@@ -1,5 +1,5 @@
 /**
- * Proof 5: prompt assembly with official sections dropped and a third-party
+ * Proof 5: prompt assembly with official sections decided and a third-party
  * section inside `<dsh>`.
  *
  * The boot composes a third-party prompt section (`acme:policy`, registered by
@@ -14,8 +14,10 @@
  *    outside section exists;
  *  - the third-party section text is inside the `<dsh>` block, marked as
  *    outside data;
- *  - NOT ONE official DSH section text survives: every section DSH itself
- *    assembled under an official name is absent from the window's prompt.
+ *  - no official section the decision table drops leaves any text behind. A
+ *    section the table keeps is carried through on purpose — a DSH tool's usage
+ *    text reaches the window verbatim inside `<harness>` — so this proof checks
+ *    the drops and leaves the keeps to proof 11 and proof 12.
  *
  * The official/third-party split is taken from DSH's own assembly, not from a
  * hardcoded list, so the check covers whatever the shipped profile registers.
@@ -42,7 +44,7 @@ import {
   scriptedLlm,
   finishProof,
 } from '../packages/arbor-testkit/src/index.ts'
-import { isOfficialSection } from '../packages/arbor-prompt/src/index.ts'
+import { decideSection, isOfficialSection } from '../packages/arbor-prompt/src/index.ts'
 
 const NAME = 'arbor-spike-proof-5'
 const arborOverlay = fileURLToPath(new URL('../patches/arbor.patch.yml', import.meta.url))
@@ -121,17 +123,25 @@ async function main(): Promise<void> {
     check('third-party section text inside <dsh>', dshBlock?.[1]?.includes(ACME_POLICY_TEXT) === true,
       `<dsh> holds the acme:policy text: ${dshBlock?.[1]?.includes(ACME_POLICY_TEXT) === true}`)
 
-    // Not one official section text survives.
-    const survivors = official
+    // Every official section the table drops leaves no text behind. The ones
+    // the table keeps are carried through on purpose — a DSH tool's usage text
+    // reaches the window verbatim inside `<harness>` — so the check is against
+    // the decision the table makes, not against survival itself. Which names
+    // are dropped, and where the kept ones go, is proof 11's and proof 12's.
+    const dropped = official.filter(section => decideSection(section.name) === 'drop')
+    const survivors = dropped
       .map(section => section.name)
       .filter((_name, index) => {
-        const text = official[index]?.text ?? ''
+        const text = dropped[index]?.text ?? ''
         return text.length > 0 && prompt.includes(text)
       })
-    check('no official section text survives', survivors.length === 0,
+    check('no dropped official section text survives', survivors.length === 0,
       `survivors: ${survivors.length === 0 ? 'none' : survivors.join(', ')}`)
     check('official sections existed to drop', official.length > 0,
       `official sections: ${official.length}`)
+    check('the table drops and keeps, rather than dropping everything',
+      dropped.length > 0 && official.length > dropped.length,
+      `dropped ${dropped.length} of ${official.length} official sections`)
     const renderedOfficial = officialText.length > 0
     check('official prompt was non-empty before dropping', renderedOfficial,
       `rendered official length: ${officialText.length}`)
