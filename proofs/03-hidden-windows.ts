@@ -35,6 +35,7 @@ import {
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
+  finishProof,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-3'
@@ -140,5 +141,4 @@ try {
 } finally {
   uninstallFailLoud()
 }
-console.log(failures.length === 0 ? 'PROOF 3 OK' : `PROOF 3 FAILED: ${failures.join('; ')}`)
-process.exitCode = failures.length === 0 ? 0 : 1
+finishProof('PROOF 3', failures)

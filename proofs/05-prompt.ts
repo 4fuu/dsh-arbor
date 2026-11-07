@@ -40,6 +40,7 @@ import {
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
+  finishProof,
 } from '../packages/arbor-testkit/src/index.ts'
 import { isOfficialSection } from '../packages/arbor-prompt/src/index.ts'
 
@@ -148,5 +149,4 @@ try {
 } finally {
   uninstallFailLoud()
 }
-console.log(failures.length === 0 ? 'PROOF 5 OK' : `PROOF 5 FAILED: ${failures.join('; ')}`)
-process.exitCode = failures.length === 0 ? 0 : 1
+finishProof('PROOF 5', failures)

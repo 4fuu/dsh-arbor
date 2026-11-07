@@ -12,3 +12,38 @@ minimumReleaseAgeExclude:
   - '@4fu/arbor-tools@2026.1106.1'
   - '@4fu/arbor-workspace-dir@2026.1106.1'
   - '@4fu/arbor-workspace-ovnfs@2026.1106.1'
+
+# Dependency install scripts, decided one by one. pnpm 11 refuses to finish an
+# install while any package with an install script is neither approved nor
+# explicitly denied, so a clean clone needs this list to be complete. Each entry
+# below was checked against what this repository actually runs: `pnpm check`
+# type-checks the sources and `pnpm proofs` boots the shipped DSH headless
+# profile from npm and drives real and scripted sessions through it. None of
+# the six needs its script, and none of them is approved.
+allowBuilds:
+  # DSH's local subprocess runner. Its postinstall only restores the executable
+  # bit on node-pty's prebuilt spawn-helper, and node-pty ships no Linux
+  # prebuild at all, so the helper it would fix does not exist here. The
+  # runner's own path spawns processes with node:child_process.
+  '@deepseek-ai/dsh-subprocess-local': false
+  # Google's generative-AI SDK, a dependency of the pi-ai provider layer DSH
+  # ships. Its script is the package's `prepare` step, which builds the
+  # published tree from source; the tarball already carries `dist/`, and the
+  # DeepSeek provider route never loads it.
+  '@google/genai': false
+  # The bundler tsx uses. Its platform binary is a separate dependency
+  # (@esbuild/linux-x64), which pnpm installs as a normal package, so the
+  # postinstall that would download or link it is redundant here.
+  esbuild: false
+  # The FFI layer DSH's Windows process bindings use. Nothing in the headless
+  # profile loads it on Linux, and building it from source needs a toolchain
+  # the proofs do not have.
+  koffi: false
+  # The pseudo-terminal library behind DSH's interactive terminal. The npm
+  # tarball carries Darwin prebuilds only, so on Linux its install script
+  # would have to compile the native addon; no proof or session in B1 opens a
+  # terminal.
+  node-pty: false
+  # A dependency of the Google SDK. Its postinstall prints a warning about the
+  # version scheme and changes nothing on disk.
+  protobufjs: false

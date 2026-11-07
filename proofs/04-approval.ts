@@ -40,6 +40,7 @@ import {
   scriptedLlm,
   spikeApprovalAsks,
   spikeToolRuns,
+  finishProof,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-4'
@@ -204,5 +205,4 @@ try {
 } finally {
   uninstallFailLoud()
 }
-console.log(failures.length === 0 ? 'PROOF 4 OK' : `PROOF 4 FAILED: ${failures.join('; ')}`)
-process.exitCode = failures.length === 0 ? 0 : 1
+finishProof('PROOF 4', failures)

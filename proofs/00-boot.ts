@@ -21,6 +21,7 @@ import { runFixtureTurn } from '@deepseek-ai/dsh-loader-smoke'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import { bootArborProfile, freshDshHome } from '../packages/arbor-testkit/src/boot.ts'
+import { finishProof } from '../packages/arbor-testkit/src/finish.ts'
 
 const NAME = 'arbor-spike-proof-0'
 const controlOverlay = fileURLToPath(new URL('../patches/control.patch.yml', import.meta.url))
@@ -39,6 +40,7 @@ async function createRootAgent(ctx: Context, preset?: string): Promise<Agent> {
 }
 
 const uninstallFailLoud = installFailLoud(NAME)
+const failures: string[] = []
 let ctx: Context | undefined
 try {
   const home = await freshDshHome('arbor-spike')
@@ -61,7 +63,11 @@ try {
     },
   })
   console.log(`RESULT output=${JSON.stringify(result.output)} usage=${JSON.stringify(result.usage)}`)
+} catch (error: unknown) {
+  console.error(error)
+  failures.push(`exception: ${error instanceof Error ? error.message : String(error)}`)
 } finally {
   await ctx?.fiber.dispose()
   uninstallFailLoud()
 }
+finishProof('PROOF 0', failures)
