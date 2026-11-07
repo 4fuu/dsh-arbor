@@ -26,6 +26,9 @@
  *  - the workspace (`@4fu/dsh-arbor-workspace`): the session's cwd, with every
  *    file access and every command running through DSH's sandboxed `ctx.fs` and
  *    `ctx.shell`;
+ *  - the `send` executor (`./send.ts`): a window's `send` lands on the DSH
+ *    session log as an assistant message, which is the only surface the user
+ *    reads;
  *  - the settings, whose window block is left to arbor's own defaults: a window
  *    stays open 300 s after its run ends and the next input for the session
  *    opens the next window of its chain.
@@ -67,6 +70,9 @@ import {
 } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
 import { DshSandboxSeam, DshSandboxWorkspace, dshWorkspaceTextOf } from '@4fu/dsh-arbor-workspace'
+import { DshSendExecutor } from './send.ts'
+
+export { DshSendExecutor, DSH_TARGET_PREFIX, DSH_USER_TARGET } from './send.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -157,13 +163,13 @@ async function noteKnownCwds(ctx: Context, journal: Journal, cwds: Map<string, s
   }
 }
 
+/** The target prefix that names the DSH session a window belongs to. */
+export const SESSION_TARGET_PREFIX = 'dsh:session:'
+
 /** The conversation target one DSH user session is, for arbor's dispatch. */
 export function sessionTarget(sessionId: string): Target {
-  return `dsh:session:${sessionId}` as Target
+  return `${SESSION_TARGET_PREFIX}${sessionId}` as Target
 }
-
-/** The target prefix that names the DSH session a window belongs to. */
-const SESSION_TARGET_PREFIX = 'dsh:session:'
 
 /** The window a `window_start` continues, when it continues one. */
 function continuedWindow(body: string | null): WindowRef | undefined {
@@ -321,6 +327,7 @@ export class ArborHostService extends Service {
         },
       }),
       settings,
+      executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
     })
     this.state = { root, journal, notes, backend, host, settings, sandboxedFileTools: seam.confined }
     this.cwds = cwds

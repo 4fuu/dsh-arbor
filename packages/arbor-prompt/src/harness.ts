@@ -70,9 +70,11 @@ export interface HarnessState {
   /** The approval policy in effect, or `undefined` when DSH reports none. */
   readonly approval: 'ask' | 'never' | undefined
   /**
-   * The DSH sandbox mode in effect. `undefined` until B3 runs arbor's file and
-   * bash calls through DSH's sandbox: until then no sandbox line is written,
-   * because nothing in arbor's path is sandboxed.
+   * The DSH sandbox mode in effect, or `undefined` when the file tools are not
+   * confined. The host reports that capability fact
+   * (`ctx.arborHost.fileToolsSandboxed`), which is true once arbor's file and
+   * bash calls really run through DSH's sandbox; until then no sandbox line is
+   * written, because nothing in arbor's path is sandboxed.
    */
   readonly sandbox: 'read-only' | 'workspace-write' | 'danger-full-access' | undefined
   /** Whether plan mode is active for the session whose turn is rendering. */
@@ -146,7 +148,10 @@ export function renderHarness(assembly: PromptAssembly, state: HarnessState): Ha
   }
 
   // How to write links into `send`, so DSH renders them. DSH's own section
-  // speaks of the final response; only `send` reaches the user here.
+  // speaks of the final response; only `send` reaches the user here. The
+  // target line comes first, because a send to a target nobody owns is an
+  // effect that never reaches anybody.
+  blocks.push(line('dsh.harness.send.target'))
   blocks.push(line('dsh.harness.send.image'))
   blocks.push(line('dsh.harness.send.file'))
   if (state.exposedTools.includes('present')) blocks.push(line('dsh.harness.send.present'))

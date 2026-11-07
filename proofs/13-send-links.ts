@@ -5,15 +5,16 @@
  * end to end against the real DSH path rather than by reading the wording back:
  *
  *  1. **Links written into `send` render in DSH's message.** The model calls
- *     `send` with an image written as `![caption](<absolute path>)` and a file
- *     written as `[name](<path#L24>)`, the way `<harness>` says to. The call runs
- *     through arbor's tool path into `ctx.tools.execute`, which lands the
- *     content on the user session's log — and the log is what DSH's client
- *     renders. The proof reads the blocks back off that log and checks they are
- *     the shapes DSH's message renderer turns into an inline image and a file
- *     link, not literal markdown text.
+ *     `send` with the target the section names and an image written as
+ *     `![caption](<absolute path>)` and a file written as
+ *     `[name](<path#L24>)`, the way `<harness>` says to. The effect is carried
+ *     out by `@4fu/dsh-arbor-host`'s `DshSendExecutor`, which appends the text
+ *     to the user session's log as an assistant message — the surface DSH's
+ *     client renders, and the same one the official agent loop writes the
+ *     model's reply to. The proof reads that event back off the log and checks
+ *     the text reached it in one piece, with its angle brackets literal.
  *  2. **`@path` references resolve.** The user's message arrives with a
- *     `@path` block, the way DSH's file-reference row attaches one, and the
+ *     `@path` mention, the way DSH's file-reference row attaches one, and the
  *     model reads it through `read` — which is arbor's own file tool working in
  *     the session's workspace, the root `<harness>` says a relative path is
  *     taken from.
@@ -43,6 +44,7 @@ import {
   finishProof,
   freshDshHome,
   scriptedLlm,
+  waitFor,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-13'
@@ -117,19 +119,22 @@ async function main(): Promise<void> {
     const prompt = (ctx.get('arborDriver') as { systemPromptOf(id: SessionId): string | undefined })
       .systemPromptOf(sessionId) ?? ''
     const harness = /<harness>\n([\s\S]*?)\n<\/harness>/.exec(prompt)?.[1] ?? ''
+    check('the section names the send target', harness.includes('send 发送，to 写 dsh:user'),
+      'the target the executor owns is the one the section names')
     check('the section states the image link syntax', harness.includes('![说明](<绝对路径>)'),
       'the angle-bracket form survived the renderer')
     check('the section states the file link syntax', harness.includes('[文件名](<路径#L24>)'),
       'the line-suffix form is there')
 
     // ---- 1. links written into send render in DSH's message ------------------
-    // The model writes both links the way the section says, and sends them.
+    // The model writes both links the way the section says, and sends them to
+    // the target the section names.
     scriptedLlm.responses = [
       {
         toolCalls: [{
           name: 'send',
           args: {
-            to: 'user',
+            to: 'dsh:user',
             content: [
               `Here is the diagram: ![the diagram](<${image}>)`,
               `And the notes: [notes.txt](<${source}#L2>)`,
@@ -142,13 +147,21 @@ async function main(): Promise<void> {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'send them' }], source: { kind: 'user' } }))
     await agent.whenIdle()
 
-    const sentBlocks = toolResultBlocks(agent)
-    const sentText = sentBlocks
-      .filter(block => block.type === 'text')
-      .map(block => (block as { text?: string }).text ?? '')
-      .join('\n')
-    check('the send call ran through arbor\'s tool path', sentBlocks.length > 0,
-      `tool result blocks: ${sentBlocks.length}`)
+    // The executor appends the send's text to this session's log as an
+    // assistant message, so the surface the client renders carries it.
+    const sent = await waitFor(() => {
+      const found = logOf(agent).filter(entry => entry.type === 'assistant/message').flatMap(entry => {
+        const message = (entry.data as { message?: { content?: readonly ContentBlock[] } }).message
+        return (message?.content ?? [])
+          .filter(block => block.type === 'text')
+          .map(block => (block as { text?: string }).text ?? '')
+          .filter(text => text.includes('![the diagram]'))
+      })
+      return found.length === 1 ? found : undefined
+    }, 10_000)
+    check('the send landed on the session log as an assistant message',
+      sent.length === 1, `assistant messages carrying the send: ${sent.length}`)
+    const sentText = sent[0] ?? ''
     check('the image link the model wrote is in the sent content',
       sentText.includes(`![the diagram](<${image}>)`),
       `sent text: ${sentText.slice(0, 200)}`)
@@ -157,24 +170,26 @@ async function main(): Promise<void> {
       `sent text: ${sentText.slice(0, 200)}`)
 
     // DSH renders a markdown image and a markdown file link out of a message's
-    // text, so the check that matters is that the text reached the session's
-    // message surface in one piece — the same log entry the client reads — with
-    // its angle brackets intact rather than escaped away.
-    const logText = logOf(agent)
-      .filter(entry => entry.type === 'tool/result')
-      .flatMap(entry => {
-        const message = (entry.data as { message?: { content?: readonly ContentBlock[] } }).message
-        return (message?.content ?? [])
-          .filter(block => block.type === 'text')
-          .map(block => (block as { text?: string }).text ?? '')
-      })
-      .join('\n')
+    // text — that is what its own `ui:deliverable-file-references` section
+    // asks for — so the checks that matter are that the text reached the
+    // session's message surface in one piece and that its angle brackets are
+    // literal rather than escaped away on the way.
     check('the links reached the session message surface unescaped',
-      logText.includes('<') && !logText.includes('&lt;'),
+      sentText.includes('<') && !sentText.includes('&lt;') && !sentText.includes('&gt;'),
       'the angle brackets are literal, not escaped entities')
     check('both links are in one message the client renders',
-      logText.includes('![the diagram]') && logText.includes('[notes.txt]'),
+      sentText.includes('![the diagram]') && sentText.includes('[notes.txt]'),
       'one message carries both')
+    check('the sent message is attributed to this session\'s model',
+      logOf(agent).some(entry => entry.type === 'assistant/message'
+        && ((entry.data as { message?: { source?: { model?: string } } }).message?.source?.model ?? '').length > 0),
+      'the assistant message names a provider and model')
+
+    // The tool result the window reads back is arbor's own queued line, and the
+    // effect's own result event records that the executor carried it out.
+    const toolBlocks = toolResultBlocks(agent)
+    check('the send call ran through arbor\'s tool path', toolBlocks.length > 0,
+      `tool result blocks: ${toolBlocks.length}`)
 
     // ---- 2. @path references resolve -----------------------------------------
     // The user references a path the way `<harness>` describes — a relative

@@ -8,9 +8,8 @@
  *   1. a default session;
  *   2. plan mode on;
  *   3. the approval policy set to `never`;
- *   4. a read-only sandbox — rendered with B3's `sandboxPrompt` flag on, which
- *      is the case the owner reviews; without the flag the line is absent, and
- *      case 1 is that rendering;
+ *   4. a read-only sandbox — the same sandbox line the default case carries,
+ *      under B3's confining filesystem, which is what makes the line honest;
  *   5. one MCP server and one third-party plugin installed.
  *
  * Each prompt is printed verbatim between markers, so the transcript holds the
@@ -165,9 +164,9 @@ async function main(): Promise<void> {
   check('case 1 states the ask approval policy',
     harnessSectionOf(basePrompt).includes(dshTextTable['dsh.harness.approval.ask'] ?? ''),
     'the ask line is there')
-  check('case 1 writes no sandbox line, because B3 has not turned the flag on',
-    !harnessSectionOf(basePrompt).includes('文件策略'),
-    'no sandbox line without B3\'s flag')
+  check('case 1 writes the sandbox line, because B3 confines the file tools',
+    harnessSectionOf(basePrompt).includes(dshTextTable['dsh.harness.sandbox.workspace-write'] ?? ''),
+    'the workspace-write line is there under B3\'s confining filesystem')
   check('case 1 carries the DSH tools that are exposed',
     harnessToolNames(basePrompt).includes('web_search') && harnessToolNames(basePrompt).includes('web_fetch'),
     `harness tool lines: ${harnessToolNames(basePrompt).join(', ')}`)
@@ -207,8 +206,8 @@ async function main(): Promise<void> {
     'the never line is there and the ask line is not')
   await neverCase.ctx.fiber.dispose()
 
-  // ---- case 4: a read-only sandbox, with B3's flag on ------------------------
-  const sandboxCase = await renderCase('CASE 4 read-only sandbox (B3 sandboxPrompt on)', [sandboxOverlay])
+  // ---- case 4: a read-only sandbox, under B3's confining filesystem ---------
+  const sandboxCase = await renderCase('CASE 4 read-only sandbox (B3 confines the file tools)', [sandboxOverlay])
   const sandboxHarness = harnessSectionOf(sandboxCase.prompt)
   check('case 4 states the read-only sandbox policy',
     sandboxHarness.includes(dshTextTable['dsh.harness.sandbox.read-only'] ?? ''),
@@ -216,6 +215,16 @@ async function main(): Promise<void> {
   check('case 4 states no other sandbox mode',
     !sandboxHarness.includes(dshTextTable['dsh.harness.sandbox.workspace-write'] ?? ''),
     'only the mode in effect is written')
+  // B3's escalation is session-scoped: an approved grant holds for the session
+  // until its standing mode changes, not for the one call that asked. The
+  // prompt must not claim otherwise, and it must not point at DSH's own
+  // per-call `sandbox_permissions` argument, which no exposed tool carries.
+  check('case 4 claims no per-call escalation',
+    !sandboxCase.prompt.includes('sandbox_permissions'),
+    'no per-call escalation argument is named')
+  check('case 4 describes the escalation grant as session-scoped',
+    /<workspace>\n[\s\S]*这个会话的文件操作和命令按批准的模式执行[\s\S]*<\/workspace>/.test(sandboxCase.prompt),
+    'the grant holds for the session, not for one call')
   await sandboxCase.ctx.fiber.dispose()
 
   // ---- case 5: an MCP server and a third-party plugin ------------------------

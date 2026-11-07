@@ -70,8 +70,9 @@ export const DSH_SECTION_DECISIONS: Readonly<Record<string, SectionDecision>> = 
   // because a section is frozen per epoch and shared by every window of it.
   'working-directory:current': 'drop',
   // The two policy lines are dsh-arbor's own, written into <harness>. The
-  // sandbox line is only written once arbor's file and bash calls really run
-  // through DSH's sandbox (B3); see `sandboxPrompt` on the host row.
+  // sandbox line is written only when the host reports
+  // `ctx.arborHost.fileToolsSandboxed` — arbor's file and bash calls really
+  // running through DSH's sandbox (B3).
   'sandbox:policy': 'harness',
   'approval:policy': 'harness',
 

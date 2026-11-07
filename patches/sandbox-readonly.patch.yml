@@ -1,23 +1,24 @@
 # The read-only sandbox overlay for proof 11.
 #
-# Two things, and they are separate on purpose:
+# One thing: the sandbox mode itself, read-only. The mode is the session's own,
+# from the `sandbox/mode` fold the sandbox-policy row owns; this overlay
+# replaces the deployment default the arbor overlay already set.
 #
-#   1. `sandboxPrompt: true` on the arbor-host row — B3's flag. Until B3 mounts
-#      a workspace whose file and bash calls really run through DSH's sandbox,
-#      the <harness> section writes no sandbox line, because the line would
-#      promise enforcement that does not exist. Proof 11 renders case 4 twice:
-#      once with the flag off (the line is absent, which is case 1) and once
-#      with it on, which is what the owner reviews.
-#   2. the sandbox mode itself, read-only. The mode is the session's own, from
-#      the `sandbox/mode` fold the sandbox-policy row owns; this overlay sets
-#      the deployment default the arbor overlay already replaced.
+# Nothing else is needed to make the <harness> section write its sandbox line.
+# The line's condition is `ctx.arborHost.fileToolsSandboxed` — the capability
+# fact the host reads off the mounted filesystem and shell backends
+# (`ctx.fs.sandboxMode` / `ctx.shell.sandboxMode`, docs/install-for-agents.md
+# section 8) — and the `headless` profile this proof boots mounts
+# `@deepseek-ai/dsh-fs-sandbox` as `ctx.fs`, so it is already true. A
+# deployment that mounts no confining backend writes no sandbox line, because
+# the line would promise enforcement that does not exist.
+#
+# So the default case (case 1) renders the `workspace-write` line and this
+# overlay renders the `read-only` one: the same line, a different mode, which
+# is exactly what the owner is asked to review.
 
 - id: sandbox-policy
   inject: []
   config:
     mode: read-only
     workspaceRoot: !!js process.cwd()
-
-- id: arbor-host
-  config:
-    sandboxPrompt: true
