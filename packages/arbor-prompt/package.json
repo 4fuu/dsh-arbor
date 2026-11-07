@@ -1,0 +1,16 @@
+{
+  "name": "@4fu/dsh-arbor-prompt",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Prompt bridge: DSH official sections dropped by name prefix, third-party sections inside an arbor <dsh> outside block",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@4fu/arbor-interfaces": "2026.1106.1",
+    "@4fu/arbor-prompt": "2026.1106.1",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1"
+  }
+}

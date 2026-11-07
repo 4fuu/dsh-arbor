@@ -1,0 +1,42 @@
+# The arbor overlay for the B0 spike.
+#
+# Applied above the shipped `headless` profile bundle layers by
+# @4fu/dsh-arbor-testkit's bootArborProfile, exactly the way a DSH plugin's
+# bundle patch or a profile's cordis.patch.yml layer composes.
+#
+# What it does:
+#   1. Disables the one-shot headless runner rows: the proofs drive agents
+#      themselves, like runFixtureTurn does.
+#   2. Disables the base `agent` row and inserts `@4fu/dsh-arbor-agent`, the
+#      AgentRegistry subclass that routes per session preset. A patch cannot
+#      swap which package a row mounts (applyPatches treats `name` as a check
+#      only, vendor/include/src/patch.ts), so the row is replaced, not edited.
+#   3. Inserts the arbor driver row, which owns the Arbor hosts and registers
+#      the arbor routing factory with the registry.
+
+# The one-shot runner is not used: proofs create and drive their own agents.
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+# The headless bundle's sandbox-policy config reads the now-disabled
+# headlessStartup provider, so replace its whole config and drop the inject.
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
+
+# Per-preset routing registry: arbor-preset sessions go to arbor, every other
+# session to the embedded official AgentLoop (whose row stays as it is).
+- id: agent
+  disabled: true
+
+- insert:
+    - id: arbor-agent
+      name: '@4fu/dsh-arbor-agent'
+
+    - id: arbor-driver
+      name: '@4fu/dsh-arbor-agent/driver'

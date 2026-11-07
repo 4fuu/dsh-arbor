@@ -1,0 +1,16 @@
+{
+  "name": "@4fu/dsh-arbor-tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tool bridge: DSH tools enter arbor as external tools and run through ctx.tools.execute",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@4fu/arbor-interfaces": "2026.1106.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+  }
+}

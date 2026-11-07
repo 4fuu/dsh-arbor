@@ -1,0 +1,21 @@
+{
+  "name": "@4fu/dsh-arbor-testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "B0 spike testkit: boot a DSH profile with arbor overlay patches, a memory journal, and a scripted model",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@4fu/arbor-errors": "2026.1106.1",
+    "@4fu/arbor-interfaces": "2026.1106.1",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-app-boot": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-loader-smoke": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1"
+  }
+}

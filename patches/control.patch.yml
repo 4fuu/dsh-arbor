@@ -1,0 +1,19 @@
+# The control overlay for the B0 spike: the shipped `headless` profile with
+# its one-shot runner rows disabled and its sandbox-policy row rewired, and
+# nothing else. Boots with this overlay are the control: no arbor code is
+# mounted, so any difference in an arbor boot is arbor's.
+
+# The one-shot runner is not used: proofs create and drive their own agents.
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+# The headless bundle's sandbox-policy config reads the now-disabled
+# headlessStartup provider, so replace its whole config and drop the inject.
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()
