@@ -15,14 +15,25 @@
  *    window's turns through `ctx.llm` and each tool call through
  *    `ctx.tools.execute`;
  *  - the `<dsh>` prompt plugin (`@4fu/dsh-arbor-prompt`);
- *  - the settings, whose window block is left to arbor's own defaults: a
- *    window stays open 300 s after its run ends and the next input for the
- *    session opens the next window of its chain.
+ *  - the environment (`@4fu/dsh-arbor-env`): arbor's own under
+ *    `DSH_HOME/arbor/env`, with DSH's skills and MCP servers mounted read-only
+ *    beside them;
+ *  - the workspace (`@4fu/dsh-arbor-workspace`): the session's cwd, with every
+ *    file access and every command running through DSH's sandboxed `ctx.fs` and
+ *    `ctx.shell`;
+ *  - the settings, whose window block is left to arbor's own defaults: a window
+ *    stays open 300 s after its run ends and the next input for the session
+ *    opens the next window of its chain.
  *
  * The judge is off on purpose in B1: every judge decision is model-based, and
  * a model-based judge cannot run through the DSH backend yet. With the judge
  * off, `host.dispatch` is deterministic — one window per session target,
  * opened on the session's first turn — which is the routing policy B1 ships.
+ *
+ * There is no `workspaces.retentionMs` here, and that is deliberate: the
+ * workspace is the session's own working directory, the user's project, so
+ * there is nothing to reclaim and reclaiming it would delete work that is not
+ * arbor's.
  */
 
 import { mkdir } from 'node:fs/promises'
@@ -35,10 +46,13 @@ import { MAX_PAGE_LIMIT } from '@4fu/arbor-interfaces'
 import { Arbor } from '@4fu/arbor-core'
 import { SqliteJournal } from '@4fu/arbor-journal-sqlite'
 import { SqliteNoteStore } from '@4fu/arbor-notes-sqlite'
+import { DirectoryEnvironment } from '@4fu/arbor-environment-dir'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createDshBackend, type DshBackend } from '@4fu/dsh-arbor-llm'
 import { dshPromptPlugin } from '@4fu/dsh-arbor-prompt'
-import { DshSessionWorkspace } from './workspace.ts'
+import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
+import { DshSandboxSeam, DshSandboxWorkspace } from '@4fu/dsh-arbor-workspace'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -62,11 +76,9 @@ export interface Config {
  * idle, 200 000 context tokens, 4 000 reserved), so a window that goes quiet
  * ends and the session's next turn opens the next window of its chain.
  *
- * The workspaces block sets one retention period. A window's own directory
- * lives under the session's cwd, which is the user's project, so it is
- * reclaimed once its chain has been finished for a week; a persistent
- * directory (`workspace.keep`) outlives that, and a deployment that wants
- * another period overrides this one.
+ * The workspaces block is deliberately absent too: the workspace is the
+ * session's own cwd, so there is no per-window directory to reclaim after a
+ * retention period.
  */
 export function defaultSettings(extra: Settings | undefined): Settings {
   return {
@@ -85,9 +97,6 @@ export function defaultSettings(extra: Settings | undefined): Settings {
         broadcast: 'off',
         active_set: 'off',
       },
-    },
-    workspaces: {
-      retentionMs: 7 * 24 * 60 * 60 * 1000,
     },
     ...extra,
   }
@@ -118,11 +127,18 @@ interface HostState {
   readonly backend: DshBackend
   readonly host: Arbor
   readonly settings: Settings
+  readonly sandboxedFileTools: boolean
 }
 
 /** The one Arbor host per DSH process, and the storage it runs on. */
 export class ArborHostService extends Service {
-  static inject = ['llm', 'tools', 'agents', 'systemPrompt']
+  // What the host and the pieces it mounts read: the backend's LLM and tools,
+  // the registry that names the session whose turn is running, DSH's prompt
+  // assembly, DSH's skill registry for `/env`, and the sandboxed filesystem and
+  // shell every window's file access and command runs through. A profile that
+  // mounts none of them cannot run arbor's windows at all, so the row says so
+  // at boot rather than at the first tool call.
+  static inject = ['llm', 'tools', 'agents', 'systemPrompt', 'skills', 'fs', 'shell', 'sandboxPolicy']
 
   static Config: z<Config, Config> = z.object({}) as unknown as z<Config, Config>
 
@@ -155,24 +171,38 @@ export class ArborHostService extends Service {
       // which is the initiating agent of that turn (see @4fu/dsh-arbor-tools).
       agents: ctx.agents,
     })
-    // Every window works in the cwd of the session it belongs to.
-    const workspace = new DshSessionWorkspace({
+    // Every file access and every command of a window runs through DSH's own
+    // sandboxed filesystem and shell, under the session's resolved policy.
+    const seam = new DshSandboxSeam(ctx, (key, args) => key)
+    const workspace = new DshSandboxWorkspace({
+      seam,
       journal,
       cwdOf: sessionId => cwds.get(sessionId),
-      currentSession: () => ctx.agents.currentInitiator()?.session.id,
+      agentOf: sessionId => ctx.agents.get(sessionId),
+      currentAgent: () => ctx.agents.currentInitiator(),
+    })
+    // `/env`: arbor's own environment under DSH_HOME/arbor, with DSH's skills
+    // and MCP servers mounted read-only beside it.
+    const environment = new DshEnvironment({
+      inner: new DirectoryEnvironment({ root, supervisor: undefined }),
+      skills: dshSkillSource(ctx.skills, listener => ctx.on('skills/change', listener)),
+      toolNames: () => ctx.tools.definitions().map(tool => tool.name),
+      cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? process.cwd(),
+      seedSettings: settings,
     })
     const host = new Arbor({
       journal,
       notes,
       backend,
       workspace,
+      environment,
       plugins: [dshPromptPlugin({
         systemPrompt: ctx.systemPrompt,
         changeCounter: () => this.promptChanges,
       })],
       settings,
     })
-    this.state = { root, journal, notes, backend, host, settings }
+    this.state = { root, journal, notes, backend, host, settings, sandboxedFileTools: seam.confined }
     this.cwds = cwds
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
@@ -201,6 +231,25 @@ export class ArborHostService extends Service {
     return this.requireState().host
   }
 
+  /**
+   * Whether arbor's own `bash`, `read`, `write` and `edit` really run through
+   * DSH's sandbox.
+   *
+   * This is the capability fact the prompt bridge reads before it states the
+   * sandbox policy in `<harness>`: the B2 plan's `sandbox:policy` row is to be
+   * written only when this is true, because a line that claims confinement the
+   * file tools do not have is a lie the model would act on. It is true when
+   * this process mounts a confining filesystem or shell backend
+   * (`ctx.fs.sandboxMode` / `ctx.shell.sandboxMode`,
+   * `@deepseek-ai/dsh-fs` / `@deepseek-ai/dsh-shell`), which is what the
+   * workspace routes every file access and command through.
+   *
+   * Read it as `ctx.arborHost.fileToolsSandboxed`.
+   */
+  get fileToolsSandboxed(): boolean {
+    return this.requireState().sandboxedFileTools
+  }
+
   /** The durable journal every window of this process records into. */
   get journal(): Journal {
     return this.requireState().journal
@@ -221,7 +270,7 @@ export class ArborHostService extends Service {
    * calls this when the session is created and when it is resumed; the cwd is
    * the session header's, which is the durable record of it.
    */
-  noteSessionCwd(sessionId: string, cwd: string | undefined): void {
+  noteSessionCwd(sessionId: SessionId, cwd: string | undefined): void {
     if (this.cwds === undefined || cwd === undefined) return
     this.cwds.set(sessionId, cwd)
   }
@@ -246,7 +295,7 @@ export class ArborHostService extends Service {
    * targets of its own, so the target alone does not name the newest window.
    * The relay reads the chain's tool calls back out of the journal on resume.
    */
-  async windowChainOf(sessionId: string): Promise<WindowRef[]> {
+  async windowChainOf(sessionId: SessionId): Promise<WindowRef[]> {
     const target = sessionTarget(sessionId)
     const { journal } = this.requireState()
     const continued = new Map<WindowRef, WindowRef>()
@@ -279,7 +328,7 @@ export class ArborHostService extends Service {
    * with the same target. So the newest `window_start` for the target names the
    * session's window, and it is the live one unless the chain has ended.
    */
-  async windowFor(sessionId: string): Promise<WindowRef | undefined> {
+  async windowFor(sessionId: SessionId): Promise<WindowRef | undefined> {
     const { host } = this.requireState()
     const newest = (await this.windowChainOf(sessionId)).at(-1)
     if (newest === undefined) return undefined
@@ -290,5 +339,3 @@ export class ArborHostService extends Service {
 }
 
 export default ArborHostService
-
-export { DshSessionWorkspace } from './workspace.ts'

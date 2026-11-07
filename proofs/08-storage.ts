@@ -12,8 +12,9 @@
  *  - the window settings are arbor's own defaults — the deployment sets no
  *    idle period, context budget or reserve — and the judge is off, so
  *    `host.dispatch` is deterministic;
- *  - the workspace root is the session's cwd: the window's own directory is
- *    created under it, and the `<workspace>` prompt section names it.
+ *  - the workspace is the session's cwd itself: there is no per-window
+ *    directory, the mount owns `exec`, `readFile` and `writeFile`, and the
+ *    `<workspace>` prompt section names the cwd and the sandbox mode.
  *
  * Run: pnpm proof:storage
  */
@@ -116,25 +117,29 @@ async function main(): Promise<void> {
     check('the judge is off, so dispatch is deterministic',
       Object.values(modes).every(mode => mode === 'off') && Object.keys(modes).length === 6,
       `judge modes: ${JSON.stringify(modes)}`)
-    check('the window retention is set, because the root is the user project',
-      settings.workspaces?.retentionMs === 7 * 24 * 60 * 60 * 1000,
-      `retentionMs: ${settings.workspaces?.retentionMs}`)
+    check('no window retention is set, because the workspace is the session cwd',
+      settings.workspaces === undefined,
+      `settings.workspaces: ${JSON.stringify(settings.workspaces)}`)
 
-    // ---- the workspace root is the session's cwd.
+    // ---- the workspace is the session's cwd itself.
     const firstWindow = windowOf(ctx, firstSession)!
     const mount = await host.host.services.ensureWorkspace(firstWindow)
-    check('the window directory is under the session cwd',
-      mount !== undefined && mount.path === join(first, `ws${firstWindow.slice(1)}`),
+    check('the window works in the session cwd itself',
+      mount !== undefined && mount.path === first,
       `window ${firstWindow} works in ${mount?.path ?? 'nothing'}; the session's cwd is ${first}`)
+    check('the mount owns its execution environment and its file access',
+      mount !== undefined && typeof mount.exec === 'function'
+        && typeof mount.readFile === 'function' && typeof mount.writeFile === 'function',
+      `exec: ${typeof mount?.exec}, readFile: ${typeof mount?.readFile}, writeFile: ${typeof mount?.writeFile}`)
     const secondWindow = windowOf(ctx, secondSession)!
     const secondMount = await host.host.services.ensureWorkspace(secondWindow)
     check('a second session window works in its own cwd',
-      secondMount?.path === join(second, `ws${secondWindow.slice(1)}`),
+      secondMount?.path === second,
       `window ${secondWindow} works in ${secondMount?.path ?? 'nothing'}; the session's cwd is ${second}`)
     const driver = ctx.get('arborDriver') as { systemPromptOf(id: SessionId): string | undefined }
     const prompt = driver.systemPromptOf(firstSession) ?? ''
     check('the <workspace> section names the session cwd',
-      /<workspace>[\s\S]*keep\/<名称>/.test(prompt) && prompt.includes(first),
+      /<workspace>[\s\S]*沙箱/.test(prompt) && prompt.includes(first),
       `the section names ${first}: ${prompt.includes(first)}`)
   } finally {
     await ctx.fiber.dispose()
