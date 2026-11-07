@@ -51,6 +51,10 @@ import { SessionPreparation, interruptedTurnClosers } from '@deepseek-ai/dsh-ses
 import { createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
+// The `working-directory/change` event's declaration lives in the
+// working-directory row's own types; importing it puts the augmentation in
+// scope, which is what lets the driver read the event and the proof append one.
+import type {} from '@deepseek-ai/dsh-working-directory'
 import { sessionTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
 import { replacedToolsRegistered } from '@4fu/dsh-arbor-tools'
 import { dataBlock } from '@4fu/arbor-prompt'
@@ -484,6 +488,16 @@ export class ArborDriver extends Service implements AgentFactory {
       this.hostService.noteDshPromptChange()
       const detachAgent = loopCtx.agents.enter(agent, parentAgent)
       await loopCtx.agents.announce(agent, source, signal)
+      // The session's own working directory can move while it runs — the
+      // `working_directory` tool, or a UI switch — and arbor's workspace root
+      // follows it, so the root the file tools work in and the root the
+      // `<workspace>` section names stay the session's own. The change itself
+      // reaches a running window as the runtime-context snapshot, because a
+      // section is frozen per epoch.
+      agent.ctx.on('session/event', (subject, event) => {
+        if (subject !== session) return
+        if (event.type === 'working-directory/change') this.hostService.noteSessionCwd(session.id, event.data.cwd)
+      })
       agent.ctx.effect(function* () {
         yield () => {
           detachAgent()

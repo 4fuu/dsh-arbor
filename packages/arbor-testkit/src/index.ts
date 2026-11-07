@@ -49,3 +49,5 @@ export const FIXTURES_DIR: string = fileURLToPath(new URL('./fixtures/', import.
 export function useDshFixtures(): void {
   process.env['ARBOR_FIXTURES'] = FIXTURES_DIR
 }
+export { MCP_INSTRUCTIONS_TEXT, MCP_SERVER_NAME, MCP_TOOL_NAME, ArborMcpFixtureService } from './mcp-fixture.ts'
+export { THIRD_PARTY_TEXT, ArborThirdPartySectionService } from './third-party-section.ts'

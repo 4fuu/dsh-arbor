@@ -1,0 +1,15 @@
+# The plan-mode overlay: the deployment's own plan-mode guidance.
+#
+# The shipped headless profile mounts `@deepseek-ai/dsh-plan-mode` with an
+# empty section, so `plan:policy` renders to nothing and the <harness> section
+# writes no plan line. A deployment that configures guidance is what makes plan
+# mode visible to the model, and this overlay is that configuration — the same
+# row config a deployment sets in its own cordis.yml.
+
+- id: plan-mode
+  config:
+    section: >-
+      You are in plan mode. Do not modify anything: no writes, no edits, no
+      commands that change state. Explore and read until you understand the
+      task, then present the complete plan with exit_plan_mode for the user's
+      review. Keep planning until they approve.

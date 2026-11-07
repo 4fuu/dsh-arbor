@@ -31,7 +31,7 @@
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import type { Plugin } from '@4fu/arbor-interfaces'
+import type { Block, Plugin } from '@4fu/arbor-interfaces'
 import { dataBlock } from '@4fu/arbor-prompt'
 import { createHash } from 'node:crypto'
 import { DSH_DATA_BLOCK } from './blocks.ts'
@@ -271,17 +271,36 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
   }
 
   /**
-   * One assembly per render pass, shared by both sections.
+   * What the assembly itself depends on, as opposed to what the rendered text
+   * depends on.
+   *
+   * DSH's `plan:policy` and `tool:*` texts read the agent and the tool set, so
+   * the assembly has to be redone when either moves; the approval policy and the
+   * sandbox mode are read from the state rather than from DSH's sections, so
+   * they do not. Keeping the two keys apart is what stops an approval switch —
+   * which happens between turns — from re-assembling DSH's prompt in the host's
+   * watch loop, where the turn that would have supplied a live signal has
+   * already ended.
+   */
+  const assemblyKey = (): string => {
+    const state = options.state()
+    return [
+      options.changeCounter(),
+      state.planActive ? 'plan' : '',
+      [...state.exposedTools].sort().join(','),
+    ].join('|')
+  }
+
+  /**
+   * One assembly per change, shared by both sections.
    *
    * `renderPluginSections` renders the sections back to back, and arbor renders
    * them again for a delta, so without this the host would assemble DSH's
-   * prompt four times per epoch. The cache is keyed by the same digest the
-   * revision uses, so it is exactly as fresh as the revision: a section whose
-   * text depends on state the digest does not cover would be served stale.
+   * prompt four times per epoch.
    */
   let assembled: { key: string; assembly: Promise<PromptAssembly> } | undefined
   const assemble = (): Promise<PromptAssembly> => {
-    const key = stateKey()
+    const key = assemblyKey()
     if (assembled?.key === key) return assembled.assembly
     const agent = agentOf(options)
     const assembly = options.systemPrompt.assemble({
@@ -296,6 +315,37 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
     options.onWarning?.(message)
   }
 
+  /**
+   * The last blocks each section rendered, so a render that fails keeps the
+   * window's prefix rather than taking the window down.
+   *
+   * A plugin section's `content()` is awaited inside the host's watch loop, and
+   * an exception there is swallowed by the loop's own error handling — which
+   * would leave the window unsettled and never ended. DSH's assembly does
+   * filesystem I/O and reads the rendering agent's fiber, so a section rendered
+   * after its session went away can legitimately fail; the section then keeps
+   * what it last said and the failure is recorded.
+   */
+  const last = new Map<string, readonly Block[]>()
+  const renderSection = async (
+    tag: string,
+    build: (assembly: PromptAssembly) => readonly Block[],
+  ): Promise<readonly Block[]> => {
+    try {
+      const blocks = build(await assemble())
+      last.set(tag, blocks)
+      return blocks
+    } catch (error: unknown) {
+      const held = last.get(tag)
+      if (held !== undefined) {
+        warn(`dsh-arbor: the <${tag}> section could not be re-rendered `
+          + `(${error instanceof Error ? error.message : String(error)}); the window keeps what it last read`)
+        return held
+      }
+      throw error
+    }
+  }
+
   return [
     {
       name: 'dsh-harness',
@@ -303,14 +353,13 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
         tag: 'harness',
         blocks: HARNESS_BLOCKS,
         text: dshTextTable,
-        content: async () => {
-          const assembly = await assemble()
+        content: async () => renderSection('harness', (assembly) => {
           const complete = detectCompleteSection(assembly)
           if (complete !== undefined) {
             warn(`dsh-arbor: DSH section "${complete}" declares complete: true; arbor keeps its own rules`)
           }
           return renderHarness(assembly, options.state()).blocks
-        },
+        }),
         revision: () => sectionDigest(stateKey()),
       },
     },
@@ -320,14 +369,13 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
         tag: 'dsh',
         blocks: [DSH_DATA_BLOCK],
         text: dshTextTable,
-        content: async () => {
-          const assembly = await assemble()
+        content: async () => renderSection('dsh', (assembly) => {
           const thirdParty: PromptAssembly = {
             ...assembly,
             sections: assembly.sections.filter(section => decideSection(section.name) === 'outside'),
           }
           return [dataBlock(renderPrompt(thirdParty))]
-        },
+        }),
         revision: () => sectionDigest(stateKey()),
         outside: true,
       },

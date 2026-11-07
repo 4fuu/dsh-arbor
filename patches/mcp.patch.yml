@@ -1,0 +1,23 @@
+# The MCP overlay: one connected MCP server, and the third-party plugin row.
+#
+# This is what an installed MCP server and an installed third-party plugin
+# contribute, in the shape DSH's own rows produce them:
+#
+#   - `mcp:<server>` — the instructions the server hands down, registered by
+#     `@deepseek-ai/dsh-mcp-client` under that name;
+#   - the server's tools on `ctx.tools` under server-qualified public names
+#     (`mcp__<server>__<rawName>`);
+#   - a third-party prompt section under a name of the plugin's own.
+#
+# Both arrive here as ordinary Cordis rows rather than a live MCP connection,
+# because a proof must not need a network server: the row registers exactly
+# what the real client row registers, which is what the bridge has to route.
+
+- insert:
+    # The MCP server's instructions, as dsh-mcp-client registers them.
+    - id: arbor-mcp-instructions
+      name: '@4fu/dsh-arbor-testkit/mcp-fixture'
+
+    # A third-party plugin's own prompt section, alongside the fixture's.
+    - id: arbor-third-party-section
+      name: '@4fu/dsh-arbor-testkit/third-party-section'

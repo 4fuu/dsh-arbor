@@ -8,8 +8,10 @@
     ".": "./src/index.ts",
     "./scripted-llm": "./src/scripted-plugin.ts",
     "./prompt-sections": "./src/prompt-sections.ts",
-    "./package.json": "./package.json",
+    "./mcp-fixture": "./src/mcp-fixture.ts",
+    "./third-party-section": "./src/third-party-section.ts",
     "./dsh-skill": "./src/fixtures/dsh-skill.ts",
+    "./package.json": "./package.json",
     "./mcp-server.mjs": "./src/fixtures/mcp-server.mjs"
   },
   "dependencies": {
