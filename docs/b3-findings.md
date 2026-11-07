@@ -1,5 +1,12 @@
 # B3 findings: the arbor workspace over DSH's sandbox, and `/env`
 
+> **Superseded in part by B3b** (`docs/b3b-projects-and-sandbox.md`). The owner's
+> decision reversed B3's sandbox for arbor sessions: arbor's tools now run on the
+> host the way they do in standalone arbor, the workspace is arbor's own over the
+> shared folder (ovnfs, with the plain directory as the fallback), and arbor takes
+> over DSH's project management. `/env`, the driver's refusal text and resume after
+> a restart still hold as written below. This page is kept as the B3 record.
+
 Every finding below is backed by a proof in `proofs/` (run `pnpm proofs`), and
 every DSH claim names the source location it rests on. DSH is tag
 `dsh-v0.2.2-rc.1` (commit `66491b05e3`); arbor is `2026.1107.0`.

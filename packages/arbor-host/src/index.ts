@@ -23,9 +23,14 @@
  *  - the environment (`@4fu/dsh-arbor-env`): arbor's own under
  *    `DSH_HOME/arbor/env`, with DSH's skills and MCP servers mounted read-only
  *    beside them;
- *  - the workspace (`@4fu/dsh-arbor-workspace`): the session's cwd, with every
- *    file access and every command running through DSH's sandboxed `ctx.fs` and
- *    `ctx.shell`;
+ *  - the workspace (`@4fu/dsh-arbor-workspace`): arbor's own, over the shared
+ *    folder under `DSH_HOME/arbor` — ovnfs when its daemon starts, the plain
+ *    directory workspace otherwise. For arbor sessions there is no DSH sandbox:
+ *    arbor's tools run on the host the way they do in standalone arbor, and the
+ *    only protection is arbor's own secret scrub;
+ *  - the project bridge (`@4fu/dsh-arbor-workspace`): the shared folder's
+ *    project subfolders are registered in DSH's own `workspaceRegistry`, so
+ *    arbor's projects are the DSH project list a user picks from;
  *  - the `send` executor (`./send.ts`): a window's `send` lands on the DSH
  *    session log as an assistant message, which is the only surface the user
  *    reads;
@@ -38,10 +43,11 @@
  * off, `host.dispatch` is deterministic — one window per session target,
  * opened on the session's first turn — which is the routing policy B1 ships.
  *
- * There is no `workspaces.retentionMs` here, and that is deliberate: the
- * workspace is the session's own working directory, the user's project, so
- * there is nothing to reclaim and reclaiming it would delete work that is not
- * arbor's.
+ * There is no `workspaces.retentionMs` here: ovnfs checkouts are a window's own
+ * work, and a chain that ends leaves them where they are until a retention
+ * period is set, exactly as arbor's own defaults do. Nothing here is reclaimed
+ * by default, and the shared folder's projects are never removed — they are the
+ * user's work, not arbor's to delete.
  */
 
 import { mkdir } from 'node:fs/promises'
@@ -69,7 +75,9 @@ import {
   type PersonaVariables,
 } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
-import { DshSandboxSeam, DshSandboxWorkspace, dshWorkspaceTextOf } from '@4fu/dsh-arbor-workspace'
+import { openArborWorkspace, DshProjectBridge, type DshProject } from '@4fu/dsh-arbor-workspace'
+import type { WorkspaceBackend } from '@4fu/arbor-core'
+import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { DshSendExecutor } from './send.ts'
 
 export { DshSendExecutor, DSH_TARGET_PREFIX, DSH_USER_TARGET } from './send.ts'
@@ -109,9 +117,10 @@ export interface Config {
  * (300 s idle, 200 000 context tokens, 4 000 reserved), so a window that goes
  * quiet ends and the session's next turn opens the next window of its chain.
  *
- * The workspaces block is deliberately absent as well: the workspace is the
- * session's own cwd, so there is no per-window directory to reclaim after a
- * retention period.
+ * The workspaces block is deliberately absent as well: the workspace is arbor's
+ * own over the shared folder, ovnfs checkouts are a window's own work, and the
+ * shared folder's projects are never reclaimed — so with no retention period
+ * nothing is removed.
  */
 export function defaultSettings(extra: Settings | undefined): Settings {
   return {
@@ -127,47 +136,6 @@ export function defaultSettings(extra: Settings | undefined): Settings {
       },
     },
     ...extra,
-  }
-}
-
-/**
- * Note the cwd of every session the journal names, read from DSH's own session
- * persistence.
- *
- * A session's cwd is the durable record of where it works
- * (`SessionHeader.cwd`), and the driver notes the live ones when a session is
- * created or resumed. A window a previous process stopped has no live session
- * when this one starts, and its continuation's prefix is frozen during
- * `Arbor.start` — so the cwd is read here, from the same store the driver reads,
- * for every session the journal still names.
- */
-async function noteKnownCwds(ctx: Context, journal: Journal, cwds: Map<string, string>): Promise<void> {
-  const persistence = ctx.get('sessionPersistence') as
-    | { open(id: string, access: 'read'): Promise<{ header: { cwd?: string }; close(): Promise<void> }> }
-    | undefined
-  if (persistence === undefined) return
-  const sessions = new Set<string>()
-  for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
-    const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
-    for (const event of page.items) {
-      for (const target of event.targets) {
-        if (target.startsWith(SESSION_TARGET_PREFIX)) sessions.add(target.slice(SESSION_TARGET_PREFIX.length))
-      }
-    }
-    if (page.items.length < MAX_PAGE_LIMIT) break
-  }
-  for (const session of sessions) {
-    try {
-      const handle = await persistence.open(session, 'read')
-      try {
-        if (handle.header.cwd !== undefined) cwds.set(session, handle.header.cwd)
-      } finally {
-        await handle.close()
-      }
-    } catch {
-      // A session the store no longer holds has no cwd to note; its windows are
-      // not live either, so nothing asks for one.
-    }
   }
 }
 
@@ -199,19 +167,25 @@ interface HostState {
   readonly backend: DshBackend
   readonly host: Arbor
   readonly settings: Settings
+  /** The arbor shared folder: the projects' home and ovnfs's source. */
+  readonly sharedFolder: string
+  /** Which workspace backend arbor settled on, so the host can report it. */
+  readonly workspaceBackend: WorkspaceBackend
+  /** The DSH project bridge over the shared folder. */
+  readonly projects: DshProjectBridge
 }
 
 /** The one Arbor host per DSH process, and the storage it runs on. */
 export class ArborHostService extends Service {
   // What the host and the pieces it mounts read: the backend's LLM and tools,
   // the registry that names the session whose turn is running, DSH's prompt
-  // assembly, DSH's skill registry for `/env`, and the sandboxed filesystem and
-  // shell every window's file access and command runs through. A profile that
-  // mounts none of them cannot run arbor's windows at all, so the row says so
-  // at boot rather than at the first tool call.
+  // assembly and DSH's skill registry for `/env`. The workspace is arbor's own
+  // (ovnfs or the plain directory over the shared folder), so it needs neither
+  // DSH's filesystem/shell seams nor the sandbox policy — those stay mounted for
+  // ordinary sessions on the embedded AgentLoop, and arbor's windows simply do
+  // not route through them.
   static inject = [
-    'llm', 'tools', 'agents', 'systemPrompt', 'sessionProjections',
-    'skills', 'fs', 'shell', 'sandboxPolicy',
+    'llm', 'tools', 'agents', 'systemPrompt', 'sessionProjections', 'skills',
   ]
 
   static Config: z<Config, Config> = z.object({}) as unknown as z<Config, Config>
@@ -219,8 +193,6 @@ export class ArborHostService extends Service {
   readonly config: Config
 
   private state: HostState | undefined
-  /** The cwd each live session runs in, for the workspace root. */
-  private cwds: Map<string, string> | undefined
   /** Raised whenever a DSH prompt provider changes, so both sections follow. */
   private promptChanges = 0
   /** Plan mode's projection, so the `<harness>` section can read it per step. */
@@ -267,7 +239,6 @@ export class ArborHostService extends Service {
       configurable: true,
       get: () => [identity, ...this.personaLines()].filter(part => part !== '').join('\n\n'),
     })
-    const cwds = new Map<string, string>()
     // The backend is built before the host, because the host is built with it;
     // the renderer is therefore read lazily, and only once a delivery has to be
     // rendered — which is long after the host exists.
@@ -284,19 +255,27 @@ export class ArborHostService extends Service {
         return host.renderer
       },
     })
-    // Every file access and every command of a window runs through DSH's own
-    // sandboxed filesystem and shell, under the session's resolved policy.
-    // The seam writes a window's refusals from the workspace's own table over the
-    // framework's, which is where the deployment's model-facing wording lives
-    // (docs/workspaces.md#prompt-text).
-    const seam = new DshSandboxSeam(ctx, dshWorkspaceTextOf)
-    const workspace = new DshSandboxWorkspace({
-      seam,
+    // Arbor's own workspace over the shared folder: ovnfs when its daemon
+    // starts, the plain-directory workspace otherwise. For arbor sessions there
+    // is no DSH sandbox — arbor's file tools run on the host the way they do in
+    // standalone arbor, and arbor's own secret scrub is the only protection on
+    // what reaches the model. The `<workspace>` section and the `workspace.*`
+    // module functions are the backend's own, with no sandbox line and no
+    // `sandbox_escalate`.
+    const arborWorkspace = await openArborWorkspace({
+      root,
       journal,
-      cwdOf: sessionId => cwds.get(sessionId),
-      agentOf: sessionId => ctx.agents.get(sessionId),
-      currentAgent: () => ctx.agents.currentInitiator(),
-      knownRoots: () => [...cwds.values()],
+      warn: message => ctx.logger.warn(message),
+    })
+    // The DSH project bridge: the shared folder's project subfolders become the
+    // DSH project list. `workspaceRegistry` is a web-profile service, so it is
+    // read lazily and the bridge stays inert on a profile that has none
+    // (headless, acp, sdk), which never renders a project picker.
+    const registry = ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
+    const projects = new DshProjectBridge({
+      registry,
+      sharedFolder: arborWorkspace.sharedFolder,
+      warn: message => ctx.logger.warn(message),
     })
     // `/env`: arbor's own environment under DSH_HOME/arbor, with DSH's skills
     // and MCP servers mounted read-only beside it.
@@ -304,14 +283,14 @@ export class ArborHostService extends Service {
       inner: new DirectoryEnvironment({ root, supervisor: undefined }),
       skills: dshSkillSource(ctx.skills, listener => ctx.on('skills/change', listener)),
       toolNames: () => ctx.tools.definitions().map(tool => tool.name),
-      cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? process.cwd(),
+      cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? arborWorkspace.sharedFolder,
       seedSettings: settings,
     })
     host = new Arbor({
       journal,
       notes,
       backend,
-      workspace,
+      workspace: arborWorkspace.workspace,
       environment,
       plugins: dshPromptPlugins({
         systemPrompt: ctx.systemPrompt,
@@ -336,18 +315,26 @@ export class ArborHostService extends Service {
       settings,
       executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
     })
-    this.state = { root, journal, notes, backend, host, settings }
-    this.cwds = cwds
+    this.state = {
+      root,
+      journal,
+      notes,
+      backend,
+      host,
+      settings,
+      sharedFolder: arborWorkspace.sharedFolder,
+      workspaceBackend: arborWorkspace.backend,
+      projects,
+    }
     // Plan mode's projection is registered here rather than only in the plan
     // row, because the <harness> section reads it once per step. Registration
     // is refcounted per key, so both see one fold of the same session log.
     this.planProjection = await ctx.sessionProjections.register(planProjectionDefinition)
-    // Every session the journal names gets its cwd noted before the host starts,
-    // because the host continues a stopped window in `start` and freezes that
-    // window's prefix then — with no turn in flight, so no initiating agent to
-    // ask. Without this, a window a restart continued would be told the
-    // process's own directory instead of the session's.
-    await noteKnownCwds(ctx, journal, cwds)
+    // Register the shared folder's projects in DSH's registry and keep the list
+    // live, so a project a window creates reaches the UI without a restart. The
+    // disposer runs on unload.
+    await projects.sync()
+    const stopProjects = projects.start()
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
     await host.start()
@@ -355,6 +342,7 @@ export class ArborHostService extends Service {
     // arbor re-renders it and hands the changed lines to live windows.
     ctx.on('system-prompt/change', () => { this.promptChanges += 1 })
     ctx.effect(() => async () => {
+      stopProjects()
       // Stopping the host records `host_restart` for every live window, so the
       // next start continues each of them; the stores close after it.
       await host.close().catch(() => {})
@@ -461,14 +449,46 @@ export class ArborHostService extends Service {
     return this.requireState().settings
   }
 
+  /** The arbor shared folder: the projects' home and ovnfs's source. */
+  get sharedFolder(): string {
+    return this.requireState().sharedFolder
+  }
+
+  /** Which workspace backend arbor settled on: `ovnfs` or `dir`. */
+  get workspaceBackend(): WorkspaceBackend {
+    return this.requireState().workspaceBackend
+  }
+
+  /** The DSH project bridge over the shared folder. */
+  get projects(): DshProjectBridge {
+    return this.requireState().projects
+  }
+
   /**
-   * Note the cwd one session runs in, so its windows work there. The driver
-   * calls this when the session is created and when it is resumed; the cwd is
-   * the session header's, which is the durable record of it.
+   * Where one arbor session works: a project folder inside the shared folder.
+   *
+   * The driver calls this for an arbor session's requested cwd and sets the
+   * session's cwd to the answer, so the DSH session, its cwd display and the
+   * project picker all agree on the shared folder. A directory outside the
+   * shared folder is not copied; it joins the shared folder only through
+   * {@link adoptArborProject}.
    */
-  noteSessionCwd(sessionId: SessionId, cwd: string | undefined): void {
-    if (this.cwds === undefined || cwd === undefined) return
-    this.cwds.set(sessionId, cwd)
+  resolveArborCwd(requested: string | undefined): Promise<string> {
+    return this.requireState().projects.resolveProject(requested)
+  }
+
+  /**
+   * Adopt an existing directory into the shared folder as a project, once. The
+   * explicit way an existing DSH project with its own path joins the shared
+   * folder; the UI's add-existing-project action or the model calls it.
+   */
+  adoptArborProject(path: string): Promise<string> {
+    return this.requireState().projects.adopt(path)
+  }
+
+  /** Every project registered from the shared folder, as DSH lists them. */
+  listArborProjects(): Promise<readonly DshProject[]> {
+    return this.requireState().projects.list()
   }
 
   /** The backend every window of this process runs through. */

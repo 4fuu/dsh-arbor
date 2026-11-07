@@ -117,9 +117,11 @@ export const DSH_TOOLS_ARBOR_REPLACES: readonly string[] = [
   'structured_output',
   'run_code',
   // DSH's project management, which arbor owns for an arbor session: the
-  // paths are arbor's own `<workspace>` section's, so a `cd` would move the
-  // ground the section describes. A UI switch still lands as a
-  // `working-directory/change` event and the workspace follows it.
+  // paths are arbor's own `<workspace>` section's — the shared folder — so a
+  // `cd` would move ground the section does not describe. A UI switch still
+  // lands as a `working-directory/change` event, but an arbor session is not
+  // bound to one cwd: its window works in the shared folder and its checkouts,
+  // so the event moves the session's cwd display and nothing a window does.
   'working_directory',
   // DSH's skill loader, which is `read` of the SKILL.md `<env>` already names:
   // the skill's body is a file under /env, and arbor's own `read` reaches it.

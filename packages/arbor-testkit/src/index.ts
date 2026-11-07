@@ -51,3 +51,4 @@ export function useDshFixtures(): void {
 }
 export { MCP_INSTRUCTIONS_TEXT, MCP_SERVER_NAME, MCP_TOOL_NAME, ArborMcpFixtureService } from './mcp-fixture.ts'
 export { THIRD_PARTY_TEXT, ArborThirdPartySectionService } from './third-party-section.ts'
+export { useOvnfsStub, OVNFS_STUB } from './ovnfs-stub.ts'

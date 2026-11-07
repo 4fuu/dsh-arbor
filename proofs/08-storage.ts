@@ -12,17 +12,21 @@
  *  - the window settings are arbor's own defaults — the deployment sets no
  *    idle period, context budget or reserve — and the judge is off, so
  *    `host.dispatch` is deterministic;
- *  - the workspace is the session's cwd itself: there is no per-window
- *    directory, the mount owns `exec`, `readFile` and `writeFile`, and the
- *    `<workspace>` prompt section names the cwd and the sandbox mode.
+ *  - the workspace is arbor's own over the shared folder: every session's
+ *    window works in the one shared folder under `DSH_HOME/arbor`, there is no
+ *    per-session directory, and the `<workspace>` section names the shared
+ *    folder with no sandbox line;
+ *  - an ordinary session on the embedded AgentLoop is untouched: it keeps the
+ *    cwd it was created with and the DSH sandbox stays mounted for it.
  *
  * Run: pnpm proof:storage
  */
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { sep } from 'node:path'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
@@ -121,26 +125,55 @@ async function main(): Promise<void> {
       settings.workspaces === undefined,
       `settings.workspaces: ${JSON.stringify(settings.workspaces)}`)
 
-    // ---- the workspace is the session's cwd itself.
+    // ---- the workspace is arbor's own. With no ovnfs binary on PATH (this
+    // proof does not stage one) the host falls back to the plain-directory
+    // workspace: one directory per window under the arbor data root. Proof 11
+    // stages the ovnfs stand-in and proves the shared-folder checkout model.
+    check('the host runs the plain-directory workspace when ovnfs is absent',
+      host.workspaceBackend === 'dir', `workspaceBackend: ${host.workspaceBackend}`)
+    const shared = host.sharedFolder
+    const workspacesRoot = join(host.dataRoot, 'workspaces')
     const firstWindow = windowOf(ctx, firstSession)!
     const mount = await host.host.services.ensureWorkspace(firstWindow)
-    check('the window works in the session cwd itself',
-      mount !== undefined && mount.path === first,
-      `window ${firstWindow} works in ${mount?.path ?? 'nothing'}; the session's cwd is ${first}`)
-    check('the mount owns its execution environment and its file access',
-      mount !== undefined && typeof mount.exec === 'function'
-        && typeof mount.readFile === 'function' && typeof mount.writeFile === 'function',
-      `exec: ${typeof mount?.exec}, readFile: ${typeof mount?.readFile}, writeFile: ${typeof mount?.writeFile}`)
+    check('the window works in its own directory under the workspaces root',
+      mount !== undefined && mount.path.startsWith(workspacesRoot + sep),
+      `window ${firstWindow} works in ${mount?.path ?? 'nothing'}; under ${workspacesRoot}`)
     const secondWindow = windowOf(ctx, secondSession)!
     const secondMount = await host.host.services.ensureWorkspace(secondWindow)
-    check('a second session window works in its own cwd',
-      secondMount?.path === second,
-      `window ${secondWindow} works in ${secondMount?.path ?? 'nothing'}; the session's cwd is ${second}`)
+    check('a second session window works in its own separate directory',
+      secondMount !== undefined && secondMount.path.startsWith(workspacesRoot + sep) && secondMount.path !== mount?.path,
+      `window ${secondWindow} in ${secondMount?.path ?? 'nothing'}; first in ${mount?.path ?? 'nothing'}`)
     const driver = ctx.get('arborDriver') as { systemPromptOf(id: SessionId): string | undefined }
     const prompt = driver.systemPromptOf(firstSession) ?? ''
-    check('the <workspace> section names the session cwd',
-      /<workspace>[\s\S]*沙箱/.test(prompt) && prompt.includes(first),
-      `the section names ${first}: ${prompt.includes(first)}`)
+    check('the <workspace> section is arbor\'s own, with no sandbox line',
+      /<workspace>[\s\S]*<\/workspace>/.test(prompt) && !prompt.includes('沙箱'),
+      `sandbox mention in the prompt: ${prompt.includes('沙箱')}`)
+
+    // ---- an ordinary session on the embedded AgentLoop is untouched.
+    scriptedLlm.responses = [{ text: 'ok' }]
+    const ordinaryId = brandString<SessionId>(`session-${randomUUID()}`)
+    const { agent: ordinary } = await ctx.agents.create({
+      sessionId: ordinaryId,
+      meta: { cwd: first },
+      agentOptions: { ...SCRIPTED_SELECTION },
+      setup: (agentCtx) => { installModelSelection(agentCtx) },
+    })
+    check('an ordinary session keeps the cwd it was created with',
+      ordinary.session.header.cwd === first,
+      `ordinary cwd: ${ordinary.session.header.cwd}; created with ${first}`)
+    check('the DSH sandbox stays mounted for ordinary sessions',
+      (ctx.get('sandboxPolicy') as unknown) !== undefined,
+      `sandboxPolicy service: ${ctx.get('sandboxPolicy') === undefined ? 'absent' : 'present'}`)
+
+    // ---- an existing directory joins the shared folder by explicit adoption.
+    const external = await mkdtemp(join(tmpdir(), 'arbor-adopt-'))
+    await writeFile(join(external, 'code.py'), 'print("hi")', 'utf8')
+    const adopted = await host.adoptArborProject(external)
+    check('an existing directory is adopted into the shared folder as a project',
+      adopted.startsWith(shared + sep) && existsSync(join(adopted, 'code.py')),
+      `adopted ${external} -> ${adopted}; code.py present: ${existsSync(join(adopted, 'code.py'))}`)
+    const adoptedAgain = await host.adoptArborProject(external)
+    check('adoption is idempotent', adoptedAgain === adopted, `second adoption: ${adoptedAgain}`)
   } finally {
     await ctx.fiber.dispose()
   }

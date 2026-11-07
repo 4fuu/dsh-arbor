@@ -26,8 +26,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
@@ -39,11 +38,13 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import {
   SCRIPTED_SELECTION,
+  arborHostOf,
   arborPatch,
   bootArborProfile,
   finishProof,
   freshDshHome,
   scriptedLlm,
+  useOvnfsStub,
   waitFor,
 } from '../packages/arbor-testkit/src/index.ts'
 
@@ -87,15 +88,11 @@ function toolResultBlocks(agent: Parameters<typeof logOf>[0]): readonly ContentB
 }
 
 async function main(): Promise<void> {
-  // A project directory the session works in, with the two files the model is
-  // asked to deliver and to read.
-  const project = await mkdtemp(join(tmpdir(), 'arbor-proof-13-'))
-  await mkdir(join(project, 'src'), { recursive: true })
-  const image = join(project, 'diagram.png')
-  await writeFile(image, PNG_1X1)
-  const source = join(project, 'src', 'notes.txt')
-  await writeFile(source, 'line one\nline two\nline three\n')
-
+  // Arbor sessions work in the shared folder, so the two files the model is
+  // asked to deliver and to read live there — ovnfs's source, which is also the
+  // session's cwd. The ovnfs stand-in is staged on PATH so the host runs the
+  // ovnfs backend and a relative `read` resolves against the shared folder.
+  await useOvnfsStub()
   await freshDshHome('arbor-spike')
   loadEnv(NAME)
   const ctx = await bootArborProfile({
@@ -104,10 +101,17 @@ async function main(): Promise<void> {
     overlayPaths: [arborPatch, arborOverlay, scriptedOverlay],
   })
   try {
+    const shared = arborHostOf(ctx).sharedFolder
+    await mkdir(join(shared, 'src'), { recursive: true })
+    const image = join(shared, 'diagram.png')
+    await writeFile(image, PNG_1X1)
+    const source = join(shared, 'src', 'notes.txt')
+    await writeFile(source, 'line one\nline two\nline three\n')
+
     const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
     const { agent } = await ctx.agents.create({
       sessionId,
-      meta: { cwd: project, agentPreset: 'arbor' },
+      meta: { cwd: shared, agentPreset: 'arbor' },
       agentOptions: { ...SCRIPTED_SELECTION } as AgentOptions,
       setup: (agentCtx) => { installModelSelection(agentCtx) },
     })
@@ -199,7 +203,7 @@ async function main(): Promise<void> {
     // turns the typed mention into an attachment, and the shipped headless
     // profile does not mount it, so this proof covers the half the arbor path
     // owns: the path the section describes is the one that resolves, through
-    // arbor's own `read`, against the session's cwd.
+    // arbor's own `read`, against the shared folder the session works in.
     scriptedLlm.responses = [
       { toolCalls: [{ name: 'read', args: { path: 'src/notes.txt' } }] },
       { text: 'read the notes' },
@@ -222,8 +226,8 @@ async function main(): Promise<void> {
       readText.includes('src/notes.txt'),
       'the path the section describes is the one that resolved')
     check('the referenced file was read from the session\'s own cwd',
-      readText.includes(project) || readText.includes('src/notes.txt'),
-      `project root: ${project}`)
+      readText.includes(shared) || readText.includes('src/notes.txt'),
+      `shared folder root: ${shared}`)
   } finally {
     await ctx.fiber.dispose()
   }

@@ -4,12 +4,13 @@
  *
  * The four things a window is told, each checked where it is acted on:
  *
- *  - the workspace is the session's cwd, so a `write` lands in the project and
- *    a `bash` command runs there;
+ *  - the workspace is arbor's own — an ovnfs checkout, or a per-window directory
+ *    when ovnfs is absent — so a `write` lands there and a `bash` command runs
+ *    there; the `<workspace>` section is arbor's own, with no sandbox line;
  *  - a DSH skill is readable from `/env`, so `read` of the path the `<env>`
  *    section names returns the skill's own body;
  *  - the mount survives a DSH restart: the session resumes onto the window the
- *    host continued, the workspace is still the cwd, and the skill is still
+ *    host continued, the workspace is still the window's, and the skill is still
  *    mounted and readable;
  *  - with `ARBOR_PROOF_LIVE=1`, the same loop runs against the real DeepSeek
  *    model: it reads the DSH skill's SKILL.md through arbor's own `read` tool
@@ -106,6 +107,7 @@ async function main(): Promise<void> {
   let ctx = await bootArborProfile({ binName: NAME, profile: 'headless', overlayPaths: overlays })
   let agent: Agent
   try {
+    const host = arborHostOf(ctx)
     scriptedLlm.responses = [{ text: 'warmed up' }]
     const created = await ctx.agents.create({
       sessionId,
@@ -116,6 +118,14 @@ async function main(): Promise<void> {
     agent = created.agent
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'warm up' }], source: { kind: 'user' } }))
     await agent.whenIdle()
+
+    // The window's workspace is arbor's own — an ovnfs checkout, or a per-window
+    // directory when ovnfs is absent — not the session's cwd. A `write` lands
+    // there and a `bash` command runs there.
+    const firstWindow = await host.windowFor(sessionId)
+    const workDir = firstWindow === undefined
+      ? undefined
+      : (await host.host.services.ensureWorkspace(firstWindow))?.path
 
     scriptedLlm.responses = [
       { toolCalls: [{ name: 'write', args: { path: 'before.txt', text: 'written before the restart' } }] },
@@ -129,10 +139,10 @@ async function main(): Promise<void> {
     // The live model is not scripted, so the write it performs is its own; the
     // scripted path performs exactly the two the proof names.
     if (!proofLive) {
-      check('a write lands in the session cwd before the restart',
-        existsSync(join(project, 'before.txt'))
-          && await readFile(join(project, 'before.txt'), 'utf8') === 'written before the restart',
-        `before.txt: ${existsSync(join(project, 'before.txt')) ? await readFile(join(project, 'before.txt'), 'utf8') : 'absent'}`)
+      check('a write lands in the window workspace before the restart',
+        workDir !== undefined && existsSync(join(workDir, 'before.txt'))
+          && await readFile(join(workDir, 'before.txt'), 'utf8') === 'written before the restart',
+        `before.txt in ${workDir}: ${workDir !== undefined && existsSync(join(workDir, 'before.txt'))}`)
     }
     check('read of the DSH skill returns its own body before the restart',
       results.some(text => text.includes('This is a DSH skill the proof registers')),
@@ -160,11 +170,16 @@ async function main(): Promise<void> {
 
     const driver = ctx.get('arborDriver') as { systemPromptOf(id: SessionId): string | undefined }
     const prompt = driver.systemPromptOf(sessionId) ?? ''
-    check('the <workspace> section still names the session cwd after the restart',
-      prompt.includes(project), `the section names ${project}: ${prompt.includes(project)}`)
+    check('the <workspace> section is arbor\'s own, with no sandbox line, after the restart',
+      /<workspace>[\s\S]*<\/workspace>/.test(prompt) && !prompt.includes('沙箱'),
+      `sandbox mention in the prompt: ${prompt.includes('沙箱')}`)
     check('the <env> section still lists the DSH skill after the restart',
       prompt.includes(PROBE_SKILL.name) && prompt.includes(SKILL_PATH),
       `the <env> section names ${PROBE_SKILL.name}: ${prompt.includes(PROBE_SKILL.name)}`)
+
+    const workDir = continued === undefined
+      ? undefined
+      : (await host.host.services.ensureWorkspace(continued))?.path
 
     const task = proofLive
       ? `Read ${SKILL_PATH} with your read tool, then answer in one sentence what that skill tells you to do.`
@@ -180,10 +195,10 @@ async function main(): Promise<void> {
 
     const results = resultTexts(agent)
     if (!proofLive) {
-      check('a write lands in the session cwd after the restart',
-        existsSync(join(project, 'after.txt'))
-          && await readFile(join(project, 'after.txt'), 'utf8') === 'written after the restart',
-        `after.txt: ${existsSync(join(project, 'after.txt')) ? await readFile(join(project, 'after.txt'), 'utf8') : 'absent'}`)
+      check('a write lands in the same window workspace after the restart',
+        workDir !== undefined && existsSync(join(workDir, 'after.txt'))
+          && await readFile(join(workDir, 'after.txt'), 'utf8') === 'written after the restart',
+        `after.txt in ${workDir}: ${workDir !== undefined && existsSync(join(workDir, 'after.txt'))}`)
     }
     check('the DSH skill is still mounted and readable after the restart',
       results.some(text => text.includes('This is a DSH skill the proof registers')),
@@ -191,9 +206,9 @@ async function main(): Promise<void> {
     // Which tools the live model reaches for is its own choice; the scripted path
     // names the command it runs.
     if (!proofLive) {
-      check('a command still runs in the session cwd after the restart',
-        results.some(text => text.includes(project)),
-        `tool results: ${JSON.stringify(results.map(text => text.slice(0, 100)))}`)
+      check('a command runs in the window workspace after the restart',
+        workDir !== undefined && results.some(text => text.includes(workDir)),
+        `a result names ${workDir}: ${workDir !== undefined && results.some(text => text.includes(workDir))}`)
     }
     if (proofLive) {
       const answers = assistantTexts(agent)

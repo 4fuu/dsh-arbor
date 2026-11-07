@@ -1,23 +1,28 @@
 /**
- * @4fu/dsh-arbor-workspace — the arbor `Workspace` over DSH's sandbox.
+ * @4fu/dsh-arbor-workspace — arbor's own workspace over the shared folder, and
+ * the DSH project bridge.
  *
- * The session's cwd is the shared root; every file access and every command of
- * a window runs through DSH's own `ctx.fs` and `ctx.shell` under the session's
- * resolved sandbox policy, so DSH's sandbox mode and its approval path apply to
- * arbor's `bash`, `read`, `write` and `edit` exactly as they do to DSH's own
- * tools of the same names.
+ * For arbor sessions arbor's tools run on the host the way they do in standalone
+ * arbor, so the workspace is arbor's own: ovnfs when its daemon starts, the
+ * plain-directory workspace otherwise, both rooted at the arbor shared folder
+ * under `DSH_HOME/arbor`. There is no DSH sandbox seam here, no `sandbox_escalate`
+ * and no `fileToolsSandboxed`; the `<workspace>` section and the `workspace.*`
+ * module functions are arbor's own.
  *
- * Arbor's default workspace when the `ovnfs` binary is found is deliberately
- * not offered inside DSH; see the note at the top of `./workspace.ts`.
+ * `DshProjectBridge` is the other half of arbor taking over DSH's project
+ * management: it makes the shared folder's project subfolders the DSH project
+ * list (`ctx.workspaceRegistry`) and decides how an existing directory joins the
+ * shared folder.
  */
 
-export { DshSandboxWorkspace, type DshWorkspaceOptions } from './workspace.ts'
 export {
-  DshSandboxSeam,
-  deny,
-  type CommandOutcome,
-  type EscalationAsk,
-  type SandboxedShellRequest,
-} from './seam.ts'
-export { DshWorkspaceGroup } from './group.ts'
-export { dshWorkspaceSection, dshWorkspaceText, dshWorkspaceTable, dshWorkspaceTextOf, DSH_WORKSPACE_BLOCK } from './text.ts'
+  openArborWorkspace,
+  arborSharedFolder,
+  type ArborWorkspace,
+  type ArborWorkspaceOptions,
+} from './workspace.ts'
+export {
+  DshProjectBridge,
+  type DshProject,
+  type DshProjectBridgeOptions,
+} from './projects.ts'

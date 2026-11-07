@@ -78,12 +78,13 @@ pnpm proof:preset      # 07 the arbor preset in the roster and selectable
 pnpm proof:storage     # 08 durable storage, one host, workspace root
 pnpm proof:lifetime    # 09 window end, continuation, idle timeout
 pnpm proof:resume      # 10 resume of a persisted session after a restart
-pnpm proof:sandbox     # 11 the workspace a window works in, and a refused write
+pnpm proof:sandbox     # 11 arbor's own workspace over the shared folder, no sandbox
 pnpm proof:harness     # 11 the rendered system prompts, the deltas, the tool sets
 pnpm proof:env         # 12 /env: DSH's skills and MCP servers, read-only
 pnpm proof:sections    # 12 the decision table against the pinned DSH
 pnpm proof:loop        # 13 the closed loop, across a restart (live-capable)
 pnpm proof:send-links  # 13 what <harness> promises about send and @path
+pnpm proof:windows     # 14 two windows on one project do not collide
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -164,7 +165,7 @@ Proof 13 is the same loop with the assertions already written, and it runs
 against the real model with `ARBOR_PROOF_LIVE=1 pnpm proof:loop`. Against the
 real model it also shows what the live run proves end to end: the model reads a
 DSH skill's `SKILL.md` through arbor's own `read` tool and answers from it, runs
-a command in the session's cwd, and calls a DSH MCP tool as a DSH tool.
+a command in the arbor shared folder, and calls a DSH MCP tool as a DSH tool.
 
 ## 4. Inspect what ran
 
@@ -185,12 +186,16 @@ a command in the session's cwd, and calls a DSH MCP tool as a DSH tool.
   and every event that belongs to a DSH session carries that session as a target
   (`dsh:session:<id>` in `event_targets`), which is how the host knows which
   window belongs to which session after a restart.
-- A window's workspace **is** the session's cwd: there is no per-window
-  subdirectory and nothing to reclaim, so the host sets no
-  `workspaces.retentionMs`. Every file access and every command runs through
-  DSH's own `ctx.fs` and `ctx.shell` under the session's sandbox policy, so
-  DSH's sandbox mode applies to arbor's `bash`/`read`/`write`/`edit` exactly as
-  it does to DSH's own tools of the same names.
+- A window's workspace is arbor's own, over the arbor shared folder under
+  `DSH_HOME/arbor/shared`: ovnfs when its binary is found and its daemon starts
+  (a copy-on-write checkout per window, opened with `workspace.checkout`, merged
+  back with `workspace.apply`), the plain-directory workspace otherwise. For
+  arbor sessions there is no DSH sandbox — arbor's file tools run on the host the
+  way they do in standalone arbor, and arbor's own secret scrub is the only
+  protection on what reaches the model. The proofs stage an ovnfs stand-in on
+  PATH (`useOvnfsStub`), because the real binary is not installed here. An
+  ordinary session on the embedded AgentLoop is untouched: its file tools still
+  run through DSH's `ctx.fs` and `ctx.shell` under its own sandbox policy.
 - The session log is DSH's own: `assistant/message` events carry the streamed
   reply, `tool/call` and `tool/result` pairs carry every tool call the window
   ran, and `turn/end` closes each turn.
@@ -214,8 +219,9 @@ packages/
                     <harness> section, and the per-section decision table
   arbor-tools/      the tool bridge: DSH tools as arbor external tools with
                     DSH's own JSON Schema, the same-name tools restricted away
-  arbor-workspace/  the Workspace over DSH's sandbox: the session's cwd, every
-                    file access and command through ctx.fs and ctx.shell
+  arbor-workspace/  arbor's own workspace over the shared folder: ovnfs, or the
+                    plain directory, with no DSH sandbox, plus the bridge that
+                    makes the shared folder's projects the DSH project list
   arbor-env/        /env: arbor's own environment under DSH_HOME/arbor/env, with
                     DSH's skills and MCP servers mounted read-only beside it
   arbor-bundle/     the installable bundle: the patch layer that replaces DSH's
@@ -225,7 +231,8 @@ packages/
                     and the B3 fixtures (a DSH skill row, a stdio MCP server)
 patches/            the overlay patch layers a proof applies above the profile
 proofs/             one runnable proof per integration point
-docs/               b0-findings.md, b3-findings.md, and this page
+docs/               b0-findings.md, b3-findings.md, b3b-projects-and-sandbox.md,
+                    and this page
 ```
 
 `packages/arbor-bundle` is the installable piece: its `cordis.patch.yml`
@@ -248,11 +255,13 @@ Works, and is covered by a proof:
 - One arbor host per DSH process, with the journal and note store under
   `DSH_HOME/arbor/`, so a session survives a restart; resume replays from the
   journal onto the session log.
-- A window's workspace is its session's cwd, and every file access and command
-  runs through DSH's own `ctx.fs` and `ctx.shell` under the session's sandbox
-  policy — so `read-only` refuses a write and the model reads the refusal with
-  the next action. The `<workspace>` prompt section names the cwd and the
-  standing mode, and only what is true is written.
+- A window's workspace is arbor's own over the shared folder: ovnfs checkouts a
+  window opens, works in and applies back, or the plain-directory fallback. There
+  is no DSH sandbox for arbor sessions — arbor's file tools run on the host, and
+  arbor's own secret scrub is the only protection. Tool approval is kept: a call
+  that needs approval still routes through DSH's approval on the user session's
+  agent. The `<workspace>` prompt section is arbor's own (ovnfs or directory
+  method), with no sandbox line.
 - `/env` carries DSH's skills (readable by path) and MCP servers (listed, with
   their tools staying DSH tools) beside arbor's own settings, built-in skills
   and the model's own installs.
@@ -265,21 +274,24 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- **B3b, in flight on branch `b3b`.** Decisions table revision 2 gives arbor
-  project management for arbor sessions and drops DSH's sandbox for them: the
-  workspace moves onto arbor's own shared folder (ovnfs, with a directory
-  workspace as the fallback) and per-window checkouts, `DshSandboxSeam` /
-  `DshSandboxWorkspace` / `sandbox_escalate` go away, and the UI's project list
-  and sandbox switch follow. Until it lands, `packages/arbor-workspace` still
-  routes through DSH's sandbox and its `<workspace>` section still describes it,
-  which is true of the code as it stands.
+- **B3b has landed on branch `b3b`** (see `docs/b3b-projects-and-sandbox.md`): arbor
+  owns project management for arbor sessions and DSH's sandbox is gone for them.
+  The workspace is arbor's own over the shared folder (ovnfs, with the plain
+  directory as the fallback) and per-window checkouts; `DshSandboxSeam` /
+  `DshSandboxWorkspace` / `sandbox_escalate` are removed, and the shared folder's
+  projects are the DSH project list. Ordinary sessions keep their sandbox and cwd.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
-- ovnfs is deliberately not offered inside DSH *yet*. Its file tools are
-  `node:fs` calls on the host, its mount carries no `exec`, and its checkout
-  operations spawn the binary directly — all outside `ctx.shell` and `ctx.fs`,
-  so DSH's sandbox would not apply to them. B3b is the work that makes it the
-  arbor session's project store. The reasoning is at the top of
-  `packages/arbor-workspace/src/workspace.ts`.
+- ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
+  `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through
+  DSH's sandbox; with the sandbox gone for arbor sessions that reasoning no
+  longer holds, so the workspace is arbor's own, chosen by arbor-core's
+  `openWorkspace` (ovnfs when the binary is found, the plain directory
+  otherwise).
+- The UI's sandbox mode switch and the per-preset filtering of the project picker
+  are client-side and belong to the later UI stage: the DSH web client ships as
+  compiled bundles, so this step delivers the server-side truth (the project list
+  reflects the shared folder; an arbor session has no sandbox mode) rather than a
+  client patch. See the UI section of `docs/b3b-projects-and-sandbox.md`.
 - The UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.
@@ -318,10 +330,12 @@ through the arbor routing registry and the embedded official loop, and
 `$DSH_HOME/arbor/` holds `journal.sqlite`, `notes.sqlite` and the `env/`
 directory the environment lives in.
 
-The bundle needs the rows a real installation already has: the base profile's
+The bundle keeps the rows a real installation already has: the base profile's
 `bash-sandbox`, `fs-sandbox`, `sandbox`, `sandbox-policy` and `approval` rows.
-Without `fs-sandbox` and `bash-sandbox` nothing confines and arbor's file tools
-run unconfined. B3b removes this dependency together with the sandbox.
+They confine the ordinary sessions that run on the embedded AgentLoop. Arbor
+sessions do not use them — arbor's file tools run on the host — so nothing about
+an arbor session depends on whether they are mounted; B3b removed that
+dependency together with the sandbox.
 
 What the installed CLI cannot do yet: drive an arbor-preset session. The
 one-shot runner refuses to adopt any session that runs under a preset —
@@ -368,8 +382,9 @@ Three decisions from revision 2 of the table, which is what this branch ships:
 - `working-directory:current` is dropped, and it is dropped from the
   runtime-context snapshot too, so the paths have exactly one home: arbor's own
   `<workspace>` section.
-- `@path` references resolve from arbor's workspace root, which stays true when
-  the workspace moves onto arbor's shared folder.
+- `@path` references resolve from arbor's workspace root, which is arbor's shared
+  folder for an arbor session — the session's cwd is the shared folder, and a
+  relative `read` resolves against it (ovnfs's mount path).
 
 Two more, from the review of the rendered prompts:
 
@@ -377,9 +392,11 @@ Two more, from the review of the rendered prompts:
   `working_directory` is DSH's project management, which arbor owns: the paths
   are arbor's `<workspace>` section's, and a `cd` would move the ground the
   section describes. A UI switch still lands as a `working-directory/change`
-  event and the workspace follows it. `skill` is `read` of the `SKILL.md` that
-  `<env>` already names, and arbor's own `read` reaches it. `read_image` stays:
-  it returns the image itself, which arbor's text-only `read` cannot.
+  event, but an arbor session is not bound to one cwd — its window works in the
+  shared folder and its checkouts, so the event moves the session's cwd display
+  and nothing a window does. `skill` is `read` of the `SKILL.md` that `<env>`
+  already names, and arbor's own `read` reaches it. `read_image` stays: it
+  returns the image itself, which arbor's text-only `read` cannot.
 - The host's arbor settings carry no `generalRules` any more, so arbor's own
   seven rules render in Chinese instead of B0's three English ones — two of
   which restated arbor's own and one of which claimed one DSH session is one
@@ -398,10 +415,10 @@ turn: it goes in at the next step boundary and is read by the turn that follows.
   prints what it saw.
 - A live proof fails on the model listing: `DEEPSEEK_API_KEY` is missing or
   wrong, or the network is unavailable. Use the scripted default instead.
-- A proof reports that a write was refused when you expected it to succeed: the
-  profile's sandbox mode is `workspace-write` unless `DSH_PERMISSION_MODE` says
-  otherwise, and `workspace-write` allows only the session's cwd. Check the
-  session's `cwd` and the mode the `<workspace>` section names. B3b removes the
-  sandbox from this path altogether.
+- A proof reports that a write was refused when you expected it to succeed: an
+  arbor session has no DSH sandbox, so arbor's own file tools write on the host
+  and are not refused by a sandbox mode. If you are testing an *ordinary*
+  session, its sandbox mode is `workspace-write` unless `DSH_PERMISSION_MODE`
+  says otherwise, and `workspace-write` allows only the session's cwd.
 - Anything else: the findings in `docs/b0-findings.md` and `docs/b3-findings.md`
   record where each integration point lives in DSH's own sources.

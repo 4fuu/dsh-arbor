@@ -163,7 +163,9 @@ class SessionArbor {
       meta: {
         origin: 'subagent',
         parentSession: this.agent.session.id,
-        ...this.driver.driverContext.get('fs') === undefined ? {} : { cwd: process.cwd() },
+        // The window works in the arbor shared folder, so its hidden agent's cwd
+        // is that folder rather than the DSH process's own directory.
+        cwd: this.hostService.sharedFolder,
       },
       agentOptions: {},
     })
@@ -309,9 +311,18 @@ export class ArborDriver extends Service implements AgentFactory {
   }
 
   async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
+    // An arbor session is not bound to the caller's directory: it works in the
+    // arbor shared folder, and a requested directory outside it joins the shared
+    // folder only through explicit adoption (see @4fu/dsh-arbor-workspace). The
+    // session's cwd is therefore resolved into the shared folder before the
+    // session is prepared, so the DSH session, its cwd display and the project
+    // picker all name a folder that is really there.
+    const meta = options.meta === undefined
+      ? { cwd: await this.hostService.resolveArborCwd(undefined) }
+      : { ...options.meta, cwd: await this.hostService.resolveArborCwd(options.meta.cwd as string | undefined) }
     const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, {
       ...options.seed === undefined ? {} : { seed: options.seed },
-      ...options.meta === undefined ? {} : { meta: options.meta },
+      meta,
       ...options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount },
     }))
     const id = preparation.session.id
@@ -319,7 +330,6 @@ export class ArborDriver extends Service implements AgentFactory {
     const arbor = new SessionArbor(this, agent)
     agent.attachBridge(arbor.bridge())
     this.sessions.set(id, arbor)
-    this.hostService.noteSessionCwd(id, preparation.session.header.cwd)
     let stored: { handle: SessionHandle; storedCount: number } | undefined
     try {
       ownerCtx.fiber.assertActive()
@@ -390,7 +400,6 @@ export class ArborDriver extends Service implements AgentFactory {
       arbor = new SessionArbor(this, agent)
       agent.attachBridge(arbor.bridge())
       this.sessions.set(id, arbor)
-      this.hostService.noteSessionCwd(id, preparation.session.header.cwd)
       await this.publish(ownerCtx, arbor, agent, preparation.session, stored, options.setup, 'resume', options.parentAgent, options.signal)
     } catch (error: unknown) {
       if (agent !== undefined) this.sessions.delete(id)
@@ -491,16 +500,6 @@ export class ArborDriver extends Service implements AgentFactory {
       this.hostService.noteDshPromptChange()
       const detachAgent = loopCtx.agents.enter(agent, parentAgent)
       await loopCtx.agents.announce(agent, source, signal)
-      // The session's own working directory can move while it runs — the
-      // `working_directory` tool, or a UI switch — and arbor's workspace root
-      // follows it, so the root the file tools work in and the root the
-      // `<workspace>` section names stay the session's own. The change itself
-      // reaches a running window as the runtime-context snapshot, because a
-      // section is frozen per epoch.
-      agent.ctx.on('session/event', (subject, event) => {
-        if (subject !== session) return
-        if (event.type === 'working-directory/change') this.hostService.noteSessionCwd(session.id, event.data.cwd)
-      })
       agent.ctx.effect(function* () {
         yield () => {
           detachAgent()
