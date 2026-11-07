@@ -52,6 +52,7 @@ import { createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import { sessionTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
+import { replacedToolsRegistered } from '@4fu/dsh-arbor-tools'
 import { dataBlock } from '@4fu/arbor-prompt'
 import type { TaskInput, WindowRef } from '@4fu/arbor-interfaces'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -226,7 +227,7 @@ class SessionArbor {
 
 /** The arbor agent factory and Cordis plugin. */
 export class ArborDriver extends Service implements AgentFactory {
-  static inject = ['agents', 'sessions', 'sessionProjections', 'arborHost']
+  static inject = ['agents', 'sessions', 'sessionProjections', 'arborHost', 'tools', 'systemPrompt']
 
   static Config: z<Config, Config> = z.object({}) as unknown as z<Config, Config>
 
@@ -465,8 +466,22 @@ export class ArborDriver extends Service implements AgentFactory {
       }
       const detachSession = agent.ctx.sessions.enter(session)
       agent.ctx.sessions.announce(session)
+      // Every capability appears once: the DSH tools arbor's own replaces are
+      // denied in this session's scope, so DSH's own pipeline refuses them and
+      // their `tool:*` prompt sections render empty. The same list keeps them
+      // out of what the backend hands arbor's catalog
+      // (`@4fu/dsh-arbor-tools` DSH_TOOLS_ARBOR_REPLACES). The restriction is
+      // scoped to this agent — `tools.restrict` refuses a global one — and is
+      // disposed with the agent's own context.
+      const liftRestriction = agent.ctx.tools.restrict({
+        deny: replacedToolsRegistered(loopCtx.tools),
+      })
       const commit: AgentSetupCommit | void = await setup?.(agent.ctx, agent)
       commit?.commit()
+      // A `tool:*` section's text reads whether its tool is registered, and the
+      // restriction moves that without a registration change, so the prompt
+      // bridge is told the prompt moved.
+      this.hostService.noteDshPromptChange()
       const detachAgent = loopCtx.agents.enter(agent, parentAgent)
       await loopCtx.agents.announce(agent, source, signal)
       agent.ctx.effect(function* () {
@@ -476,6 +491,7 @@ export class ArborDriver extends Service implements AgentFactory {
         }
         yield async () => { await arbor.bridge().close() }
       }, 'arborDriver.detach()')
+      agent.ctx.effect(() => liftRestriction, 'arborDriver.restrictTools()')
     })
   }
 }

@@ -14,7 +14,12 @@
  *  - the DSH-backed `AgentBackend` (`@4fu/dsh-arbor-llm`), which runs each
  *    window's turns through `ctx.llm` and each tool call through
  *    `ctx.tools.execute`;
- *  - the `<dsh>` prompt plugin (`@4fu/dsh-arbor-prompt`);
+ *  - the two prompt plugins (`@4fu/dsh-arbor-prompt`): a trusted `<harness>`
+ *    section this bridge writes, and a `<dsh>` data block for third-party
+ *    material;
+ *  - the deployment's persona, read out of DSH's own assembly once and merged
+ *    into arbor's `<identity>` section, because it is the deployment's
+ *    configuration rather than a section of its own;
  *  - the environment (`@4fu/dsh-arbor-env`): arbor's own under
  *    `DSH_HOME/arbor/env`, with DSH's skills and MCP servers mounted read-only
  *    beside them;
@@ -48,9 +53,18 @@ import { SqliteJournal } from '@4fu/arbor-journal-sqlite'
 import { SqliteNoteStore } from '@4fu/arbor-notes-sqlite'
 import { DirectoryEnvironment } from '@4fu/arbor-environment-dir'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { planProjectionDefinition } from '@deepseek-ai/dsh-plan-mode'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { createDshBackend, type DshBackend } from '@4fu/dsh-arbor-llm'
-import { dshPromptPlugin } from '@4fu/dsh-arbor-prompt'
+import {
+  dshPromptPlugins,
+  interpolatePersona,
+  readDeploymentPersona,
+  type DeploymentPersona,
+  type HarnessState,
+  type PersonaVariables,
+} from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
 import { DshSandboxSeam, DshSandboxWorkspace, dshWorkspaceTextOf } from '@4fu/dsh-arbor-workspace'
 
@@ -182,7 +196,10 @@ export class ArborHostService extends Service {
   // shell every window's file access and command runs through. A profile that
   // mounts none of them cannot run arbor's windows at all, so the row says so
   // at boot rather than at the first tool call.
-  static inject = ['llm', 'tools', 'agents', 'systemPrompt', 'skills', 'fs', 'shell', 'sandboxPolicy']
+  static inject = [
+    'llm', 'tools', 'agents', 'systemPrompt', 'sessionProjections',
+    'skills', 'fs', 'shell', 'sandboxPolicy',
+  ]
 
   static Config: z<Config, Config> = z.object({}) as unknown as z<Config, Config>
 
@@ -191,8 +208,17 @@ export class ArborHostService extends Service {
   private state: HostState | undefined
   /** The cwd each live session runs in, for the workspace root. */
   private cwds: Map<string, string> | undefined
-  /** Raised whenever a DSH prompt provider changes, so the `<dsh>` section follows. */
+  /** Raised whenever a DSH prompt provider changes, so both sections follow. */
   private promptChanges = 0
+  /** Plan mode's projection, so the `<harness>` section can read it per step. */
+  private planProjection: ProjectionHandle<{ active: boolean }> | undefined
+  /** The deployment's persona, read once when the host is built. */
+  private persona: DeploymentPersona | undefined
+  /** The last provider and model a live session rendered under, for the fallback. */
+  private lastProvider: string | undefined
+  private lastModel: string | undefined
+  /** The warnings the bridge raised while the host was built, for diagnostics. */
+  readonly warnings: string[] = []
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'arborHost')
@@ -205,8 +231,34 @@ export class ArborHostService extends Service {
     await mkdir(root, { recursive: true })
     const journal = new SqliteJournal({ path: join(root, 'journal.sqlite') })
     const notes = new SqliteNoteStore({ path: join(root, 'notes.sqlite'), journal })
+    // The deployment's persona belongs in arbor's <identity>, so it is read out
+    // of DSH's own assembly before the host is built. A persona a plugin
+    // registers after this point is not carried; the section it registers is
+    // still decided by the table and reported through `warnings`.
+    const persona = await readDeploymentPersona(ctx.systemPrompt)
+    this.persona = persona
+    for (const warning of persona.warnings) {
+      this.warnings.push(warning)
+      ctx.logger.warn(warning)
+    }
     const settings = defaultSettings(this.config.settings)
+    // `identity` is a getter rather than a string because DSH's persona carries
+    // `{{model}}` and `{{provider}}`, which are per-request values there: the
+    // loop re-resolves them on every request, and arbor's prefix is frozen per
+    // epoch, so the only faithful resolution is the one for the session whose
+    // turn is rendering. Arbor reads `settings.identity` at each render
+    // (`renderSystemPrompt`), so the getter is evaluated per epoch.
+    const identity = settings.identity ?? ''
+    Object.defineProperty(settings, 'identity', {
+      enumerable: true,
+      configurable: true,
+      get: () => [identity, ...this.personaLines()].filter(part => part !== '').join('\n\n'),
+    })
     const cwds = new Map<string, string>()
+    // The backend is built before the host, because the host is built with it;
+    // the renderer is therefore read lazily, and only once a delivery has to be
+    // rendered — which is long after the host exists.
+    let host: Arbor | undefined
     const backend = createDshBackend({
       llm: ctx.llm,
       tools: ctx.tools,
@@ -214,6 +266,10 @@ export class ArborHostService extends Service {
       // runs as is resolved per call: the session whose turn is executing it,
       // which is the initiating agent of that turn (see @4fu/dsh-arbor-tools).
       agents: ctx.agents,
+      renderer: () => {
+        if (host === undefined) throw new Error('arbor host: the renderer was read before the host existed')
+        return host.renderer
+      },
     })
     // Every file access and every command of a window runs through DSH's own
     // sandboxed filesystem and shell, under the session's resolved policy.
@@ -238,20 +294,40 @@ export class ArborHostService extends Service {
       cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? process.cwd(),
       seedSettings: settings,
     })
-    const host = new Arbor({
+    host = new Arbor({
       journal,
       notes,
       backend,
       workspace,
       environment,
-      plugins: [dshPromptPlugin({
+      plugins: dshPromptPlugins({
         systemPrompt: ctx.systemPrompt,
+        // The assembly runs in the scope of the session whose turn is rendering
+        // the section, which is what lets DSH's own `plan:policy` say whether
+        // plan mode is active. Arbor rebuilds an epoch whenever a section's
+        // revision moves, and the revision covers this session's state, so two
+        // sessions of different states never share one epoch.
+        agent: () => ctx.agents.currentInitiator(),
+        // A fresh signal per assembly: a section is re-rendered by the host's
+        // own watch loop, after the turn that opened the window has ended, and
+        // DSH's working-directory context provider does filesystem I/O under
+        // this signal — a finished turn's would abort it.
+        signal: new AbortController().signal,
         changeCounter: () => this.promptChanges,
-      })],
+        state: () => this.harnessState(),
+        onWarning: (message) => {
+          this.warnings.push(message)
+          ctx.logger.warn(message)
+        },
+      }),
       settings,
     })
     this.state = { root, journal, notes, backend, host, settings, sandboxedFileTools: seam.confined }
     this.cwds = cwds
+    // Plan mode's projection is registered here rather than only in the plan
+    // row, because the <harness> section reads it once per step. Registration
+    // is refcounted per key, so both see one fold of the same session log.
+    this.planProjection = await ctx.sessionProjections.register(planProjectionDefinition)
     // Every session the journal names gets its cwd noted before the host starts,
     // because the host continues a stopped window in `start` and freezes that
     // window's prefix then — with no turn in flight, so no initiating agent to
@@ -271,6 +347,84 @@ export class ArborHostService extends Service {
       await journal.close().catch(() => {})
       await notes.close().catch(() => {})
     }, 'arborHost.close()')
+  }
+
+  /**
+   * The dynamic state the `<harness>` section renders, read for the session
+   * whose turn is running.
+   *
+   * A section is frozen per epoch and shared by every window of it, so a
+   * session's own policy is the one whose turn is rendering — the same rule
+   * arbor's `<workspace>` section follows for its root. A window a restart
+   * continued renders outside any turn and therefore without these lines until
+   * its session's next turn moves the revision and delivers them as a delta.
+   */
+  private harnessState(): HarnessState {
+    const ctx = this.ctx
+    const agent = ctx.agents.currentInitiator()
+    const session = agent?.session
+    // The approval policy: the session's own override when it has one, else the
+    // deployment's configured default. `effectivePolicy` is DSH-private, and
+    // `overrideOf` plus the config is the public half of the same read.
+    const approvalService = ctx.get('approval')
+    const approval = session === undefined
+      ? undefined
+      : approvalService?.overrideOf(session) ?? approvalService?.config.policy
+    // The sandbox line is written only when the file tools really are confined:
+    // `fileToolsSandboxed` is the capability fact, and the mode is read per step
+    // so a mid-window switch reaches the window as a delta.
+    const sandbox = this.fileToolsSandboxed && session !== undefined
+      ? ctx.get('sandboxPolicy')?.resolve({ session }).mode
+      : undefined
+    const planActive = session === undefined ? false : this.planReader(session).active === true
+    return {
+      approval,
+      sandbox,
+      planActive,
+      exposedTools: this.state?.backend.externalToolNames() ?? [],
+    }
+  }
+
+  /** The plan-mode state of one session, from the host's own registration. */
+  private planReader(session: Session): { active: boolean } {
+    const handle = this.planProjection
+    if (handle === undefined) return { active: false }
+    return handle.readerFor(session)()
+  }
+
+  /**
+   * Note that a DSH prompt input changed without a `system-prompt/change`.
+   *
+   * The driver calls this after it installs the arbor tool restriction in a
+   * session's scope: a `tool:*` section's text reads whether its tool is
+   * registered, and the restriction moves that without a registration change.
+   */
+  noteDshPromptChange(): void {
+    this.promptChanges += 1
+  }
+
+  /**
+   * The deployment's persona lines, with DSH's prompt variables resolved
+   * against the session whose turn is rendering.
+   *
+   * A window a restart continued renders outside any turn, so the last values
+   * a live session gave are the fallback: the persona then names the model that
+   * session was running rather than carrying a placeholder.
+   */
+  private personaLines(): string[] {
+    const agent = this.ctx.agents.currentInitiator()
+    const selection = agent?.model.current()
+    const provider = selection?.provider ?? agent?.options.provider
+    const model = selection?.model ?? agent?.options.model
+    if (provider !== undefined) this.lastProvider = provider
+    if (model !== undefined) this.lastModel = model
+    const resolved: PersonaVariables = {
+      ...this.lastProvider === undefined ? {} : { provider: this.lastProvider },
+      ...this.lastModel === undefined ? {} : { model: this.lastModel },
+    }
+    return [this.persona?.prefix ?? '', this.persona?.suffix ?? '']
+      .map(text => interpolatePersona(text, resolved))
+      .filter(text => text !== '')
   }
 
   private requireState(): HostState {

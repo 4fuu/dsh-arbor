@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Tool bridge: DSH tools enter arbor as external tools and run through ctx.tools.execute",
+  "description": "Tool bridge: DSH tools enter arbor as external tools with their own JSON Schema, the ones arbor replaces are restricted away, and calls run through ctx.tools.execute",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"

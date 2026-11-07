@@ -31,18 +31,21 @@ import type {
   PreStepDecision,
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
-import { AgentModel, agentEvents } from '@deepseek-ai/dsh-agent'
+import { AgentModel, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { InboxState } from '@deepseek-ai/dsh-agent'
 import type { StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import { createAssistantMessage, createSystemMessage, errorChain, LlmError } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
+import { joinContextSections, renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
+import { snapshotContextNames } from '@4fu/dsh-arbor-prompt'
 import type { ToolResult, WindowEvent } from '@4fu/arbor-interfaces'
 import type { WindowRef } from '@4fu/arbor-interfaces'
 import { ArborInbox } from './inbox.ts'
 import { ArborStreamAttempt } from './assistant-stream.ts'
+import { RuntimeContextProjection } from './runtime-context.ts'
 
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface ModelCallInput {
@@ -137,6 +140,12 @@ export class ArborSessionAgent implements Agent {
   public readonly session: Session
   /** The window the live step drives, so the turn can end its run. */
   private currentWindow: WindowRef | undefined
+  /**
+   * The session's runtime-context snapshot: the working directory and any
+   * third-party runtime context, appended when it changes and never rewritten
+   * into the frozen prefix.
+   */
+  private readonly runtimeContext: RuntimeContextProjection
 
   constructor(
     loopCtx: Context,
@@ -159,6 +168,7 @@ export class ArborSessionAgent implements Agent {
     this.model = new AgentModel(projections.modelSelection, session, options)
     this.inbox = new ArborInbox(projections.inbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
+    this.runtimeContext = new RuntimeContextProjection(this.ctx, session)
     // A session resumed from its log already carries the system prompt it
     // opened with, exactly like the official loop's in-history projection.
     this.systemPromptLogged = hasSystemMessage(session)
@@ -310,16 +320,19 @@ export class ArborSessionAgent implements Agent {
         // `agent/pre-step` is dispatched every step, exactly like the official
         // loop, and a decision's messages are the ones this step admits: a hook
         // that rewrites them is honored. Only `reject` ends the turn early.
-        // What the spike left out is the fallback: the official loop's default
-        // appends the runtime context its own projection assembled, which is
-        // where a mid-session model switch announces itself and where plan mode
-        // puts its context. B2's prompt bridge owns that injection; until it
-        // lands, a rewrite from a hook still works and the fallback adds
-        // nothing.
+        // The fallback is the official loop's own: it appends the runtime
+        // context its projection assembled — the session's working directory
+        // and any third-party runtime context — which is where a mid-session
+        // `working-directory/change` reaches the model, because a section is
+        // frozen per epoch and cannot state one session's path. A hook that
+        // rewrites the messages replaces it, exactly like the official loop.
         const decision = await this.dispatch.waterfall(
           'agent/pre-step',
           { messages: claimed, turn, step, signal, modelSelection: selection },
-          (): Promise<PreStepDecision> => Promise.resolve({ kind: 'enter', messages: claimed }),
+          async (): Promise<PreStepDecision> => {
+            const snapshot = await this.runtimeContextSnapshot(signal)
+            return { kind: 'enter', messages: snapshot === undefined ? claimed : [...claimed, snapshot] }
+          },
         )
         signal.throwIfAborted()
         if (decision.kind === 'reject') {
@@ -377,6 +390,23 @@ export class ArborSessionAgent implements Agent {
     phase.wakeRequested = false
     phase.step = 0
     return true
+  }
+
+  /**
+   * The session's runtime-context snapshot for this step, or `undefined` when
+   * nothing changed since the last one.
+   *
+   * DSH's own assembly supplies the text, so the wording stays DSH's: the
+   * snapshot is the one the official loop would have appended for this session.
+   */
+  private async runtimeContextSnapshot(signal: AbortSignal): Promise<UserMessage | undefined> {
+    const assembly = await this.loopCtx.systemPrompt.assemble({
+      ...assembleContextFor(this, signal),
+      ...this.model.current() === undefined ? {} : { modelSelection: this.model.current() },
+    })
+    const carried = new Set(snapshotContextNames(assembly))
+    const sections = renderContextSections(assembly).filter(section => carried.has(section.name))
+    return this.runtimeContext.project(joinContextSections(sections))
   }
 
   /** One model call plus the tool executions it requested. */

@@ -30,7 +30,8 @@
 
 import type { Agent, AgentRegistry, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { LlmRuntime, PreparedLlmCall, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
-import { BlockAssembler, createDeveloperMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, createDeveloperMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
@@ -51,7 +52,20 @@ import type {
   WindowSession,
   WindowState,
 } from '@4fu/arbor-interfaces'
+import { renderDelivery } from '@4fu/arbor-prompt'
+import type { Renderer } from '@4fu/arbor-prompt'
 import { dshExternalTools, schemaOf } from '@4fu/dsh-arbor-tools'
+
+// The source kind a delivery from arbor's host is steered in as: one user-role
+// input the framework inserted, which is what separates it from a message the
+// user actually wrote.
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'arbor-delivery': {
+      kind: 'arbor-delivery'
+    } & ContextFormed
+  }
+}
 
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface DshModelCall {
@@ -85,6 +99,13 @@ export interface DshBackendOptions {
    * the turn executing it — the same attribution DSH itself uses.
    */
   readonly agents: AgentRegistry
+  /**
+   * The host's one renderer, read lazily because the host is built after this
+   * backend is. A delivery's blocks were built by the host with its own table
+   * and block kinds, so rendering them with any other renderer would drop the
+   * fixed lines and the kinds a plugin registered.
+   */
+  readonly renderer: () => Renderer
 }
 
 /** A minimal publish/subscribe bus for one window's events. */
@@ -155,17 +176,40 @@ class DshWindowSession implements WindowSession {
   private readonly ended = Promise.withResolvers<WindowOutcome>()
   private currentState: WindowState = 'running'
   private readonly usageValue = { used: 0, limit: 0, reserve: 0 }
-  private readonly queued: Delivery[] = []
   private readonly onEnd: () => void
+  /** The window's frozen epoch, whose declared tools a `refreshTools` replaces. */
+  private epoch: OpenWindowRequest | undefined
+  /** The DSH session agent whose turns drive this window, once one is bound. */
+  private driver: Agent | undefined
+  /** How a delivery is rendered into the one user-role input the model reads. */
+  private readonly render: (delivery: Delivery) => string
 
-  constructor(window: WindowRef, bus: WindowEventBus, onEnd: () => void) {
+  constructor(window: WindowRef, bus: WindowEventBus, onEnd: () => void, render: (delivery: Delivery) => string) {
     this.window = window
     this.bus = bus
     this.onEnd = onEnd
+    this.render = render
   }
 
   get state(): WindowState {
     return this.currentState
+  }
+
+  /** Capture the window's frozen epoch: its prompt, its declared tools, its limits. */
+  open(request: OpenWindowRequest): void {
+    this.epoch = request
+    this.usageValue.limit = request.limits.contextTokens
+    this.usageValue.reserve = request.limits.reserveTokens
+  }
+
+  /** Bind the DSH session agent whose turns drive this window. */
+  bind(agent: Agent): void {
+    this.driver = agent
+  }
+
+  /** Drop the binding, the way a session's disposal does. */
+  unbind(): void {
+    this.driver = undefined
   }
 
   /** One live event of this window, from the session agent that drives it. */
@@ -174,12 +218,74 @@ class DshWindowSession implements WindowSession {
     this.bus.publish(event)
   }
 
+  /**
+   * Insert at the next tool-call boundary, through DSH's own steering.
+   *
+   * The mapping is the one arbor's `AgentBackend` contract names for a backend
+   * that is not pi: `agent.inject` for a step boundary and the agent's steering
+   * for the next turn. `agent.steer` covers both, because it splices into the
+   * next step while a turn runs and starts one when the window is idle — which
+   * is what a delivery arriving for a quiet window wants.
+   */
   async steer(delivery: Delivery): Promise<void> {
-    this.queued.push(delivery)
+    this.deliver(delivery, 'steer')
   }
 
+  /** Queue for after the run ends: the delivery becomes the next turn's input. */
   async followUp(delivery: Delivery): Promise<void> {
-    this.queued.push(delivery)
+    this.deliver(delivery, 'followUp')
+  }
+
+  private deliver(delivery: Delivery, how: 'steer' | 'followUp'): void {
+    // The host never steers into a window it has ended or paused, and a window
+    // whose session is not bound yet has no inbox to splice into: a restart
+    // continuation opens before its session comes back.
+    if (this.currentState !== 'running') return
+    const agent = this.driver
+    if (agent === undefined) return
+    const text = this.render(delivery)
+    if (text === '') return
+    const message = createUserMessage({
+      content: [{ type: 'text', text }],
+      source: { kind: 'arbor-delivery' },
+    })
+    if (how === 'steer') agent.steer(message)
+    else agent.followup(message)
+  }
+
+  /**
+   * Replace the tools this window declared, so a tool that appeared is callable
+   * here and one that was removed is not. The window's prefix is not rebuilt:
+   * the `tools_delta` it is steered tells it what moved.
+   */
+  async refreshTools(tools: readonly DirectToolSpec[]): Promise<void> {
+    if (this.epoch === undefined) return
+    this.epoch = { ...this.epoch, tools }
+  }
+
+  /** The tools declared to the model for this window, as they stand now. */
+  toolSpecs(): readonly DirectToolSpec[] {
+    return this.epoch?.tools ?? []
+  }
+
+  /** The system prompt this window's epoch rendered. */
+  systemPrompt(): string {
+    return this.epoch?.prompt.system ?? ''
+  }
+
+  /**
+   * Add one model call's tokens to the window's running total, and publish the
+   * usage event.
+   *
+   * The event is what makes a running window current: the host asks every
+   * plugin section's revision and re-reads the external tools on it, once per
+   * step, so a `prompt_delta` and a `tools_delta` are delivered here rather than
+   * never.
+   */
+  addUsage(usage: TokenUsage | undefined): void {
+    if (usage === undefined) return
+    this.usageValue.used += (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)
+    this.publish({ kind: 'usage', usage: { ...this.usageValue } })
   }
 
   async end(handoff?: Handoff, reason: WindowEndReason = 'model_ended'): Promise<void> {
@@ -222,10 +328,9 @@ class DshWindowSession implements WindowSession {
   }
 }
 
-/** One window's epoch, its bus, and the session agent bound to it. */
+/** One window's live session, and the session agent bound to it. */
 interface WindowEntry {
   readonly session: DshWindowSession
-  request: OpenWindowRequest | undefined
   agent: Agent | undefined
 }
 
@@ -253,7 +358,7 @@ export class DshBackend implements AgentBackend {
     const waiting = this.waiting.get(window)
     if (waiting !== undefined) return waiting.promise
     const entry = this.windows.get(window)
-    if (entry !== undefined && entry.request !== undefined) return Promise.resolve()
+    if (entry !== undefined) return Promise.resolve()
     const deferred = Promise.withResolvers<void>()
     this.waiting.set(window, deferred)
     return deferred.promise
@@ -274,10 +379,25 @@ export class DshBackend implements AgentBackend {
     })
   }
 
+  /**
+   * The names of the DSH tools this backend hands to arbor, for the
+   * `<harness>` section's revision and its tool-usage lines. The same filter
+   * {@link externalTools} applies, so a name here is a name the model can call.
+   */
+  externalToolNames(): readonly string[] {
+    return this.externalTools().map(tool => tool.name).sort()
+  }
+
   async open(request: OpenWindowRequest): Promise<WindowSession> {
     const bus = new WindowEventBus()
-    const session = new DshWindowSession(request.window, bus, () => { this.release(request.window) })
-    this.windows.set(request.window, { session, request, agent: undefined })
+    const session = new DshWindowSession(
+      request.window,
+      bus,
+      () => { this.release(request.window) },
+      delivery => renderDelivery(delivery, this.options.renderer()),
+    )
+    session.open(request)
+    this.windows.set(request.window, { session, agent: undefined })
     this.waiting.get(request.window)?.resolve()
     this.waiting.delete(request.window)
     return session
@@ -290,7 +410,9 @@ export class DshBackend implements AgentBackend {
    */
   bind(window: WindowRef, agent: Agent): void {
     const entry = this.windows.get(window)
-    if (entry !== undefined) entry.agent = agent
+    if (entry === undefined) return
+    entry.agent = agent
+    entry.session.bind(agent)
   }
 
   /**
@@ -299,7 +421,9 @@ export class DshBackend implements AgentBackend {
    */
   unbind(window: WindowRef): void {
     const entry = this.windows.get(window)
-    if (entry !== undefined) entry.agent = undefined
+    if (entry === undefined) return
+    entry.agent = undefined
+    entry.session.unbind()
   }
 
   /** Drop one ended window's state, so nothing retains its agent or its bus. */
@@ -316,12 +440,12 @@ export class DshBackend implements AgentBackend {
 
   /** The system prompt this window's epoch rendered. */
   systemPrompt(window: WindowRef): string {
-    return this.requireEntry(window).request?.prompt.system ?? ''
+    return this.requireEntry(window).session.systemPrompt()
   }
 
-  /** The direct tools declared to the model for this window. */
+  /** The direct tools declared to the model for this window, as they stand now. */
   toolSpecs(window: WindowRef): readonly DirectToolSpec[] {
-    return this.requireEntry(window).request?.tools ?? []
+    return this.requireEntry(window).session.toolSpecs()
   }
 
   /** Publish one live stream event to the window. */
@@ -390,6 +514,10 @@ export class DshBackend implements AgentBackend {
       assembler.push(chunk)
     }
     signal.throwIfAborted()
+    // The window's token total moves, which is also the host's cue to ask every
+    // plugin section's revision and re-read the external tools: a prompt delta
+    // and a tools delta are delivered on this event.
+    this.windows.get(input.window)?.session.addUsage(assembler.usage)
     return { ...assembler.usage === undefined ? {} : { usage: assembler.usage }, finish: assembler.finish.kind }
   }
 
