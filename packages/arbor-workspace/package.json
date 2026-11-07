@@ -9,8 +9,8 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@4fu/arbor-core": "2026.1107.0",
-    "@4fu/arbor-interfaces": "2026.1107.0",
+    "@4fu/arbor-core": "2026.1107.1",
+    "@4fu/arbor-interfaces": "2026.1107.1",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.1"
   }
 }
