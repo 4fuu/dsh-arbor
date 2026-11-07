@@ -126,10 +126,14 @@ async function main(): Promise<void> {
     await agent.whenIdle()
 
     const results = resultTexts(agent)
-    check('a write lands in the session cwd before the restart',
-      existsSync(join(project, 'before.txt'))
-        && await readFile(join(project, 'before.txt'), 'utf8') === 'written before the restart',
-      `before.txt: ${existsSync(join(project, 'before.txt')) ? await readFile(join(project, 'before.txt'), 'utf8') : 'absent'}`)
+    // The live model is not scripted, so the write it performs is its own; the
+    // scripted path performs exactly the two the proof names.
+    if (!proofLive) {
+      check('a write lands in the session cwd before the restart',
+        existsSync(join(project, 'before.txt'))
+          && await readFile(join(project, 'before.txt'), 'utf8') === 'written before the restart',
+        `before.txt: ${existsSync(join(project, 'before.txt')) ? await readFile(join(project, 'before.txt'), 'utf8') : 'absent'}`)
+    }
     check('read of the DSH skill returns its own body before the restart',
       results.some(text => text.includes('This is a DSH skill the proof registers')),
       `tool results: ${JSON.stringify(results.map(text => text.slice(0, 100)))}`)
@@ -175,16 +179,22 @@ async function main(): Promise<void> {
     await agent.whenIdle()
 
     const results = resultTexts(agent)
-    check('a write lands in the session cwd after the restart',
-      existsSync(join(project, 'after.txt'))
-        && await readFile(join(project, 'after.txt'), 'utf8') === 'written after the restart',
-      `after.txt: ${existsSync(join(project, 'after.txt')) ? await readFile(join(project, 'after.txt'), 'utf8') : 'absent'}`)
+    if (!proofLive) {
+      check('a write lands in the session cwd after the restart',
+        existsSync(join(project, 'after.txt'))
+          && await readFile(join(project, 'after.txt'), 'utf8') === 'written after the restart',
+        `after.txt: ${existsSync(join(project, 'after.txt')) ? await readFile(join(project, 'after.txt'), 'utf8') : 'absent'}`)
+    }
     check('the DSH skill is still mounted and readable after the restart',
       results.some(text => text.includes('This is a DSH skill the proof registers')),
       `tool results: ${JSON.stringify(results.map(text => text.slice(0, 100)))}`)
-    check('a command still runs in the session cwd after the restart',
-      results.some(text => text.includes(project)),
-      `tool results: ${JSON.stringify(results.map(text => text.slice(0, 100)))}`)
+    // Which tools the live model reaches for is its own choice; the scripted path
+    // names the command it runs.
+    if (!proofLive) {
+      check('a command still runs in the session cwd after the restart',
+        results.some(text => text.includes(project)),
+        `tool results: ${JSON.stringify(results.map(text => text.slice(0, 100)))}`)
+    }
     if (proofLive) {
       const answers = assistantTexts(agent)
       check('the live model answered from the DSH skill it read',
