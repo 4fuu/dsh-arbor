@@ -2,10 +2,13 @@
  * The arbor driver: the AgentFactory that runs arbor-preset sessions, and the
  * Cordis plugin row that mounts it.
  *
- * One DSH user session is one arbor window of the process's single Arbor host
- * (`@4fu/dsh-arbor-host`): the journal, the note store and the board are shared
- * by every session, and each session is one conversation target of that one
- * host. Per session the driver owns
+ * One DSH user session is one conversation target of the process's single Arbor
+ * host (`@4fu/dsh-arbor-host`): the journal, the note store and the board are
+ * shared by every session, and each session is one source of that one host.
+ * Arbor's own model is what a session's windows follow — a window ends when its
+ * run ends and the session's next turn opens the next window of its chain, so
+ * several windows serve one session and none of them is the session. Per
+ * session the driver owns
  *
  *  - the window, opened through `host.dispatch` on the session's first turn and
  *    taken back — not reopened — when the session already has a live one, which

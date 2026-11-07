@@ -36,7 +36,7 @@ export const dshTextTable: TextTable = {
   // here is arbor's, because only `send` reaches the user here.
   'dsh.harness.lead':
     '你是运行在 DeepSeek Harness（DSH）里的一个 arbor 窗口：DSH 是外层环境，arbor 是它的 agent 驱动。'
-    + '用户通过 DSH 的界面和你交流，只能用 send 看到你发出去的内容；回合里直接写出的文字用户看不到，但会写进记录，后续窗口可以查到。',
+    + '用户通过 DSH 的界面和你交流，只能看到你用 send 发出去的内容；回合里直接写出的文字用户看不到，但会写进记录，后续窗口可以查到。',
 
   // Approval policy: DSH's two policies, in this bridge's words. The routing
   // itself is DSH's — a call that needs approval goes through the session's

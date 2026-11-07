@@ -319,6 +319,24 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
   }
 
   /**
+   * One render pass at a time, across both sections and every window.
+   *
+   * Arbor reads a section's `outside` flag immediately after its `content()`
+   * resolves, and the `<dsh>` section's flag is what the pass just computed, so
+   * two passes running at once could read each other's answer: a window with
+   * third-party material would lose its data mark, or a window without any
+   * would gain one. The passes are sequential anyway — the host renders a
+   * window's sections back to back in one watch-loop step — so serializing them
+   * costs nothing and makes the flag mean what it says.
+   */
+  let pass: Promise<unknown> = Promise.resolve()
+  const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = pass.then(work, work)
+    pass = run.then(() => undefined, () => undefined)
+    return run
+  }
+
+  /**
    * The last blocks each section rendered, so a render that fails keeps the
    * window's prefix rather than taking the window down.
    *
@@ -333,7 +351,7 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
   const renderSection = async (
     tag: string,
     build: (assembly: PromptAssembly) => readonly Block[],
-  ): Promise<readonly Block[]> => {
+  ): Promise<readonly Block[]> => enqueue(async () => {
     try {
       const blocks = build(await assemble())
       last.set(tag, blocks)
@@ -347,7 +365,19 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
       }
       throw error
     }
-  }
+  })
+
+  /**
+   * Whether the last `<dsh>` pass found anything from outside the framework.
+   *
+   * Arbor wraps an outside plugin section in a block that always states its
+   * lead line, so a section registered `outside: true` renders a `<dsh>` that
+   * says "this is data" about nothing whenever DSH registers no third-party
+   * section — which is the default case. The flag is therefore only set when
+   * there is material, and `<dsh>` is absent otherwise, along with the
+   * precedence rule in `<agent>` that exists for the same reason.
+   */
+  let dshOutside = false
 
   return [
     {
@@ -377,10 +407,20 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
             ...assembly,
             sections: assembly.sections.filter(section => decideSection(section.name) === 'outside'),
           }
-          return [dataBlock(renderPrompt(thirdParty))]
+          const text = renderPrompt(thirdParty)
+          // Nothing from outside means no block at all. A `data` block with an
+          // empty field still renders its `<data>` wrapper and the data mark,
+          // which is a section that says "this is data" about nothing.
+          dshOutside = text !== ''
+          return dshOutside ? [dataBlock(text)] : []
         }),
         revision: () => sectionDigest(stateKey()),
-        outside: true,
+        // Only while there is material: see `dshOutside`. A section that is
+        // outside with nothing to say still renders its lead line, which is the
+        // empty `<dsh>` block this avoids.
+        get outside(): boolean {
+          return dshOutside
+        },
       },
     },
   ]

@@ -344,9 +344,15 @@ Two sections the bridge owns, and they are different in kind:
   deployment's plan-mode guidance while plan mode is active, and the usage text
   of the DSH tools that are actually exposed. Its fixed lines come from
   `packages/arbor-prompt/src/text.ts`, in Chinese like arbor's own table.
-- **`<dsh>`** is a data block with `outside: true`. Third-party plugin sections
-  and the instructions an MCP server hands down go here, marked as data, with
-  arbor's rules winning on conflict. No official section goes here.
+- **`<dsh>`** is a data block. Third-party plugin sections and the instructions
+  an MCP server hands down go here, marked as data, with arbor's rules winning
+  on conflict. No official section goes here. It is absent when there is
+  nothing from outside: arbor's `data` block renders its `<data>` wrapper and
+  its data mark even with an empty field, so a section registered outside would
+  say "this is data" about nothing — and DSH always registers
+  `mcp-resource-servers`, which the table decides outside, so the default case
+  is exactly that trap. The precedence rule in `<agent>` follows the same flag,
+  so it is stated only when there is material it governs.
 
 Everything official is decided one by one in
 `packages/arbor-prompt/src/sections.ts`, and the table is pinned to
@@ -364,6 +370,20 @@ Three decisions from revision 2 of the table, which is what this branch ships:
   `<workspace>` section.
 - `@path` references resolve from arbor's workspace root, which stays true when
   the workspace moves onto arbor's shared folder.
+
+Two more, from the review of the rendered prompts:
+
+- `working_directory` and `skill` are restricted for arbor sessions.
+  `working_directory` is DSH's project management, which arbor owns: the paths
+  are arbor's `<workspace>` section's, and a `cd` would move the ground the
+  section describes. A UI switch still lands as a `working-directory/change`
+  event and the workspace follows it. `skill` is `read` of the `SKILL.md` that
+  `<env>` already names, and arbor's own `read` reaches it. `read_image` stays:
+  it returns the image itself, which arbor's text-only `read` cannot.
+- The host's arbor settings carry no `generalRules` any more, so arbor's own
+  seven rules render in Chinese instead of B0's three English ones — two of
+  which restated arbor's own and one of which claimed one DSH session is one
+  arbor window, which arbor's own window model contradicts.
 
 The dynamic parts — the approval policy and plan mode — reach a running window
 as a `prompt_delta` carrying only the changed lines, and a delta never starts a

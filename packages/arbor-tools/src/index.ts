@@ -53,6 +53,12 @@ import type { ExternalTool, JSONSchema, DirectToolSpec, ToolCall, ToolResult } f
  *   `session_event_read`, `session_event_trace` — history is arbor's journal.
  * - `structured_output` — only DSH's own subagents use it.
  * - `run_code` — arbor has its own `code_exec`; DSH's PTC executor is not used.
+ * - `working_directory` — arbor owns the paths for an arbor session.
+ * - `skill` — reading the SKILL.md `<env>` names, which arbor's `read` does.
+ *
+ * `read_image` is deliberately absent: it returns the image itself, which
+ * arbor's text-only `read` cannot, so it is a capability of its own rather than
+ * a duplicate.
  *
  * The list is filtered against what the deployment actually registers before
  * it is used, because `tools.restrict` rejects an unknown name.
@@ -110,6 +116,16 @@ export const DSH_TOOLS_ARBOR_REPLACES: readonly string[] = [
   // structured output and PTC
   'structured_output',
   'run_code',
+  // DSH's project management, which arbor owns for an arbor session: the
+  // paths are arbor's own `<workspace>` section's, so a `cd` would move the
+  // ground the section describes. A UI switch still lands as a
+  // `working-directory/change` event and the workspace follows it.
+  'working_directory',
+  // DSH's skill loader, which is `read` of the SKILL.md `<env>` already names:
+  // the skill's body is a file under /env, and arbor's own `read` reaches it.
+  // `read_image` is NOT here: it returns the image itself, which arbor's
+  // text-only `read` cannot do.
+  'skill',
 ]
 
 /**
