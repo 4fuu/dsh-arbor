@@ -1,0 +1,7 @@
+# The scripted-model overlay for the B0 spike: registers a scripted provider
+# route and the spike_echo test tool as ordinary Cordis rows, so proofs run
+# without the network and without a real API key.
+
+- insert:
+    - id: arbor-scripted-llm
+      name: '@4fu/dsh-arbor-testkit/scripted-llm'

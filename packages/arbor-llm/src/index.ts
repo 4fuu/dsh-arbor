@@ -134,22 +134,19 @@ class WindowEventBus {
 /** One running arbor window backed by a DSH session. */
 class DshWindowSession implements WindowSession {
   readonly window: WindowRef
-  private readonly bus = new WindowEventBus()
+  private readonly bus: WindowEventBus
   private readonly ended = Promise.withResolvers<WindowOutcome>()
   private currentState: WindowState = 'running'
   private readonly usageValue = { used: 0, limit: 0, reserve: 0 }
   private readonly queued: Delivery[] = []
 
-  constructor(window: WindowRef) {
+  constructor(window: WindowRef, bus: WindowEventBus) {
     this.window = window
+    this.bus = bus
   }
 
   get state(): WindowState {
     return this.currentState
-  }
-
-  publish(event: WindowEvent): void {
-    this.bus.publish(event)
   }
 
   async steer(delivery: Delivery): Promise<void> {
@@ -207,6 +204,7 @@ export class DshBackend implements AgentBackend {
   private requestHeaderLogged = false
   private loggedToolNames: readonly string[] = []
   private readonly opened = Promise.withResolvers<void>()
+  private readonly bus = new WindowEventBus()
 
   private readonly options: DshBackendOptions
 
@@ -233,10 +231,15 @@ export class DshBackend implements AgentBackend {
 
   async open(request: OpenWindowRequest): Promise<WindowSession> {
     this.request = request
-    const session = new DshWindowSession(request.window)
+    const session = new DshWindowSession(request.window, this.bus)
     this.session = session
     this.opened.resolve()
     return session
+  }
+
+  /** The window's live events, observable beside the host's own watch loop. */
+  events(): AsyncIterable<WindowEvent> {
+    return this.bus.subscribe()
   }
 
   /** The system prompt this window's epoch rendered. */
@@ -251,14 +254,14 @@ export class DshBackend implements AgentBackend {
 
   /** Publish one live stream event to the window. */
   publish(event: WindowEvent): void {
-    this.session?.publish(event)
+    this.bus.publish(event)
   }
 
   /** The turn's work settled: the window's run ends and it stays open for more. */
   finishRun(): void {
     const session = this.session
     if (session === undefined || session.state === 'ended') return
-    session.publish({
+    this.bus.publish({
       kind: 'run_ended',
       outcome: { window: session.window, reason: 'model_ended', usage: session.usage() },
     })
@@ -267,11 +270,17 @@ export class DshBackend implements AgentBackend {
   /** End the window, the way a host shutdown does. */
   async endWindow(reason: WindowEndReason = 'host_restart'): Promise<void> {
     await this.session?.end(undefined, reason)
+    this.bus.close()
   }
 
   /** The live window session, for the driver's bridge. */
   get live(): DshWindowSession | undefined {
     return this.session
+  }
+
+  /** Close the window's event bus, releasing every observer. */
+  closeEvents(): void {
+    this.bus.close()
   }
 
   /**

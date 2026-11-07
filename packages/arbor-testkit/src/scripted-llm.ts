@@ -65,8 +65,11 @@ function* chunksOf(response: ScriptedResponse): Generator<StreamChunk> {
 
 /** The scripted adapter: one response per stream call, in script order. */
 export class ScriptedAdapter extends LlmAdapter {
-  constructor(private readonly script: ScriptedLlm) {
+  private readonly script: ScriptedLlm
+
+  constructor(script: ScriptedLlm) {
     super()
+    this.script = script
   }
 
   override providerInfo(provider: string): LlmProviderInfo {

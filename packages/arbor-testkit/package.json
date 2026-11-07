@@ -6,7 +6,8 @@
   "description": "B0 spike testkit: boot a DSH profile with arbor overlay patches, a memory journal, and a scripted model",
   "exports": {
     ".": "./src/index.ts",
-    "./journal": "./src/journal-plugin.ts"
+    "./journal": "./src/journal-plugin.ts",
+    "./scripted-llm": "./src/scripted-plugin.ts"
   },
   "dependencies": {
     "@4fu/arbor-errors": "2026.1106.1",

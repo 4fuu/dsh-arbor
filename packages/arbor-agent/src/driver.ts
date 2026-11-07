@@ -26,6 +26,7 @@
  * session under the official loop.
  */
 
+import { randomUUID } from 'node:crypto'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -39,6 +40,7 @@ import type {
   SessionStartSource,
 } from '@deepseek-ai/dsh-agent'
 import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionPreparation } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -48,7 +50,7 @@ import { dshPromptPlugin } from '@4fu/dsh-arbor-prompt'
 import { dshExternalTools } from '@4fu/dsh-arbor-tools'
 import type { Journal } from '@4fu/arbor-interfaces'
 import { Arbor } from '@4fu/arbor-core'
-import type { Settings, TaskInput, WindowRef } from '@4fu/arbor-interfaces'
+import type { Settings, TaskInput, WindowEvent, WindowRef } from '@4fu/arbor-interfaces'
 import { dataBlock } from '@4fu/arbor-prompt'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { InboxState, ModelSelectionProjectionState } from '@deepseek-ai/dsh-agent'
@@ -108,6 +110,7 @@ class SessionArbor {
   readonly backend: DshBackend
   readonly host: Arbor
   private window: WindowRef | undefined
+  private windowAgent: Agent | undefined
   private promptChanges = 0
   private bridgeCache: ArborWindowBridge | undefined
 
@@ -161,7 +164,41 @@ class SessionArbor {
     // The host launches the window asynchronously; wait for the backend to
     // capture the frozen epoch before the first model call reads it.
     await this.backend.whenOpen()
+    await this.registerWindowAgent(this.window)
     return this.window
+  }
+
+  /**
+   * Register the window as a DSH agent with `meta.origin: 'subagent'`, the
+   * convention `packages/subagent/subagent/src/child-agent.ts` uses for
+   * delegated children: the registry and the agent-team tools see the
+   * window, and the sidebar's `sessionVisible`
+   * (packages/client/ui-workspace/src/client/tree.ts) leaves it out. The
+   * agent is owned by this session's agent, so it is not a registry root.
+   *
+   * B0 registers the window as an idle official-loop agent: it carries the
+   * window's identity and nothing else. B1 decides what a window agent
+   * drives, alongside the official subagent tool opening arbor windows.
+   */
+  private async registerWindowAgent(window: WindowRef): Promise<void> {
+    if (this.windowAgent !== undefined) return
+    const sessionId = brandString<SessionId>(`window-${window}-${randomUUID()}`)
+    const { agent } = await this.driver.driverContext.agents.create({
+      sessionId,
+      parentAgent: this.agent,
+      meta: {
+        origin: 'subagent',
+        parentSession: this.agent.session.id,
+        ...this.driver.driverContext.get('fs') === undefined ? {} : { cwd: process.cwd() },
+      },
+      agentOptions: {},
+    })
+    this.windowAgent = agent
+  }
+
+  /** The agent registered for this session's window, once one exists. */
+  get windowAgentOf(): Agent | undefined {
+    return this.windowAgent
   }
 
   /** The bridge the session agent drives. */
@@ -190,6 +227,16 @@ class SessionArbor {
   /** Start the host so a dispatch can open a window. */
   async start(): Promise<void> {
     await this.host.start()
+  }
+
+  /** The arbor host this session drives, for observers and diagnostics. */
+  arborHost(): Arbor {
+    return this.host
+  }
+
+  /** The window's live events, for observers beside the host's own watch. */
+  windowEvents(): AsyncIterable<WindowEvent> {
+    return this.backend.events()
   }
 }
 
@@ -232,6 +279,16 @@ export class ArborDriver extends Service implements AgentFactory {
   /** The driver's own DSH context, for the per-session arbor worlds. */
   get driverContext(): Context {
     return this.runtime.ctx
+  }
+
+  /** The per-session arbor world, for tests and diagnostics. */
+  sessionArbor(sessionId: SessionId): SessionArbor | undefined {
+    return this.sessions.get(sessionId)
+  }
+
+  /** The agent registered for a session's arbor window, once one exists. */
+  windowAgentOf(sessionId: SessionId): Agent | undefined {
+    return this.sessions.get(sessionId)?.windowAgentOf
   }
 
   /** The deployment-provided arbor journal. */
