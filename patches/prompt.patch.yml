@@ -1,0 +1,7 @@
+# The third-party prompt-section overlay for the B0 spike: registers one
+# section under a non-official name, the way a third-party DSH plugin would,
+# so the prompt bridge has third-party material to carry into the <dsh> block.
+
+- insert:
+    - id: arbor-prompt-section
+      name: '@4fu/dsh-arbor-testkit/prompt-sections'

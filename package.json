@@ -5,12 +5,14 @@
   "description": "B0 spike: running arbor as DeepSeek Harness's agent driver",
   "packageManager": "pnpm@11.28.5",
   "scripts": {
+    "proof:boot": "node --experimental-strip-types --no-warnings proofs/00-boot.ts",
     "proof:routing": "node --experimental-strip-types --no-warnings proofs/01-routing.ts",
     "proof:roundtrip": "node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts",
     "proof:hidden": "node --experimental-strip-types --no-warnings proofs/03-hidden-windows.ts",
     "proof:approval": "node --experimental-strip-types --no-warnings proofs/04-approval.ts",
     "proof:prompt": "node --experimental-strip-types --no-warnings proofs/05-prompt.ts",
     "proof:plugins": "node --experimental-strip-types --no-warnings proofs/06-plugins.ts",
+    "proofs": "node --experimental-strip-types --no-warnings proofs/00-boot.ts && node --experimental-strip-types --no-warnings proofs/01-routing.ts && node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts && node --experimental-strip-types --no-warnings proofs/03-hidden-windows.ts && node --experimental-strip-types --no-warnings proofs/04-approval.ts && node --experimental-strip-types --no-warnings proofs/05-prompt.ts && node --experimental-strip-types --no-warnings proofs/06-plugins.ts",
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

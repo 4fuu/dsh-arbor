@@ -16,3 +16,4 @@ export {
 } from './scripted-llm.ts'
 export type { ScriptedResponse } from './scripted-llm.ts'
 export { scriptedLlm, spikeApprovalAsks, spikeToolRuns, ScriptedLlmService } from './scripted-plugin.ts'
+export { ACME_POLICY_TEXT, SpikePromptSectionService } from './prompt-sections.ts'

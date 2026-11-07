@@ -28,13 +28,13 @@ import { createHash } from 'node:crypto'
 /**
  * Official DSH prompt-section name prefixes, dropped from the `<dsh>` block.
  *
- * Derived from the sections the shipped base and headless bundles register
- * (packages/core/system-prompt/src/index.ts SECTION_ORDERS plus the tool,
- * context, preset, subagent and experimental plugins): `harness:`,
- * `deployment:`, `tool:`, `context:`, `plan:`, `goal:`, `subagent:`,
- * `approval:`, `mcp:`, `jobs:`, `schedule:`, `workflow:`, `session:`,
- * `deliverable:`, `structured:`, `ptc:`, `web-surface:`, `browser-use:`,
- * `cua:`, `terminal:`, `ralph:`, `agent-team:`, `computer-use:`.
+ * Derived from every non-test `systemPrompt.section({ name: ... })`
+ * registration in deepseek-harness at dsh-v0.2.2-rc.1, grouped by the
+ * taxonomy packages/core/system-prompt/src/index.ts SECTION_ORDERS defines:
+ * `harness:`, `deployment:`, `tool:`, `context:`, `plan:`, `team:`,
+ * `subagent:`, `approval:`, `mcp:`, `jobs:`, `schedule:`, `workflow:`,
+ * `session:`, `ui:`, `ptc:`, `browser-use:`, `computer-use:`, `terminal:`,
+ * `ralph:`.
  */
 export const DSH_OFFICIAL_SECTION_PREFIXES: readonly string[] = [
   'harness:',
@@ -42,7 +42,7 @@ export const DSH_OFFICIAL_SECTION_PREFIXES: readonly string[] = [
   'tool:',
   'context:',
   'plan:',
-  'goal:',
+  'team:',
   'subagent:',
   'approval:',
   'mcp:',
@@ -50,21 +50,27 @@ export const DSH_OFFICIAL_SECTION_PREFIXES: readonly string[] = [
   'schedule:',
   'workflow:',
   'session:',
-  'deliverable:',
-  'structured:',
+  'ui:',
   'ptc:',
-  'web-surface:',
   'browser-use:',
-  'cua:',
+  'computer-use:',
   'terminal:',
   'ralph:',
-  'agent-team:',
-  'computer-use:',
+]
+
+/**
+ * Official section names that carry no prefix of their own: the exact
+ * registrations in deepseek-harness at dsh-v0.2.2-rc.1 whose names sit
+ * outside the taxonomy (`packages/mcp/mcp-resources/src/index.ts`).
+ */
+export const DSH_OFFICIAL_SECTION_NAMES: readonly string[] = [
+  'mcp-resource-servers',
 ]
 
 /** Whether a DSH prompt section is official, and therefore dropped. */
 export function isOfficialSection(name: string): boolean {
-  return DSH_OFFICIAL_SECTION_PREFIXES.some(prefix => name.startsWith(prefix))
+  return DSH_OFFICIAL_SECTION_NAMES.includes(name)
+    || DSH_OFFICIAL_SECTION_PREFIXES.some(prefix => name.startsWith(prefix))
 }
 
 /** The part of DSH's system-prompt service the bridge uses. */

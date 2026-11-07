@@ -291,6 +291,11 @@ export class ArborDriver extends Service implements AgentFactory {
     return this.sessions.get(sessionId)?.windowAgentOf
   }
 
+  /** The system prompt the session's arbor window rendered, once it opened. */
+  systemPromptOf(sessionId: SessionId): string | undefined {
+    return this.sessions.get(sessionId)?.backend.systemPrompt()
+  }
+
   /** The deployment-provided arbor journal. */
   journal(): Journal {
     const provider = this.runtime.ctx.get('arborJournal') as { journal: Journal } | undefined
