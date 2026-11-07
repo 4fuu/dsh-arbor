@@ -28,13 +28,16 @@
  *
  * The companion `./projects.ts` makes the shared folder's project subfolders the
  * DSH project list (`ctx.workspaceRegistry`), which is the other half of arbor
- * taking over DSH's project management.
+ * taking over DSH's project management, and `./section.ts` extends that same
+ * `<workspace>` section with the external-project pointers (see
+ * {@link withArborWorkspace}).
  */
 
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { openWorkspace, type OpenWorkspaceResult, type WorkspaceBackend } from '@4fu/arbor-core'
-import type { Journal, Workspace } from '@4fu/arbor-interfaces'
+import type { Journal, TextTable, Workspace } from '@4fu/arbor-interfaces'
+import { withPointerSection, type PointerSource } from './section.ts'
 
 /** Inputs for {@link openArborWorkspace}. */
 export interface ArborWorkspaceOptions {
@@ -51,6 +54,12 @@ export interface ArborWorkspaceOptions {
   readonly bin?: string
   /** Called with a non-fatal note, such as a version mismatch or the fallback. */
   readonly warn?: (message: string) => void
+  /**
+   * Where the external-project pointers are read from. Absent leaves the
+   * workspace implementation's own section untouched — a host with no project
+   * bridge, such as a test that only wants a workspace.
+   */
+  readonly pointers?: PointerSource
 }
 
 /** The workspace arbor runs with, and the shared folder it is rooted at. */
@@ -75,9 +84,60 @@ export function arborSharedFolder(root: string, source?: string): string {
 }
 
 /**
+ * Wrap arbor's own workspace so its `<workspace>` prompt section also names the
+ * external-project pointers, and so it states that nothing here is reclaimed.
+ *
+ * Two overrides, everything else forwarded. A `Proxy` rather than a hand-written
+ * delegation, because `Workspace` gains members as arbor grows — a checkout
+ * query, a keep, an environment hook — and a wrapper that listed today's members
+ * would silently drop tomorrow's capability instead of forwarding it.
+ *
+ *  - **`promptSection`** hands the implementation's own section (ovnfs's, or the
+ *    plain-directory workspace's) to {@link withPointerSection}, which keeps
+ *    every one of its lines and appends the pointer lines after them. That is
+ *    what puts the pointers inside the one `<workspace>` tag — the section
+ *    arbor-core registers from the workspace — instead of in a second home.
+ *  - **`reclaimable`** answers `false`. Arbor 2026.1107.1 asks an implementation
+ *    whether it owns the directory it would remove (`Workspace.reclaimable?()`),
+ *    and this deployment's answer is no: the workspace a window is handed is
+ *    rooted at the shared folder, whose projects are the user's work, so no
+ *    retention period may remove one. The host then neither asks which ref to
+ *    reclaim nor arms a deadline, and no failure is recorded. Nothing changes
+ *    today — no `workspaces.retentionMs` is set — it is the truth stated before
+ *    a retention is configured.
+ *
+ * @param workspace - the workspace `openWorkspace` settled on.
+ * @param pointers - where the pointers are read from, or undefined to leave the
+ *   implementation's own section exactly as it is.
+ */
+export function withArborWorkspace(workspace: Workspace, pointers: PointerSource | undefined): Workspace {
+  const sectionOf = pointers === undefined
+    ? workspace.promptSection?.bind(workspace)
+    : (table: TextTable) => {
+        const base = workspace.promptSection?.(table)
+        // An implementation that contributes no section keeps contributing none.
+        return base === undefined ? undefined : withPointerSection(base, pointers)
+      }
+  return new Proxy(workspace, {
+    get(target, property) {
+      if (property === 'promptSection') return sectionOf
+      if (property === 'reclaimable') return () => false
+      const value = Reflect.get(target, property)
+      // Methods are forwarded bound to the implementation, so a caller that
+      // takes one off the wrapper still runs it against the real workspace.
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    },
+  })
+}
+
+/**
  * Open arbor's own workspace over the shared folder: ovnfs when its daemon
  * starts, the plain-directory workspace otherwise. The shared folder is created
  * first so ovnfs always has a source and the project bridge always has a home.
+ *
+ * The workspace that comes back is wrapped by {@link withArborWorkspace} when
+ * pointers are named, so its `<workspace>` section answers for the
+ * external-project pointers as well as for the method.
  */
 export async function openArborWorkspace(options: ArborWorkspaceOptions): Promise<ArborWorkspace> {
   const sharedFolder = arborSharedFolder(options.root, options.source)
@@ -94,5 +154,9 @@ export async function openArborWorkspace(options: ArborWorkspaceOptions): Promis
     ...options.bin === undefined ? {} : { bin: options.bin },
     ...options.warn === undefined ? {} : { warn: options.warn },
   })
-  return { ...result, sharedFolder }
+  return {
+    ...result,
+    sharedFolder,
+    workspace: withArborWorkspace(result.workspace, options.pointers),
+  }
 }

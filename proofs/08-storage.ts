@@ -16,6 +16,11 @@
  *    window works in the one shared folder under `DSH_HOME/arbor`, there is no
  *    per-session directory, and the `<workspace>` section names the shared
  *    folder with no sandbox line;
+ *  - an existing directory with its own path is an external pointer, named
+ *    inside that same `<workspace>` section: a window reads the pointed file on
+ *    its first call, a pointer added mid-window reaches the window as a delta of
+ *    only the changed line, and a pointer whose directory is gone leaves the
+ *    prompt;
  *  - an ordinary session on the embedded AgentLoop is untouched: it keeps the
  *    cwd it was created with and the DSH sandbox stays mounted for it.
  *
@@ -57,18 +62,86 @@ const check = (label: string, ok: boolean, detail: string): void => {
 }
 
 /** One arbor session, driven for one turn. */
-async function runSession(ctx: Awaited<ReturnType<typeof bootArborProfile>>, cwd: string): Promise<SessionId> {
-  const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
-  const agentOptions: AgentOptions = { ...SCRIPTED_SELECTION }
-  const { agent } = await ctx.agents.create({
-    sessionId,
-    meta: { cwd, agentPreset: 'arbor' },
-    agentOptions,
-    setup: (agentCtx) => { installModelSelection(agentCtx) },
-  })
+async function runSession(
+  ctx: Awaited<ReturnType<typeof bootArborProfile>>,
+  cwd: string,
+  responses: readonly { toolCalls?: readonly { name: string; args: Record<string, unknown> }[]; text?: string }[] = [{ text: 'pong' }],
+  existing?: SessionId,
+): Promise<SessionId> {
+  let agent: Agent
+  if (existing === undefined) {
+    const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
+    const agentOptions: AgentOptions = { ...SCRIPTED_SELECTION }
+    ;({ agent } = await ctx.agents.create({
+      sessionId,
+      meta: { cwd, agentPreset: 'arbor' },
+      agentOptions,
+      setup: (agentCtx) => { installModelSelection(agentCtx) },
+    }))
+  } else {
+    agent = ctx.agents.get(existing) as Agent
+  }
+  scriptedLlm.responses = [...responses]
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'say pong' }], source: { kind: 'user' } }))
   await agent.whenIdle()
-  return sessionId
+  return agent.session.id
+}
+
+/** One tool call a window ran, with the text its result carried. */
+interface LoggedToolCall {
+  readonly name: string
+  readonly text: string
+}
+
+/** Every tool call the session's window ran, in order, with its result text. */
+function toolCallsOf(ctx: Awaited<ReturnType<typeof bootArborProfile>>, sessionId: SessionId): readonly LoggedToolCall[] {
+  const agent = ctx.agents.get(sessionId) as Agent
+  const names: string[] = []
+  const texts: string[] = []
+  for (let seq = 0; seq < agent.session.seq; seq++) {
+    const event = agent.session.eventAt(seq as never)
+    if (event?.type === 'tool/call') {
+      names.push((event.data as { name?: string }).name ?? '')
+    } else if (event?.type === 'tool/result') {
+      const message = (event.data as { message?: { content?: readonly { type: string; text?: string }[] } }).message
+      texts.push((message?.content ?? []).filter(block => block.type === 'text').map(block => block.text ?? '').join(''))
+    }
+  }
+  return names.map((name, index) => ({ name, text: texts[index] ?? '' }))
+}
+
+/**
+ * Every delivery the host spliced into the session's inbox, as the text the
+ * window reads.
+ *
+ * A prompt delta is context for the window rather than an input that deserves a
+ * turn of its own, so the backend injects it (`@4fu/dsh-arbor-llm`,
+ * `DELTA_KINDS`) and it lands on the session log as an `agent/inbox/spliced`
+ * event — which is what makes it observable here.
+ */
+function splicedTextsOf(ctx: Awaited<ReturnType<typeof bootArborProfile>>, sessionId: SessionId): readonly string[] {
+  const agent = ctx.agents.get(sessionId) as Agent
+  const texts: string[] = []
+  for (let seq = 0; seq < agent.session.seq; seq++) {
+    const event = agent.session.eventAt(seq as never)
+    if (event?.type !== 'agent/inbox/spliced') continue
+    const inserted = (event.data as { inserted?: readonly { content?: readonly { type: string; text?: string }[] }[] }).inserted ?? []
+    for (const message of inserted) {
+      texts.push(...(message.content ?? []).filter(block => block.type === 'text').map(block => block.text ?? ''))
+    }
+  }
+  return texts
+}
+
+/** Wait until one call answers, or give up after `limit` ms. */
+async function waitFor<T>(read: () => T | undefined, limit = 10_000): Promise<T | undefined> {
+  const deadline = Date.now() + limit
+  for (;;) {
+    const found = read()
+    if (found !== undefined) return found
+    if (Date.now() > deadline) return undefined
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
 }
 
 async function main(): Promise<void> {
@@ -181,13 +254,76 @@ async function main(): Promise<void> {
     check('the pointer is listed for the prompt',
       pointers.length === 1 && pointers[0]?.path === external,
       `pointers: ${pointers.map(p => `${p.name}=${p.path}`).join(', ')}`)
+
+    // ---- the pointer is named inside arbor's own <workspace> section, and a
+    // window reaches the path it names on its first call, with no exploratory
+    // call before it: the prompt is the only thing the window was given.
+    const pointerSession = await runSession(ctx, first, [
+      { toolCalls: [{ name: 'read', args: { path: join(external, 'code.py') } }] },
+      { text: 'read the pointed file' },
+    ])
+    const pointerPrompt = driver.systemPromptOf(pointerSession) ?? ''
+    const workspace = /<workspace>([\s\S]*?)<\/workspace>/.exec(pointerPrompt)?.[1] ?? ''
+    check('the pointer line is inside the one <workspace> section',
+      workspace.includes(`外部项目 ${pointer.name}：${pointer.path}`),
+      `<workspace> names the pointer: ${workspace.includes(pointer.path)}`)
+    check('the pointer is named once, in one home, and not restated elsewhere',
+      pointerPrompt.split(pointer.path).length - 1 === 1
+        && workspace.includes('用户另外添加的目录')
+        && workspace.includes('没有复制它')
+        && workspace.includes('就在原处改'),
+      `occurrences of the path in the whole prompt: ${pointerPrompt.split(pointer.path).length - 1}`)
+    const readCalls = toolCallsOf(ctx, pointerSession)
+    check('a window reads the pointed file on its first call, with no exploratory call before it',
+      readCalls.length === 1
+        && readCalls[0]?.name === 'read'
+        && readCalls[0]?.text.includes('print("hi")'),
+      `tool calls: ${readCalls.map(one => one.name).join(', ') || '(none)'}; result: ${readCalls[0]?.text ?? ''}`)
+
+    // ---- a pointer added while the window runs reaches it as a delta of only
+    // the changed line, the way every other prompt-section change does. The
+    // host delivers from its own watch loop, which runs beside the turn rather
+    // than inside it, so the proof waits for what it asserts.
+    const secondPointer = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
+    await writeFile(join(secondPointer, 'notes.md'), 'the second directory', 'utf8')
+    host.pointerArborProject(secondPointer)
+    await runSession(ctx, first, [{ text: 'one more turn' }], pointerSession)
+    const wanted = `外部项目 ${basename(secondPointer)}：${secondPointer}`
+    const delta = await waitFor(() => {
+      const found = splicedTextsOf(ctx, pointerSession).filter(text => text.includes(wanted))
+      return found.length === 1 ? found[0] : undefined
+    })
+    check('a pointer added mid-window reaches the running window as a delta',
+      delta !== undefined, `delta: ${JSON.stringify(delta ?? '(none)')}`)
+    check('the delta carries only the changed line',
+      delta !== undefined
+        && /<workspace>\n([\s\S]*?)\n<\/workspace>/.exec(delta)?.[1] === `+ ${wanted}`
+        && !delta.includes('用户另外添加的目录'),
+      `delta: ${JSON.stringify(delta ?? '(none)')}`)
+
     // True at read: remove the directory and the pointer drops, so the prompt
-    // never names a path that no longer exists.
+    // never names a path that no longer exists. The window's own prefix is
+    // frozen, so the drop reaches it as a delta of the line that went, and a
+    // window that opens afterwards never sees the line at all.
     await rm(external, { recursive: true, force: true })
     const afterGone = await host.listArborPointers()
     check('a pointer whose directory is gone drops from the list',
-      afterGone.length === 0,
-      `pointers after the directory is removed: ${afterGone.map(p => p.name).join(', ') || '(none)'}`)
+      afterGone.length === 1 && afterGone[0]?.path === secondPointer,
+      `pointers after the directory is removed: ${afterGone.map(p => p.name).join(', ')}`)
+    const gone = `外部项目 ${pointer.name}：${pointer.path}`
+    await runSession(ctx, first, [{ text: 'one more turn' }], pointerSession)
+    const dropped = await waitFor(() => {
+      const found = splicedTextsOf(ctx, pointerSession).filter(text => text.includes(gone))
+      return found.length === 1 ? found[0] : undefined
+    })
+    check('the dropped pointer reaches the window as a delta of the line that went',
+      dropped !== undefined
+        && /<workspace>\n([\s\S]*?)\n<\/workspace>/.exec(dropped)?.[1] === `- ${gone}`,
+      `delta: ${JSON.stringify(dropped ?? '(none)')}`)
+    const laterPrompt = driver.systemPromptOf(await runSession(ctx, first)) ?? ''
+    check('a window that opens afterwards never sees the dropped pointer',
+      !laterPrompt.includes(external) && laterPrompt.includes(secondPointer),
+      `the removed path is still named: ${laterPrompt.includes(external)}`)
   } finally {
     await ctx.fiber.dispose()
   }

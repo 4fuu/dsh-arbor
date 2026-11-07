@@ -82,8 +82,6 @@ export class DshProjectBridge {
   private debounce: NodeJS.Timeout | undefined
   /** Recorded external directories: name -> absolute path. Never projects. */
   private readonly pointers = new Map<string, string>()
-  /** Bumped whenever a pointer is added, removed, or drops for a gone path. */
-  private pointerEpoch = 0
 
   constructor(options: DshProjectBridgeOptions) {
     this.registry = options.registry
@@ -138,13 +136,12 @@ export class DshProjectBridge {
     const path = resolve(externalPath)
     const name = basename(path.replace(/\/+$/, '')) || 'project'
     this.pointers.set(name, path)
-    this.pointerEpoch += 1
     return { name, path }
   }
 
   /** Drop a pointer by name; a no-op when the name is not recorded. */
   removePointer(name: string): void {
-    if (this.pointers.delete(name)) this.pointerEpoch += 1
+    this.pointers.delete(name)
   }
 
   /**
@@ -159,19 +156,23 @@ export class DshProjectBridge {
         if ((await stat(path)).isDirectory()) result.push({ name, path })
       } catch {
         this.pointers.delete(name)
-        this.pointerEpoch += 1
       }
     }
     return result.sort((a, b) => a.name.localeCompare(b.name))
   }
 
   /**
-   * A revision that moves whenever a pointer is added or removed, so a running
-   * window's prompt is re-rendered — and handed a delta of only the changed
-   * line — the moment the set of pointers changes.
+   * A revision that moves whenever the live pointer set moves, so a running
+   * window's section is re-rendered — and handed a delta of only the changed
+   * line — the moment the set changes. The host asks for it once per step, so
+   * the existence check lives here: reading it drops a pointer whose directory
+   * has gone, which moves the revision, which drops the line from the prompt.
+   * It is a digest of the live set rather than a counter, so a pointer removed
+   * and re-added at the same path costs nothing.
    */
-  get pointerRevision(): number {
-    return this.pointerEpoch
+  async pointerRevision(): Promise<string> {
+    const live = await this.listPointers()
+    return live.map(pointer => `${pointer.name}=${pointer.path}`).join('|')
   }
 
   /** Every project subfolder of the shared folder, registered in DSH's registry. */

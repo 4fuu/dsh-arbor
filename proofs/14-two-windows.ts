@@ -12,7 +12,12 @@
  *    applies, c1's checkout holds only c1's change and c2's only c2's — the
  *    checkouts are separate directories, so the concurrent work does not
  *    interfere;
- *  - after both apply, the shared project folder holds both changes.
+ *  - after both apply, the shared project folder holds both changes;
+ *  - and the change shows in the project as DSH's UI sees it: the project
+ *    bridge registers the shared folder's project subfolder in DSH's own
+ *    `WorkspaceRegistry` (`ctx.workspaceRegistry`, a web-profile service this
+ *    proof stands in for), so the applied change sits inside the directory the
+ *    project picker lists.
  *
  * Run: pnpm proof:windows
  */
@@ -29,6 +34,9 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
+import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
+import { DshProjectBridge } from '../packages/arbor-workspace/src/index.ts'
 import {
   SCRIPTED_SELECTION,
   arborHostOf,
@@ -137,6 +145,23 @@ async function main(): Promise<void> {
       existsSync(join(project, 'first.txt')) && existsSync(join(project, 'second.txt'))
         && existsSync(join(project, 'README.md')),
       `shared: first.txt=${existsSync(join(project, 'first.txt'))}, second.txt=${existsSync(join(project, 'second.txt'))}, README.md=${existsSync(join(project, 'README.md'))}`)
+
+    // ---- the change shows in the project as DSH's UI sees it. The registry is
+    // a web-profile service, so this proof stands in for it with the one member
+    // the bridge calls: `create(path, title)`.
+    const registered: { path: string; title: string }[] = []
+    const registryStandIn = {
+      create: async (path: string, title?: string) => {
+        registered.push({ path, title: title ?? '' })
+        return { id: WorkspaceId(`ws-${registered.length}`), path, title: title ?? '' }
+      },
+    } as unknown as WorkspaceRegistry
+    const projects = await new DshProjectBridge({ registry: registryStandIn, sharedFolder: shared }).sync()
+    check('the applied change sits inside the project DSH\'s project list shows',
+      projects.some(one => one.path === project)
+        && registered.some(one => one.path === project && one.title === 'app')
+        && existsSync(join(project, 'first.txt')) && existsSync(join(project, 'second.txt')),
+      `registered: ${registered.map(one => `${one.title}=${one.path}`).join(', ')}; both changes present: ${existsSync(join(project, 'first.txt')) && existsSync(join(project, 'second.txt'))}`)
   } finally {
     await ctx.fiber.dispose()
   }

@@ -19,9 +19,16 @@
 export {
   openArborWorkspace,
   arborSharedFolder,
+  withArborWorkspace,
   type ArborWorkspace,
   type ArborWorkspaceOptions,
 } from './workspace.ts'
+export {
+  withPointerSection,
+  POINTER_BLOCKS,
+  POINTER_TEXT,
+  type PointerSource,
+} from './section.ts'
 export {
   DshProjectBridge,
   type DshProject,

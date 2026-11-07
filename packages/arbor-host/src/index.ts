@@ -75,7 +75,7 @@ import {
   type PersonaVariables,
 } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
-import { openArborWorkspace, DshProjectBridge, type DshProject, type ExternalPointer } from '@4fu/dsh-arbor-workspace'
+import { openArborWorkspace, arborSharedFolder, DshProjectBridge, type DshProject, type ExternalPointer } from '@4fu/dsh-arbor-workspace'
 import type { WorkspaceBackend } from '@4fu/arbor-core'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { DshSendExecutor } from './send.ts'
@@ -261,21 +261,23 @@ export class ArborHostService extends Service {
     // standalone arbor, and arbor's own secret scrub is the only protection on
     // what reaches the model. The `<workspace>` section and the `workspace.*`
     // module functions are the backend's own, with no sandbox line and no
-    // `sandbox_escalate`.
+    // `sandbox_escalate`; the external-project pointers are rendered inside that
+    // same section, so "where you work" and "where the user's own directories
+    // are" are answered in one place.
+    const registry = ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
+    const projects = new DshProjectBridge({
+      registry,
+      sharedFolder: arborSharedFolder(root),
+      warn: message => ctx.logger.warn(message),
+    })
     const arborWorkspace = await openArborWorkspace({
       root,
       journal,
       warn: message => ctx.logger.warn(message),
-    })
-    // The DSH project bridge: the shared folder's project subfolders become the
-    // DSH project list. `workspaceRegistry` is a web-profile service, so it is
-    // read lazily and the bridge stays inert on a profile that has none
-    // (headless, acp, sdk), which never renders a project picker.
-    const registry = ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
-    const projects = new DshProjectBridge({
-      registry,
-      sharedFolder: arborWorkspace.sharedFolder,
-      warn: message => ctx.logger.warn(message),
+      pointers: {
+        list: () => projects.listPointers(),
+        revision: () => projects.pointerRevision(),
+      },
     })
     // `/env`: arbor's own environment under DSH_HOME/arbor, with DSH's skills
     // and MCP servers mounted read-only beside it.
