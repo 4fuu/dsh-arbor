@@ -203,10 +203,7 @@ export class DshEnvironment implements Environment {
 
   /** Install drafts, refusing one that names an item DSH owns. */
   async install(drafts: readonly EnvDraft[], remove?: readonly (EnvItemRef | EnvItemName)[]): Promise<EnvRevision> {
-    this.refuseTaken([
-      ...drafts.map(draft => `${draft.kind}:${draft.name}`),
-      ...this.namedBy(remove),
-    ])
+    this.refuseTaken([...this.takenBy(drafts), ...this.namedBy(remove)])
     return this.inner.install(drafts, remove)
   }
 

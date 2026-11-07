@@ -19,6 +19,7 @@
  */
 
 import type { BlockKindSpec, PromptSection, TextTable } from '@4fu/arbor-interfaces'
+import { textOf, zhTextTable, type TextArgs } from '@4fu/arbor-prompt'
 
 /** This workspace's own fixed strings. */
 export const dshWorkspaceText: TextTable = {
@@ -112,4 +113,16 @@ export function dshWorkspaceSection(facts: () => { root: string; mode: string })
       return [{ kind: 'dsh_workspace_method', fields: { root, mode } }]
     },
   }
+}
+
+/**
+ * This implementation's strings over the framework's own, which is the table a
+ * refusal is written from: a window reads arbor's wording for the parts the
+ * core owns and this implementation's for the parts it owns.
+ */
+export const dshWorkspaceTable: TextTable = { ...zhTextTable, ...dshWorkspaceText }
+
+/** One fixed string, from the table a window's refusals are written from. */
+export function dshWorkspaceTextOf(key: string, args?: TextArgs): string {
+  return textOf(dshWorkspaceTable, key, args, key)
 }

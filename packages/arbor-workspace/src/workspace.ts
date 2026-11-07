@@ -71,13 +71,12 @@ import type {
   WorkspaceRef,
 } from '@4fu/arbor-interfaces'
 import { arborError } from '@4fu/arbor-errors'
-import { textOf, zhTextTable } from '@4fu/arbor-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { DshSandboxSeam } from './seam.ts'
 import { DshWorkspaceGroup } from './group.ts'
-import { dshWorkspaceSection, dshWorkspaceText } from './text.ts'
+import { dshWorkspaceSection, dshWorkspaceTable, dshWorkspaceTextOf } from './text.ts'
 
 /** The target prefix that names the DSH session a window belongs to. */
 const SESSION_TARGET_PREFIX = 'dsh:session:'
@@ -100,6 +99,14 @@ export interface DshWorkspaceOptions {
   readonly agentOf: (sessionId: SessionId) => Agent | undefined
   /** The agent whose turn is running, when one is. */
   readonly currentAgent: () => Agent | undefined
+  /**
+   * Every cwd a live or persisted session runs in, oldest noted first.
+   *
+   * A window a restart continued has no live session when the host freezes its
+   * prefix — `Arbor.start` continues it with no turn in flight — so the root
+   * that stands then is the newest one any session is known to run in.
+   */
+  readonly knownRoots: () => readonly string[]
 }
 
 export class DshSandboxWorkspace implements Workspace {
@@ -108,13 +115,14 @@ export class DshSandboxWorkspace implements Workspace {
   private readonly cwdOf: (sessionId: SessionId) => string | undefined
   private readonly agentOf: (sessionId: SessionId) => Agent | undefined
   private readonly currentAgent: () => Agent | undefined
+  private readonly knownRoots: () => readonly string[]
   /** The approved wider mode one session asked for, with what it was granted over. */
   private readonly grants = new Map<SessionId, Grant>()
   /** The root the last session to run noted, for a render outside any turn. */
   private lastRoot: string | undefined
 
   /** This implementation's own fixed strings, merged over the framework's. */
-  readonly text: TextTable = { ...zhTextTable, ...dshWorkspaceText }
+  readonly text: TextTable = dshWorkspaceTable
 
   constructor(options: DshWorkspaceOptions) {
     this.seam = options.seam
@@ -122,6 +130,7 @@ export class DshSandboxWorkspace implements Workspace {
     this.cwdOf = options.cwdOf
     this.agentOf = options.agentOf
     this.currentAgent = options.currentAgent
+    this.knownRoots = options.knownRoots
   }
 
   // ---- the roots --------------------------------------------------------
@@ -140,12 +149,26 @@ export class DshSandboxWorkspace implements Workspace {
     return root ?? this.lastRoot ?? process.cwd()
   }
 
-  /** The root the session whose turn is running works in. */
+  /**
+   * The root the session whose turn is running works in.
+   *
+   * Outside a turn — which is where the host freezes a continued window's
+   * prefix, in `Arbor.start` — the newest cwd any session is known to run in
+   * stands, and the process's own directory only when nothing is known at all.
+   */
   private currentRoot(): string {
     const session = this.currentAgent()?.session
     const root = session === undefined ? undefined : this.cwdOf(session.id)
-    if (root !== undefined) this.lastRoot = root
-    return root ?? this.lastRoot ?? process.cwd()
+    if (root !== undefined) {
+      this.lastRoot = root
+      return root
+    }
+    const newest = this.knownRoots().at(-1)
+    if (newest !== undefined) {
+      this.lastRoot = newest
+      return newest
+    }
+    return this.lastRoot ?? process.cwd()
   }
 
   /** The root one window ref names, for the `workspace.path` answer. */
@@ -214,8 +237,8 @@ export class DshSandboxWorkspace implements Workspace {
     throw arborError({
       code: 'invalid',
       rule: 'workspace.reclaim.refused',
-      message: textOf(this.text, 'refused.workspace.reclaim'),
-      nextAction: textOf(this.text, 'next.workspace.reclaim'),
+      message: dshWorkspaceTextOf('refused.workspace.reclaim'),
+      nextAction: dshWorkspaceTextOf('next.workspace.reclaim'),
     })
   }
 
@@ -278,6 +301,13 @@ export class DshSandboxWorkspace implements Workspace {
     const session = await this.sessionOfWindow(window)
     const agent = (session === undefined ? undefined : this.agentOf(session)) ?? this.currentAgent()
     const standing = this.seam.policyOf(agent?.session)
+    // The closed target vocabulary, checked before the ask: `read-only` is the
+    // floor and nothing escalates to it (`ESCALATION_TARGETS`,
+    // `@deepseek-ai/dsh-sandbox`), and a name outside the vocabulary is a
+    // malformed ask rather than one the user should be shown.
+    if (!this.seam.escalationModes.includes(mode as SandboxMode)) {
+      throw this.refusalOf(new Error(`unknown escalation target: ${mode}`), mode, standing.mode)
+    }
     let granted: SandboxMode
     try {
       granted = await this.seam.escalate(
@@ -305,8 +335,8 @@ export class DshSandboxWorkspace implements Workspace {
     return arborError({
       code: rule === 'sandbox_escalate.rejected' ? 'denied' : 'invalid',
       rule,
-      message: textOf(this.text, `refused.${rule}`, { mode, current: standing }),
-      nextAction: textOf(this.text, `next.${rule}`),
+      message: dshWorkspaceTextOf(`refused.${rule}`, { mode, current: standing }),
+      nextAction: dshWorkspaceTextOf(`next.${rule}`),
     })
   }
 

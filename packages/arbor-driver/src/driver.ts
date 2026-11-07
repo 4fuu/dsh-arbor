@@ -196,7 +196,15 @@ class SessionArbor {
           ...position,
           message: createToolResultMessage({
             callId: call.id,
-            content: [{ type: 'text', text: result.content }],
+            // A refusal carries its wording in `error`, not in `content`: the
+            // core answers a refused call with an empty body and the rule, the
+            // message and the next action beside it (the same three parts
+            // `arbor-core`'s own `refusalText` writes into the journal). DSH's
+            // own tools put a denial's reason in the result content, so the
+            // text is put here too — without it the model would read an empty
+            // tool result and never learn why the call was refused or what to
+            // do instead.
+            content: [{ type: 'text', text: result.content !== '' ? result.content : refusalText(result) }],
             isError: !result.ok,
           }),
           ...result.ok ? {} : { error: toolErrorOf(result) },
@@ -495,6 +503,21 @@ function toolErrorOf(result: { error?: { rule: string; message: string } }): {
     code: 'TOOL_CALL_FAILED',
     ...result.error === undefined ? {} : { reason: result.error.message },
   }
+}
+
+/**
+ * One refused call's wording, as the model reads it.
+ *
+ * Arbor's core answers a refused call with an empty `content` and the three
+ * parts beside it, and writes the same three parts into the journal as one line
+ * (`@4fu/arbor-core`, `host.js`, `refusalText`). The session log is the history
+ * the next model request is derived from, so the line is what a window's refusal
+ * has to carry — otherwise the model sees an empty tool result.
+ */
+function refusalText(result: { error?: { rule: string; message: string; nextAction?: string } }): string {
+  const error = result.error
+  if (error === undefined) return ''
+  return `${error.rule} ${error.message}${error.nextAction === undefined ? '' : ` ${error.nextAction}`}`
 }
 
 export default ArborDriver

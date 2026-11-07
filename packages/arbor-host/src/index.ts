@@ -52,7 +52,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createDshBackend, type DshBackend } from '@4fu/dsh-arbor-llm'
 import { dshPromptPlugin } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
-import { DshSandboxSeam, DshSandboxWorkspace } from '@4fu/dsh-arbor-workspace'
+import { DshSandboxSeam, DshSandboxWorkspace, dshWorkspaceTextOf } from '@4fu/dsh-arbor-workspace'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -102,10 +102,54 @@ export function defaultSettings(extra: Settings | undefined): Settings {
   }
 }
 
+/**
+ * Note the cwd of every session the journal names, read from DSH's own session
+ * persistence.
+ *
+ * A session's cwd is the durable record of where it works
+ * (`SessionHeader.cwd`), and the driver notes the live ones when a session is
+ * created or resumed. A window a previous process stopped has no live session
+ * when this one starts, and its continuation's prefix is frozen during
+ * `Arbor.start` — so the cwd is read here, from the same store the driver reads,
+ * for every session the journal still names.
+ */
+async function noteKnownCwds(ctx: Context, journal: Journal, cwds: Map<string, string>): Promise<void> {
+  const persistence = ctx.get('sessionPersistence') as
+    | { open(id: string, access: 'read'): Promise<{ header: { cwd?: string }; close(): Promise<void> }> }
+    | undefined
+  if (persistence === undefined) return
+  const sessions = new Set<string>()
+  for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
+    const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
+    for (const event of page.items) {
+      for (const target of event.targets) {
+        if (target.startsWith(SESSION_TARGET_PREFIX)) sessions.add(target.slice(SESSION_TARGET_PREFIX.length))
+      }
+    }
+    if (page.items.length < MAX_PAGE_LIMIT) break
+  }
+  for (const session of sessions) {
+    try {
+      const handle = await persistence.open(session, 'read')
+      try {
+        if (handle.header.cwd !== undefined) cwds.set(session, handle.header.cwd)
+      } finally {
+        await handle.close()
+      }
+    } catch {
+      // A session the store no longer holds has no cwd to note; its windows are
+      // not live either, so nothing asks for one.
+    }
+  }
+}
+
 /** The conversation target one DSH user session is, for arbor's dispatch. */
 export function sessionTarget(sessionId: string): Target {
   return `dsh:session:${sessionId}` as Target
 }
+
+/** The target prefix that names the DSH session a window belongs to. */
+const SESSION_TARGET_PREFIX = 'dsh:session:'
 
 /** The window a `window_start` continues, when it continues one. */
 function continuedWindow(body: string | null): WindowRef | undefined {
@@ -173,13 +217,17 @@ export class ArborHostService extends Service {
     })
     // Every file access and every command of a window runs through DSH's own
     // sandboxed filesystem and shell, under the session's resolved policy.
-    const seam = new DshSandboxSeam(ctx, (key, args) => key)
+    // The seam writes a window's refusals from the workspace's own table over the
+    // framework's, which is where the deployment's model-facing wording lives
+    // (docs/workspaces.md#prompt-text).
+    const seam = new DshSandboxSeam(ctx, dshWorkspaceTextOf)
     const workspace = new DshSandboxWorkspace({
       seam,
       journal,
       cwdOf: sessionId => cwds.get(sessionId),
       agentOf: sessionId => ctx.agents.get(sessionId),
       currentAgent: () => ctx.agents.currentInitiator(),
+      knownRoots: () => [...cwds.values()],
     })
     // `/env`: arbor's own environment under DSH_HOME/arbor, with DSH's skills
     // and MCP servers mounted read-only beside it.
@@ -204,6 +252,12 @@ export class ArborHostService extends Service {
     })
     this.state = { root, journal, notes, backend, host, settings, sandboxedFileTools: seam.confined }
     this.cwds = cwds
+    // Every session the journal names gets its cwd noted before the host starts,
+    // because the host continues a stopped window in `start` and freezes that
+    // window's prefix then — with no turn in flight, so no initiating agent to
+    // ask. Without this, a window a restart continued would be told the
+    // process's own directory instead of the session's.
+    await noteKnownCwds(ctx, journal, cwds)
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
     await host.start()

@@ -1,0 +1,24 @@
+# The /env fixture overlay for the B3 proofs: one DSH skill registered on
+# ctx.skills and one real mcp-client row connected to the fixture MCP server,
+# so the /env proofs read what a real DSH installation has rather than a stub.
+#
+# Only the B3 proofs load this layer, so the B0 and B1 proofs keep booting the
+# profile they were written against. A proof that loads it calls the testkit's
+# useDshFixtures() first: the mcp-client row names the fixture server script
+# through the ARBOR_FIXTURES environment variable, because an overlay patch's
+# `!!js` expression is evaluated with `new Function` and cannot reach
+# `import.meta.url`.
+
+- insert:
+    - id: arbor-probe-skill
+      name: '@4fu/dsh-arbor-testkit/dsh-skill'
+
+    - id: arbor-probe-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: probe
+        command: node
+        args:
+          - !!js process.env.ARBOR_FIXTURES + '/mcp-server.mjs'
+        failOnStartupError: true
