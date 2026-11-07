@@ -15,10 +15,8 @@ export { DshSandboxWorkspace, type DshWorkspaceOptions } from './workspace.ts'
 export {
   DshSandboxSeam,
   deny,
-  denialMarker,
   type CommandOutcome,
   type EscalationAsk,
-  type SandboxFacts,
   type SandboxedShellRequest,
 } from './seam.ts'
 export { DshWorkspaceGroup, ESCALATE_TOOL } from './group.ts'

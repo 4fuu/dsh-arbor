@@ -58,16 +58,6 @@ export type SandboxedShellRequest = ShellExecRequest & {
   readonly sandboxPolicy?: SandboxExecutionPolicy
 }
 
-/** What a window's file access and command execution run under. */
-export interface SandboxFacts {
-  /** The mode this session's calls run under right now. */
-  readonly mode: SandboxMode
-  /** The absolute root `workspace-write` may write under. */
-  readonly workspaceRoot: string
-  /** Whether a confining capability is mounted at all. */
-  readonly confined: boolean
-}
-
 /** One escalation ask, as the seam hands it to DSH's approval. */
 export interface EscalationAsk {
   readonly mode: string
@@ -132,12 +122,6 @@ export class DshSandboxSeam {
       throw new Error('dsh-arbor workspace: ctx.sandboxPolicy is missing (load @deepseek-ai/dsh-sandbox-policy)')
     }
     return policy.resolve(session === undefined ? {} : { session })
-  }
-
-  /** What a window's file access and commands run under, for the prompt. */
-  factsOf(session: Session | undefined): SandboxFacts {
-    const policy = this.policyOf(session)
-    return { mode: policy.mode, workspaceRoot: policy.workspaceRoot, confined: this.confined }
   }
 
   /** Where one path names in the backend's execution world. */
@@ -311,11 +295,6 @@ export class DshSandboxSeam {
       },
     )
   }
-}
-
-/** The marker DSH's own mutating tools put in front of a policy denial. */
-export function denialMarker(mode: SandboxMode): string {
-  return sandboxDenialMarker(mode)
 }
 
 /**

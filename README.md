@@ -8,7 +8,7 @@ DSH's own embedded AgentLoop, in the same process.
 - DSH is pinned to tag `dsh-v0.2.2-rc.1` (commit `66491b05e3` of
   deepseek-ai/deepseek-harness); the packages install the published
   `@deepseek-ai/dsh@0.2.2-rc.1` tree, so no monorepo build is needed.
-- arbor is pinned to `2026.1106.1` (`@4fu/arbor-*` from npm).
+- arbor is pinned to `2026.1107.0` (`@4fu/arbor-*` from npm).
 - Node 24+ (developed on Node 26; the sources are erasable-syntax TypeScript
   run directly through Node's type stripping, so there is no build step).
 
@@ -23,17 +23,17 @@ DSH's own embedded AgentLoop, in the same process.
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b1
+git checkout b3
 pnpm install        # pnpm 11+; the dependency build policy is in pnpm-workspace.yaml
 pnpm check          # tsc --noEmit over every package and proof
-pnpm proofs         # all eleven proofs, against the scripted model
+pnpm proofs         # all fourteen proofs, against the scripted model
 ```
 
 One prompt to hand to a model, so it installs and inspects this according to
 your needs — edit the bracketed parts, or drop them:
 
 ```text copy Copy Install Prompt
-Install dsh-arbor (https://github.com/4fuu/dsh-arbor, branch b1) in this
+Install dsh-arbor (https://github.com/4fuu/dsh-arbor, branch b3) in this
 environment [in a scratch clone under /tmp] and show me that it works: follow
 docs/install-for-agents.md, run pnpm install, pnpm check and pnpm proofs, and
 [also drive one live turn against the real DeepSeek model, with a DSH restart
@@ -59,6 +59,9 @@ pnpm proof:preset      # 07 the arbor preset in the roster, routing both ways
 pnpm proof:storage     # 08 durable storage, one host, workspace root
 pnpm proof:lifetime    # 09 window end, continuation, idle timeout
 pnpm proof:resume      # 10 resume of a persisted session after a restart
+pnpm proof:sandbox     # 11 arbor's own file tools inside DSH's sandbox
+pnpm proof:env         # 12 /env: DSH's skills and MCP servers, read-only
+pnpm proof:loop        # 13 the closed loop, across a restart (live-capable)
 ```
 
 The default run uses a scripted model, so it needs no key and no network.
@@ -80,13 +83,22 @@ ARBOR_PROOF_LIVE=1 pnpm proofs          # or a single proof
 | 05 | Prompt assembly | every official section DSH itself assembled is absent from the window's prompt, with no survivor; the third-party section arrives inside the arbor `<dsh>` outside block |
 | 06 | Common plugins | seven common plugin rows active, their sections registered, `todo_write` runs on the arbor path and on the embedded-loop path |
 | 07 | Preset + routing | the preset is in the roster and selectable, its selection is on the log, the arbor session runs through the driver and the ordinary session in the same process is untouched |
-| 08 | Storage + workspace | data under `DSH_HOME/arbor/` with a SQLite journal and note store, one host for two sessions of different cwds, arbor's own window defaults, the judge off, a window's directory under its session's cwd, the `<workspace>` section naming it |
+| 08 | Storage + workspace | data under `DSH_HOME/arbor/` with a SQLite journal and note store, one host for two sessions of different cwds, arbor's own window defaults, the judge off, the mount being the session's cwd itself and owning `exec`/`readFile`/`writeFile`, the `<workspace>` section naming it and the standing sandbox mode |
 | 09 | Window lifetime | a window the model ends hands off to a continuation the next turn drives; an idle window ends and the next turn opens a new window of the chain; one system prompt; no dangling tool calls |
 | 10 | Resume | the relay's own logic on synthetic input, a clean restart that resumes onto the window the host continued, and an interrupted restart whose journal-recorded call the log lost is replayed and closed as outcome-unknown |
+| 11 | Sandbox | the mount is the session's cwd and owns the three capabilities, `ctx.arborHost.fileToolsSandboxed` is the capability fact, a refused `write` reaches the model with the denial marker and the next action, a `sandbox_escalate` asks through DSH's approval on the user session's agent inside its open turn and the grant lets the write through, a rejection reaches the model as a refusal, the floor is refused without an ask, a command runs in the cwd |
+| 12 | `/env` | a real DSH skill on `ctx.skills` and a real `mcp-client` row appear in `<env>`; `read` of the skill's path returns DSH's body; the MCP server declares no functions so no arbor module duplicates its tools; arbor's own built-ins, settings and `reload` still work; a write under `/env` and a removal of a DSH item are refused |
+| 13 | Closed loop | a write and a DSH-skill read before a restart, the same after the session resumes onto the window the host continued, and with `ARBOR_PROOF_LIVE=1` the same loop against the real DeepSeek model |
 
 Findings, the exact DSH source locations each one rests on, what arbor's core is
 still missing, and the recommended module layout:
-[docs/b0-findings.md](docs/b0-findings.md).
+[docs/b0-findings.md](docs/b0-findings.md) for the B0 spike and
+[docs/b3-findings.md](docs/b3-findings.md) for the workspace and `/env`.
+
+The capability the B2 prompt bridge gates its `<harness>` sandbox line on is
+`ctx.arborHost.fileToolsSandboxed`: true when a confining filesystem or shell
+backend is mounted, which is what every window's file access and command runs
+through.
 
 ## Layout
 
@@ -98,6 +110,7 @@ patches/            overlay patch layers applied above the shipped profile
   prompt.patch.yml    a third-party prompt section, as a plugin would register
   lifetime.patch.yml  arbor's window idle overlay, for the lifetime proof
   preset-registry.patch.yml  the preset roster row, for the preset proof
+  dsh-env.patch.yml  the /env fixtures: a DSH skill and a real mcp-client row
 packages/
   arbor-host/       the one Arbor host per process: the durable SQLite journal
                     and note store under DSH_HOME/arbor, the settings, the
@@ -110,11 +123,17 @@ packages/
   arbor-prompt/     the prompt bridge: <dsh> outside block, official sections
                     dropped by name prefix (B0's rule, kept until B2)
   arbor-tools/      the tool bridge: DSH tools as arbor external tools
+  arbor-workspace/  the Workspace over DSH's sandbox: the session's cwd, with
+                    every file access and command through ctx.fs and ctx.shell,
+                    and the sandbox_escalate tool
+  arbor-env/        /env: arbor's own environment under DSH_HOME/arbor/env, with
+                    DSH's skills and MCP servers mounted read-only beside it
   arbor-bundle/     the installable bundle: cordis.patch.yml with the row swaps,
                     the manifest and the locale
   arbor-preset/     the agent-preset row that puts arbor in DSH's roster
   arbor-testkit/    the boot harness, the memory journal, the scripted model,
-                    the gate and the typed row accessors
+                    the gate and the typed row accessors, and the B3 fixtures
+                    (a DSH skill row and a stdio MCP server)
 proofs/              one runnable proof per integration point
 ```
 
@@ -150,4 +169,9 @@ Deliberately out of B1, and not worked around here:
   refuses to adopt any session that runs under a preset; a surface that
   composes presets (the TUI or web client, or the SDK path the proofs use) is
   required. The UI is B4.
-- Workspace over DSH's sandboxed filesystem and `/env` are B3; the UI is B4.
+- The UI is B4.
+- ovnfs is deliberately not offered inside DSH: its file tools are `node:fs`
+  calls on the host, its mount carries no `exec`, and its checkout operations
+  spawn the binary directly — all outside `ctx.shell` and `ctx.fs`, so DSH's
+  sandbox would not apply to them. The reasoning is at the top of
+  `packages/arbor-workspace/src/workspace.ts`.
