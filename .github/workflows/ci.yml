@@ -25,10 +25,11 @@ jobs:
         run: pnpm proofs
 
   # The same three proofs against the real DeepSeek model. The job is skipped
-  # until a DEEPSEEK_API_KEY secret is set on the repository, because a run
-  # without one fails on the provider's model listing.
+  # unless the repository variable ARBOR_PROOF_LIVE is set to 1, because a run
+  # without a key fails on the provider's model listing. Set the variable and a
+  # DEEPSEEK_API_KEY secret on the repository to enable it.
   live-model:
-    if: ${{ secrets.DEEPSEEK_API_KEY != '' }}
+    if: ${{ vars.ARBOR_PROOF_LIVE == '1' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
