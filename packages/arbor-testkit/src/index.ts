@@ -15,4 +15,4 @@ export {
   installScriptedLlm,
 } from './scripted-llm.ts'
 export type { ScriptedResponse } from './scripted-llm.ts'
-export { scriptedLlm, spikeToolRuns, ScriptedLlmService } from './scripted-plugin.ts'
+export { scriptedLlm, spikeApprovalAsks, spikeToolRuns, ScriptedLlmService } from './scripted-plugin.ts'

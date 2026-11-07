@@ -25,6 +25,9 @@ export const scriptedLlm = new ScriptedLlm()
 /** Every run of the spike's test tool, in order. */
 export const spikeToolRuns: { args: unknown }[] = []
 
+/** Every approval ask the spike's asking tool produced, in order. */
+export const spikeApprovalAsks: { name: string; reason: string }[] = []
+
 /** Registers the scripted provider route and the spike_echo test tool. */
 export class ScriptedLlmService extends Service {
   static inject = ['llm', 'tools']
@@ -35,6 +38,30 @@ export class ScriptedLlmService extends Service {
 
   protected [Service.init](): void {
     this.ctx.llm.registerAdapter([SCRIPTED_PROVIDER], new ScriptedAdapter(scriptedLlm))
+    // A tool whose calls need approval: the pre-execute waterfall turns the
+    // call into an ask, which is what routes it to DSH's approval path.
+    this.ctx.on('tools/pre-execute', (exec, next) => {
+      if (exec.name !== 'spike_ask') return next()
+      spikeApprovalAsks.push({ name: exec.name, reason: 'the spike asks for approval' })
+      return Promise.resolve({ kind: 'ask' as const, reason: 'the spike asks for approval' })
+    })
+    this.ctx.tools.register({
+      name: 'spike_ask',
+      description: 'Run a guarded action that needs approval. Test-only tool for the B0 spike.',
+      parameters: {
+        type: 'object',
+        properties: { action: { type: 'string', description: 'the action to run' } },
+        required: ['action'],
+      },
+      output: {
+        schema: { type: 'object', properties: { ran: { type: 'string' } }, required: ['ran'] },
+        render: (_args, value) => [{ type: 'text', text: `ran: ${(value as { ran: string }).ran}` }],
+      },
+      execute: async (args: unknown) => {
+        spikeToolRuns.push({ args })
+        return { ran: (args as { action: string }).action }
+      },
+    })
     this.ctx.tools.register({
       name: 'spike_echo',
       description: 'Echo the text back. Test-only tool for the B0 spike.',
