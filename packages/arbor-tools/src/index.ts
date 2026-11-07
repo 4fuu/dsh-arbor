@@ -82,13 +82,12 @@ export function schemaOf(spec: DirectToolSpec): Record<string, unknown> {
 }
 
 /**
- * The live-turn facts a running session agent exposes, so a tool call is
- * logged at the position of the turn executing it and aborted with it. The
- * arbor session agent implements them; any other agent simply does not, and
- * the call then runs without a log position, the way a standalone call does.
+ * The live turn's abort signal, which a running session agent exposes so a
+ * tool call is aborted with the turn that asked for it. The arbor session
+ * agent implements it; any other agent simply does not, and the call then runs
+ * on a signal of its own, the way a standalone call does.
  */
-export interface LiveTurnFacts {
-  currentLogPosition(): { turn: number; step: number } | undefined
+export interface LiveTurnSignal {
   currentSignal(): AbortSignal | undefined
 }
 
@@ -113,6 +112,11 @@ export interface DshExternalToolsOptions {
  * any turn — DSH's own pipeline degrades the execution to a deny, which is the
  * correct fail-closed answer.
  *
+ * The execution carries no log position, so DSH's pipeline does not write the
+ * `tool/call` + `tool/result` pair: the driver's bridge writes one pair for
+ * every call the window runs, arbor's own tools included, because the session
+ * log is the history the next model request is derived from.
+ *
  * The parameter round-trip (DSH JSON Schema → arbor ParameterSpec → DSH JSON
  * Schema) is lossy for exotic schemas; the faithful mapping and the
  * official-tool replacement are the next stage's work.
@@ -125,8 +129,7 @@ export function dshExternalTools(options: DshExternalToolsOptions): readonly Ext
     parameters: parametersOf(schema),
     execute: async (request: ToolCall): Promise<ToolResult> => {
       const agent = agents.currentInitiator()
-      const live = agent as (Agent & Partial<LiveTurnFacts>) | undefined
-      const position = live?.currentLogPosition?.()
+      const live = agent as (Agent & Partial<LiveTurnSignal>) | undefined
       const signal = live?.currentSignal?.() ?? new AbortController().signal
       const call: ToolCallBlock = {
         type: 'tool-call',
@@ -138,7 +141,6 @@ export function dshExternalTools(options: DshExternalToolsOptions): readonly Ext
         calls: [call],
         ...agent === undefined ? {} : { agent },
         signal,
-        ...position === undefined ? {} : { log: position },
       })
       const settled = batch.results.find(result => result.callId === request.callId) ?? batch.results[0]
       const result = settled?.result

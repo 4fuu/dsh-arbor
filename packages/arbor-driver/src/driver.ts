@@ -48,6 +48,7 @@ import type {
 import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { SessionPreparation, interruptedTurnClosers } from '@deepseek-ai/dsh-session'
+import { createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import { sessionTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
@@ -177,7 +178,30 @@ class SessionArbor {
         const control = this.hostService.host.windowControl()
         const args = safeArgs(call.arguments)
         const at = await control.recordToolCall(window, { name: call.name, args, callId: call.id })
-        return control.runToolCall(window, { name: call.name, args, callId: call.id }, at ?? undefined)
+        // The call is mirrored onto the session log here, for every tool the
+        // window runs — arbor's own and DSH's alike. The log is the history the
+        // next model request is derived from, and a provider refuses a history
+        // whose assistant message asks for a tool call that has no result, so a
+        // window that runs only arbor's own tools still leaves a valid log.
+        // DSH's pipeline is not asked to log (the external tools carry no log
+        // position), which is what keeps this the one pair per call.
+        const callSeq = this.agent.session.append('tool/call', {
+          ...position,
+          callId: call.id,
+          name: call.name,
+          arguments: call.arguments,
+        }).seq
+        const result = await control.runToolCall(window, { name: call.name, args, callId: call.id }, at ?? undefined)
+        this.agent.session.append('tool/result', {
+          ...position,
+          message: createToolResultMessage({
+            callId: call.id,
+            content: [{ type: 'text', text: result.content }],
+            isError: !result.ok,
+          }),
+          ...result.ok ? {} : { error: toolErrorOf(result) },
+        }, { surfaceOp: 'append', sourceEventSeqs: [callSeq] })
+        return result
       },
       publish: (window, event) => { this.hostService.backend.publish(window, event) },
       finishRun: window => { this.hostService.backend.finishRun(window) },
@@ -279,6 +303,7 @@ export class ArborDriver extends Service implements AgentFactory {
     const arbor = new SessionArbor(this, agent)
     agent.attachBridge(arbor.bridge())
     this.sessions.set(id, arbor)
+    this.hostService.noteSessionCwd(id, preparation.session.header.cwd)
     let stored: { handle: SessionHandle; storedCount: number } | undefined
     try {
       ownerCtx.fiber.assertActive()
@@ -349,6 +374,7 @@ export class ArborDriver extends Service implements AgentFactory {
       arbor = new SessionArbor(this, agent)
       agent.attachBridge(arbor.bridge())
       this.sessions.set(id, arbor)
+      this.hostService.noteSessionCwd(id, preparation.session.header.cwd)
       await this.publish(ownerCtx, arbor, agent, preparation.session, stored, options.setup, 'resume', options.parentAgent, options.signal)
     } catch (error: unknown) {
       if (agent !== undefined) this.sessions.delete(id)
@@ -455,6 +481,19 @@ function safeArgs(raw: string): Record<string, unknown> {
       : {}
   } catch {
     return {}
+  }
+}
+
+/** One refused tool call as the session log's error shape. */
+function toolErrorOf(result: { error?: { rule: string; message: string } }): {
+  name: string
+  code: string
+  reason?: string
+} {
+  return {
+    name: result.error?.rule ?? 'ToolCallFailed',
+    code: 'TOOL_CALL_FAILED',
+    ...result.error === undefined ? {} : { reason: result.error.message },
   }
 }
 

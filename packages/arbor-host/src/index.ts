@@ -38,6 +38,7 @@ import { SqliteNoteStore } from '@4fu/arbor-notes-sqlite'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createDshBackend, type DshBackend } from '@4fu/dsh-arbor-llm'
 import { dshPromptPlugin } from '@4fu/dsh-arbor-prompt'
+import { DshSessionWorkspace } from './workspace.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -60,6 +61,12 @@ export interface Config {
  * The window block is deliberately absent: arbor's own defaults apply (300 s
  * idle, 200 000 context tokens, 4 000 reserved), so a window that goes quiet
  * ends and the session's next turn opens the next window of its chain.
+ *
+ * The workspaces block sets one retention period. A window's own directory
+ * lives under the session's cwd, which is the user's project, so it is
+ * reclaimed once its chain has been finished for a week; a persistent
+ * directory (`workspace.keep`) outlives that, and a deployment that wants
+ * another period overrides this one.
  */
 export function defaultSettings(extra: Settings | undefined): Settings {
   return {
@@ -79,6 +86,9 @@ export function defaultSettings(extra: Settings | undefined): Settings {
         active_set: 'off',
       },
     },
+    workspaces: {
+      retentionMs: 7 * 24 * 60 * 60 * 1000,
+    },
     ...extra,
   }
 }
@@ -88,6 +98,18 @@ export function sessionTarget(sessionId: string): Target {
   return `dsh:session:${sessionId}` as Target
 }
 
+/** The window a `window_start` continues, when it continues one. */
+function continuedWindow(body: string | null): WindowRef | undefined {
+  if (body === null) return undefined
+  try {
+    const parsed: unknown = JSON.parse(body)
+    const previous = (parsed as { continuation?: unknown } | null)?.continuation
+    return typeof previous === 'string' ? previous as WindowRef : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Everything the host owns, built once in `[Service.init]`. */
 interface HostState {
   readonly root: string
@@ -95,6 +117,7 @@ interface HostState {
   readonly notes: NoteStore
   readonly backend: DshBackend
   readonly host: Arbor
+  readonly settings: Settings
 }
 
 /** The one Arbor host per DSH process, and the storage it runs on. */
@@ -106,6 +129,8 @@ export class ArborHostService extends Service {
   readonly config: Config
 
   private state: HostState | undefined
+  /** The cwd each live session runs in, for the workspace root. */
+  private cwds: Map<string, string> | undefined
   /** Raised whenever a DSH prompt provider changes, so the `<dsh>` section follows. */
   private promptChanges = 0
 
@@ -120,6 +145,8 @@ export class ArborHostService extends Service {
     await mkdir(root, { recursive: true })
     const journal = new SqliteJournal({ path: join(root, 'journal.sqlite') })
     const notes = new SqliteNoteStore({ path: join(root, 'notes.sqlite'), journal })
+    const settings = defaultSettings(this.config.settings)
+    const cwds = new Map<string, string>()
     const backend = createDshBackend({
       llm: ctx.llm,
       tools: ctx.tools,
@@ -128,17 +155,25 @@ export class ArborHostService extends Service {
       // which is the initiating agent of that turn (see @4fu/dsh-arbor-tools).
       agents: ctx.agents,
     })
+    // Every window works in the cwd of the session it belongs to.
+    const workspace = new DshSessionWorkspace({
+      journal,
+      cwdOf: sessionId => cwds.get(sessionId),
+      currentSession: () => ctx.agents.currentInitiator()?.session.id,
+    })
     const host = new Arbor({
       journal,
       notes,
       backend,
+      workspace,
       plugins: [dshPromptPlugin({
         systemPrompt: ctx.systemPrompt,
         changeCounter: () => this.promptChanges,
       })],
-      settings: defaultSettings(this.config.settings),
+      settings,
     })
-    this.state = { root, journal, notes, backend, host }
+    this.state = { root, journal, notes, backend, host, settings }
+    this.cwds = cwds
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
     await host.start()
@@ -176,6 +211,21 @@ export class ArborHostService extends Service {
     return this.requireState().notes
   }
 
+  /** The settings this host runs arbor with. */
+  get settings(): Settings {
+    return this.requireState().settings
+  }
+
+  /**
+   * Note the cwd one session runs in, so its windows work there. The driver
+   * calls this when the session is created and when it is resumed; the cwd is
+   * the session header's, which is the durable record of it.
+   */
+  noteSessionCwd(sessionId: string, cwd: string | undefined): void {
+    if (this.cwds === undefined || cwd === undefined) return
+    this.cwds.set(sessionId, cwd)
+  }
+
   /** The backend every window of this process runs through. */
   get backend(): DshBackend {
     return this.requireState().backend
@@ -190,20 +240,32 @@ export class ArborHostService extends Service {
    * Every window of this session's chain, oldest first.
    *
    * The chain is the session's first window, its continuations, and the one a
-   * restart opened for it: every `window_start` carries the session's target,
-   * and a continuation carries its predecessor's targets with it. The relay
-   * reads the chain's tool calls back out of the journal on resume.
+   * restart opened for it. The first window carries the session's target, and
+   * every window after it names its predecessor in its own `window_start` body
+   * — which is what makes the chain walkable: a restart continuation carries no
+   * targets of its own, so the target alone does not name the newest window.
+   * The relay reads the chain's tool calls back out of the journal on resume.
    */
   async windowChainOf(sessionId: string): Promise<WindowRef[]> {
     const target = sessionTarget(sessionId)
     const { journal } = this.requireState()
-    const chain: WindowRef[] = []
+    const continued = new Map<WindowRef, WindowRef>()
+    let newest: WindowRef | undefined
     for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
       const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
       for (const event of page.items) {
-        if (event.window !== null && event.targets.includes(target)) chain.push(event.window)
+        if (event.window === null) continue
+        if (event.targets.includes(target)) newest = event.window
+        const previous = continuedWindow(event.body)
+        if (previous !== undefined) continued.set(previous, event.window)
       }
       if (page.items.length < MAX_PAGE_LIMIT) break
+    }
+    const chain: WindowRef[] = []
+    let current = newest
+    while (current !== undefined && chain.length < 1000) {
+      chain.push(current)
+      current = continued.get(current)
     }
     return chain
   }
@@ -228,3 +290,5 @@ export class ArborHostService extends Service {
 }
 
 export default ArborHostService
+
+export { DshSessionWorkspace } from './workspace.ts'

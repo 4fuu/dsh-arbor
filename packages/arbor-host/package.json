@@ -14,6 +14,7 @@
     "@4fu/arbor-journal-sqlite": "2026.1106.1",
     "@4fu/arbor-notes-sqlite": "2026.1106.1",
     "@4fu/arbor-prompt": "2026.1106.1",
+    "@4fu/arbor-workspace-dir": "2026.1106.1",
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",
     "@deepseek-ai/cordis": "4.1.0",

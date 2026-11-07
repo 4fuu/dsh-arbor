@@ -307,6 +307,15 @@ export class ArborSessionAgent implements Agent {
         if (selection === undefined) {
           throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and model or record a model selection`)
         }
+        // `agent/pre-step` is dispatched every step, exactly like the official
+        // loop, and a decision's messages are the ones this step admits: a hook
+        // that rewrites them is honored. Only `reject` ends the turn early.
+        // What the spike left out is the fallback: the official loop's default
+        // appends the runtime context its own projection assembled, which is
+        // where a mid-session model switch announces itself and where plan mode
+        // puts its context. B2's prompt bridge owns that injection; until it
+        // lands, a rewrite from a hook still works and the fallback adds
+        // nothing.
         const decision = await this.dispatch.waterfall(
           'agent/pre-step',
           { messages: claimed, turn, step, signal, modelSelection: selection },

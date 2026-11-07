@@ -16,6 +16,15 @@
  * notifications, so a live window is re-rendered only when a DSH section
  * actually changed, and arbor delivers the changed lines as a `prompt_delta`
  * at the next tool-call boundary.
+ *
+ * B1 keeps this bridge exactly as the spike proved it. The drop-by-prefix rule
+ * is withdrawn for B2: the system prompt is then to carry both arbor's logic
+ * and DSH's own mechanisms, with a per-section decision table pinned to the
+ * DSH version and a `<harness>` section dsh-arbor writes itself. The seam B2
+ * replaces is the one this module already has — {@link isOfficialSection}, the
+ * two lists it reads, and {@link renderDshSections}, which is where the
+ * per-section decisions and the extra sections are rendered. Nothing else in
+ * this package needs to change for that, and nothing here is extended in B1.
  */
 
 import type { Agent } from '@deepseek-ai/dsh-agent'

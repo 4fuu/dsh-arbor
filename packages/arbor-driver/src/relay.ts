@@ -111,6 +111,7 @@ export function relayToolCalls(
 ): Extract<SessionEvent, { type: 'tool/call' }>[] {
   const asked: AskedCall[] = []
   const answered = new Set<string>()
+  const started = new Set<string>()
   for (const event of log) {
     switch (event.type) {
       case 'assistant/message':
@@ -128,6 +129,9 @@ export function relayToolCalls(
           })
         }
         break
+      case 'tool/call':
+        started.add(event.data.callId)
+        break
       case 'tool/result':
         answered.add(event.data.message.toolCallId)
         break
@@ -143,7 +147,10 @@ export function relayToolCalls(
     const wanted = asked[position]
     if (wanted === undefined) break
     if (wanted.name !== call.name || !sameArgs(wanted.arguments, call.args)) break
-    if (answered.has(wanted.callId)) continue
+    // A call the log answers is complete, and one it has already recorded as
+    // started needs only the result DSH's own repair supplies: replaying
+    // either would duplicate an event the log already holds.
+    if (answered.has(wanted.callId) || started.has(wanted.callId)) continue
     const data: SessionEventMap['tool/call'] = {
       turn: wanted.turn,
       step: wanted.step,

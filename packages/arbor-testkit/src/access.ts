@@ -8,6 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ArborHostService } from '@4fu/dsh-arbor-host'
 import type { ArborDriver, SessionArborLike } from '@4fu/dsh-arbor-driver'
+import type { AgentPresetRegistry } from '@deepseek-ai/dsh-agent-preset-registry'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WindowRef } from '@4fu/arbor-interfaces'
 
@@ -25,6 +26,13 @@ export function arborDriverOf(ctx: Context): ArborDriver {
   return driver
 }
 
+/** The booted preset roster, when the deployment has one. */
+export function agentPresetsOf(ctx: Context): AgentPresetRegistry {
+  const presets = ctx.get('agentPresets') as AgentPresetRegistry | undefined
+  if (presets === undefined) throw new Error('no agentPresets service: is the preset registry mounted?')
+  return presets
+}
+
 /** The per-session arbor world of one session, once the driver has one. */
 export function sessionArborOf(ctx: Context, sessionId: SessionId): SessionArborLike | undefined {
   return arborDriverOf(ctx).sessionArbor(sessionId)
@@ -36,10 +44,13 @@ export function windowOf(ctx: Context, sessionId: SessionId): WindowRef | undefi
 }
 
 /** Poll until `read` answers something other than undefined, or the deadline passes. */
-export async function waitFor<T>(read: () => T | undefined, timeoutMs = 10_000): Promise<T> {
+export async function waitFor<T>(
+  read: () => T | undefined | Promise<T | undefined>,
+  timeoutMs = 10_000,
+): Promise<T> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    const value = read()
+    const value = await read()
     if (value !== undefined) return value
     if (Date.now() > deadline) throw new Error('waitFor: the value never appeared')
     await new Promise<void>(resolve => setTimeout(resolve, 5))

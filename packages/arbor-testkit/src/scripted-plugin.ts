@@ -25,6 +25,18 @@ export const scriptedLlm = new ScriptedLlm()
 /** Every run of the spike's test tool, in order. */
 export const spikeToolRuns: { args: unknown }[] = []
 
+/**
+ * When set, every spike tool run waits for this promise before it runs, and
+ * stops waiting when the turn that asked for it is aborted. A proof holds the
+ * tools to keep a call in flight.
+ */
+export let spikeToolGate: Promise<void> | undefined
+
+/** Hold or release the spike tools. */
+export function holdSpikeTools(gate: Promise<void> | undefined): void {
+  spikeToolGate = gate
+}
+
 /** Every approval ask the spike's asking tool produced, in order. */
 export const spikeApprovalAsks: { name: string; reason: string }[] = []
 
@@ -57,7 +69,8 @@ export class ScriptedLlmService extends Service {
         schema: { type: 'object', properties: { ran: { type: 'string' } }, required: ['ran'] },
         render: (_args, value) => [{ type: 'text', text: `ran: ${(value as { ran: string }).ran}` }],
       },
-      execute: async (args: unknown) => {
+      execute: async (args: unknown, exec) => {
+        await holdForGate(exec.signal)
         spikeToolRuns.push({ args })
         return { ran: (args as { action: string }).action }
       },
@@ -74,12 +87,22 @@ export class ScriptedLlmService extends Service {
         schema: { type: 'object', properties: { echo: { type: 'string' } }, required: ['echo'] },
         render: (_args, value) => [{ type: 'text', text: `echo: ${(value as { echo: string }).echo}` }],
       },
-      execute: async (args: unknown) => {
+      execute: async (args: unknown, exec) => {
+        await holdForGate(exec.signal)
         spikeToolRuns.push({ args })
         return { echo: (args as { text: string }).text }
       },
     })
   }
+}
+
+/** Wait for the gate a proof set, or for the turn's abort, whichever comes first. */
+async function holdForGate(signal: AbortSignal): Promise<void> {
+  if (spikeToolGate === undefined) return
+  await Promise.race([
+    spikeToolGate,
+    new Promise<void>(resolve => { signal.addEventListener('abort', () => { resolve() }, { once: true }) }),
+  ])
 }
 
 export default ScriptedLlmService
