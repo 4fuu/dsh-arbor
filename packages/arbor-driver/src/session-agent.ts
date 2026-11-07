@@ -38,6 +38,7 @@ import type { ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import { createAssistantMessage, createSystemMessage, errorChain, LlmError } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections } from '@deepseek-ai/dsh-system-prompt'
+import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import { snapshotContextNames } from '@4fu/dsh-arbor-prompt'
@@ -321,10 +322,8 @@ export class ArborSessionAgent implements Agent {
         // loop, and a decision's messages are the ones this step admits: a hook
         // that rewrites them is honored. Only `reject` ends the turn early.
         // The fallback is the official loop's own: it appends the runtime
-        // context its projection assembled — the session's working directory
-        // and any third-party runtime context — which is where a mid-session
-        // `working-directory/change` reaches the model, because a section is
-        // frozen per epoch and cannot state one session's path. A hook that
+        // context its projection assembled — a third party's per-session
+        // context, which a section frozen per epoch cannot state. A hook that
         // rewrites the messages replaces it, exactly like the official loop.
         const decision = await this.dispatch.waterfall(
           'agent/pre-step',
@@ -398,12 +397,27 @@ export class ArborSessionAgent implements Agent {
    *
    * DSH's own assembly supplies the text, so the wording stays DSH's: the
    * snapshot is the one the official loop would have appended for this session.
+   * Only a third party's context is carried — the paths are arbor's own
+   * `<workspace>` section's, and the policies are `<harness>`'s.
    */
   private async runtimeContextSnapshot(signal: AbortSignal): Promise<UserMessage | undefined> {
-    const assembly = await this.loopCtx.systemPrompt.assemble({
-      ...assembleContextFor(this, signal),
-      ...this.model.current() === undefined ? {} : { modelSelection: this.model.current() },
-    })
+    let assembly: PromptAssembly
+    try {
+      assembly = await this.loopCtx.systemPrompt.assemble({
+        ...assembleContextFor(this, signal),
+        ...this.model.current() === undefined ? {} : { modelSelection: this.model.current() },
+      })
+    } catch (error: unknown) {
+      // The assembly runs DSH's own providers, and one of them — the tool
+      // presentation row — resolves a tool executor in this agent's scope and
+      // throws when none is registered there. The arbor path executes its tools
+      // through `ctx.tools.execute` and never mounts DSH's executor, so that
+      // provider has nothing to describe. A snapshot is the one thing the
+      // pre-step fallback adds, and losing it costs the model a third party's
+      // runtime context for one step; losing the turn costs it the step.
+      this.ctx.logger.warn(`arbor driver: the runtime-context snapshot was skipped: ${errorChain(error)}`)
+      return undefined
+    }
     const carried = new Set(snapshotContextNames(assembly))
     const sections = renderContextSections(assembly).filter(section => carried.has(section.name))
     return this.runtimeContext.project(joinContextSections(sections))

@@ -19,5 +19,5 @@ export {
   type EscalationAsk,
   type SandboxedShellRequest,
 } from './seam.ts'
-export { DshWorkspaceGroup, ESCALATE_TOOL } from './group.ts'
+export { DshWorkspaceGroup } from './group.ts'
 export { dshWorkspaceSection, dshWorkspaceText, dshWorkspaceTable, dshWorkspaceTextOf, DSH_WORKSPACE_BLOCK } from './text.ts'

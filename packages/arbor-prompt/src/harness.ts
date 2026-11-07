@@ -5,7 +5,7 @@
  * Arbor's own sections (`<identity>`, `<agent>`, `<tools>`, `<modules>`,
  * `<env>`, `<workspace>`) carry the framework's logic. This section carries
  * DSH's: that the window runs inside DeepSeek Harness and the user only sees
- * what `send` writes, the approval policy, the sandbox policy, how to write
+ * what `send` writes, the approval policy, how to write
  * image and file links into `send` so DSH renders them, how `@path`
  * references arrive, plan mode's guidance while it is active, and the usage
  * text of the DSH tools that are actually exposed to arbor windows.
@@ -69,14 +69,6 @@ export const HARNESS_BLOCKS: readonly BlockKindSpec[] = [
 export interface HarnessState {
   /** The approval policy in effect, or `undefined` when DSH reports none. */
   readonly approval: 'ask' | 'never' | undefined
-  /**
-   * The DSH sandbox mode in effect, or `undefined` when the file tools are not
-   * confined. The host reports that capability fact
-   * (`ctx.arborHost.fileToolsSandboxed`), which is true once arbor's file and
-   * bash calls really run through DSH's sandbox; until then no sandbox line is
-   * written, because nothing in arbor's path is sandboxed.
-   */
-  readonly sandbox: 'read-only' | 'workspace-write' | 'danger-full-access' | undefined
   /** Whether plan mode is active for the session whose turn is rendering. */
   readonly planActive: boolean
   /** The DSH tool names actually exposed to arbor windows, sorted. */
@@ -122,8 +114,8 @@ function governs(sectionName: string, exposed: readonly string[]): boolean {
  * Render the `<harness>` section's blocks from DSH's own assembly.
  *
  * A DSH section the table drops contributes nothing. A section the table
- * keeps is either rewritten in this bridge's words (the approval and sandbox
- * policies, the `send` link wording, the `@path` wording) or carried through
+ * keeps is either rewritten in this bridge's words (the approval policy, the
+ * `send` link wording, the `@path` wording) or carried through
  * verbatim (a DSH tool's usage text, and the deployment's plan-mode guidance).
  */
 export function renderHarness(assembly: PromptAssembly, state: HarnessState): HarnessRender {
@@ -138,13 +130,6 @@ export function renderHarness(assembly: PromptAssembly, state: HarnessState): Ha
     blocks.push(line('dsh.harness.approval.never'))
   } else if (state.approval === 'ask') {
     blocks.push(line('dsh.harness.approval.ask'))
-  }
-
-  // Sandbox policy: one line per mode, and nothing at all until B3 turns the
-  // capability on. The session's own root is arbor's <workspace> section's.
-  const sandbox = state.sandbox
-  if (sandbox !== undefined && dshTextTable[`dsh.harness.sandbox.${sandbox}`] !== undefined) {
-    blocks.push(line(`dsh.harness.sandbox.${sandbox}`))
   }
 
   // How to write links into `send`, so DSH renders them. DSH's own section

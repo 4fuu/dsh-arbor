@@ -65,15 +65,16 @@ export const DSH_SECTION_DECISIONS: Readonly<Record<string, SectionDecision>> = 
   'deployment:persona-suffix': 'identity',
 
   // ---- the dynamic runtime context ---------------------------------------
-  // The session's cwd is written by arbor's own <workspace> section; the
-  // change itself is delivered per session as the runtime-context message,
-  // because a section is frozen per epoch and shared by every window of it.
+  // The session's cwd is written by arbor's <workspace> section, and DSH's
+  // project management is arbor's for an arbor session (decisions table
+  // revision 2): the project is arbor's own shared folder, the window works in
+  // its own checkout, and the paths belong to <workspace>. Nothing is written
+  // here, and no runtime-context snapshot is delivered either.
   'working-directory:current': 'drop',
-  // The two policy lines are dsh-arbor's own, written into <harness>. The
-  // sandbox line is written only when the host reports
-  // `ctx.arborHost.fileToolsSandboxed` — arbor's file and bash calls really
-  // running through DSH's sandbox (B3).
-  'sandbox:policy': 'harness',
+  // The two policy lines are dsh-arbor's own, written into <harness>. There is
+  // no sandbox line: arbor sessions do not use DSH's sandbox, so a line would
+  // name enforcement that does not exist.
+  'sandbox:policy': 'drop',
   'approval:policy': 'harness',
 
   // ---- what the model writes, and how it refers to files ------------------

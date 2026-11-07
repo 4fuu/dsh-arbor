@@ -33,7 +33,7 @@ import type { LlmRuntime, PreparedLlmCall, StreamChunk, TokenUsage } from '@deep
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { BlockAssembler, createDeveloperMessage, createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import type { ToolsService } from '@deepseek-ai/dsh-tools'
 import type {
@@ -66,6 +66,21 @@ declare module '@deepseek-ai/dsh-llm' {
     } & ContextFormed
   }
 }
+
+/**
+ * The delivery kinds that say what changed under a window rather than what the
+ * window should do about it.
+ *
+ * A prompt delta, a tools delta and an environment delta are all diffs of the
+ * window's own context. They belong at the next step boundary of a running
+ * window and in the next turn's prefix of a quiet one; neither is a reason to
+ * start a turn.
+ */
+const DELTA_KINDS: ReadonlySet<Delivery['kind']> = new Set<Delivery['kind']>([
+  'prompt_delta',
+  'tools_delta',
+  'environment_delta',
+])
 
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface DshModelCall {
@@ -249,7 +264,13 @@ class DshWindowSession implements WindowSession {
       content: [{ type: 'text', text }],
       source: { kind: 'arbor-delivery' },
     })
-    if (how === 'steer') agent.steer(message)
+    // A delta is context for the window, not an input that deserves a turn of
+    // its own: it says what changed under the window's feet, so it goes in at
+    // the next step boundary and is never what starts a turn. Steering one into
+    // a quiet window would wake that window's session to read a diff, which is
+    // a turn the user did not ask for and the model has nothing to do in.
+    if (how === 'steer' && DELTA_KINDS.has(delivery.kind)) agent.inject(message)
+    else if (how === 'steer') agent.steer(message)
     else agent.followup(message)
   }
 
@@ -534,26 +555,34 @@ export class DshBackend implements AgentBackend {
     })
     const baseline = agent.session.requestHeader()
     const log = this.headers.get(agent)
+    let headerSeq: SessionSeq | undefined
     if (log === undefined || !log.logged) {
-      agent.session.append('request/header', {
+      headerSeq = agent.session.append('request/header', {
         header,
         reason: baseline === undefined ? 'initial' : 'resume',
-      })
+      }).seq
       this.headers.set(agent, { logged: true, toolNames: tools.map(tool => String(tool['name'])) })
-      return
-    }
-    if (baseline === undefined || !headerEquals(baseline, header)) {
-      agent.session.append('request/header', { header, reason: 'change' })
-      const previousNames = new Set(log.toolNames)
+    } else if (baseline === undefined || !headerEquals(baseline, header)) {
+      headerSeq = agent.session.append('request/header', { header, reason: 'change' }).seq
+      // The tool set is diffed against the previous header rather than against
+      // this process's own record of it, so a window a restart continued reports
+      // the same additions the log already implies. Without that, the second
+      // process's first change would re-report tools the first one added.
+      const previousNames = new Set((baseline?.tools ?? []).map(tool => String(tool.name)))
       const currentNames = new Set(tools.map(tool => String(tool['name'])))
       const additions = [...currentNames].filter(name => !previousNames.has(name))
         .map(name => ({ type: 'tool-addition' as const, toolName: name }))
       const removals = [...previousNames].filter(name => !currentNames.has(name))
         .map(name => ({ type: 'tool-removal' as const, toolName: name }))
       if (additions.length > 0 || removals.length > 0) {
+        // A `developer/message` that activates a tool must name the header that
+        // declares it, which is the one just appended: DSH's own append refuses
+        // the event otherwise, and the refusal lands on the turn that asked for
+        // the model call.
         agent.session.append('developer/message', {
           ...position,
           message: createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [...additions, ...removals] }),
+          ...additions.length > 0 ? { headerSeq } : {},
         }, { surfaceOp: 'append' })
       }
       this.headers.set(agent, { logged: true, toolNames: tools.map(tool => String(tool['name'])) })

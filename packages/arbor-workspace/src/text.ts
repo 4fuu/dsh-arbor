@@ -9,13 +9,15 @@
  * another implementation never shows this method.
  *
  * What the section says is only what is true here: the workspace is the DSH
- * session's own working directory, every file access and every command of a
+ * session's own working directory, and every file access and every command of a
  * window runs through DSH's sandboxed filesystem and shell under the session's
- * own sandbox policy, and the one way to a wider mode is the escalation tool,
- * which asks the user through DSH's approval.
+ * own sandbox policy. There is no escalation line: decisions table revision 2
+ * drops DSH's sandbox for arbor sessions, so the section states the policy that
+ * stands and the refusal a write outside it meets, and names no tool for asking
+ * for a wider one.
  *
- * Identifiers stay as they are: `sandbox_escalate`, `workspace.path`, `read`,
- * `write`, `edit`, `bash`.
+ * Identifiers stay as they are: `workspace.path`, `read`, `write`, `edit`,
+ * `bash`.
  */
 
 import type { BlockKindSpec, PromptSection, TextTable } from '@4fu/arbor-interfaces'
@@ -30,46 +32,21 @@ export const dshWorkspaceText: TextTable = {
     + '当前会话的沙箱模式是 {mode}，工作目录 {root} 是 workspace-write 的边界。',
   'workspace.method.readonly': '只读模式下任何写入都会被拒绝，拒绝信息里会说明原因和下一步；'
     + 'workspace-write 模式下只有 {root} 里的写入被允许；danger-full-access 不做限制。',
-  'workspace.method.escalate': '需要更宽的权限时调用 sandbox_escalate(mode, justification)：'
-    + '它会经 DSH 的审批请用户批准，用一句话说明为什么这一步需要更宽的权限；'
-    + '批准后这个会话的文件操作和命令按批准的模式执行，直到用户在 DSH 里切换沙箱模式。',
   'workspace.method.env': '/env 里的技能和 MCP 服务器是只读的：技能用 read 按路径读，MCP 的工具作为 DSH 工具直接调用。',
   'workspace.method.means': 'bash 在 {root} 里跑命令，后台作业用 bash_output 和 bash_stop 接着管。',
-  // ---- the tool this implementation adds ---------------------------------
-  'function.sandbox_escalate': '请用户批准更宽的沙箱模式：mode 取 workspace-write 或 danger-full-access，'
-    + 'justification 是用一句话说明为什么当前这一步需要它。批准后这个会话的文件操作和命令按批准的模式执行。',
   // ---- results ----------------------------------------------------------
-  'result.sandbox_escalate': '已批准把沙箱模式提到 {mode}。这个会话后续的文件操作和命令按这个模式执行，'
-    + '直到用户在 DSH 里切换沙箱模式。',
   'result.workspace.path': '{root}（会话工作目录，本会话的所有窗口都在这里工作：按约定不要改动别的会话的东西）',
   'function.workspace.path': '按窗口引用查询它所在的会话工作目录：本会话的所有窗口都在这一个目录里工作。',
   // ---- refusals ---------------------------------------------------------
-  'refused.sandbox_escalate.mode': 'mode 只能是 workspace-write 或 danger-full-access，收到的是 {mode}。',
-  'refused.sandbox_escalate.justification': 'justification 不能为空：用一句话向用户说明为什么这一步需要更宽的权限。',
-  'refused.sandbox_escalate.narrower': '{mode} 不比当前的 {current} 更宽，不需要审批。',
-  'refused.sandbox_escalate.rejected': '用户拒绝了把沙箱模式提到 {mode} 的请求：这一步仍然被拒绝，停下来向用户说明，不要绕过它。',
-  'refused.sandbox_escalate.cancelled': '提请批准 {mode} 的审批被取消了：这一步没有执行，向用户说明后再决定怎么做。',
-  'refused.sandbox_escalate.unavailable': '没有可用的审批通道，无法请用户批准更宽的模式：停下来向用户说明，不要绕过它。',
-  'refused.sandbox_escalate.absent': '这个组合没有挂载任何沙箱后端，没有可用的沙箱模式可提。',
-  'refused.sandbox_escalate.failed': '提请批准 {mode} 失败了：{mode} 没有生效，向用户说明后再决定怎么做。',
   'refused.workspace.reclaim': '工作区就是会话自己的工作目录，不能被回收。',
   // ---- next actions -----------------------------------------------------
-  'next.sandbox_escalate.mode': 'mode 取 workspace-write 或 danger-full-access。',
-  'next.sandbox_escalate.justification': '补一句理由，例如「要把构建产物写到仓库外的缓存目录」。',
-  'next.sandbox_escalate.narrower': '直接用当前模式重试这一步。',
-  'next.sandbox_escalate.rejected': '向用户说明这一步被拒绝的原因，并给出不需要更宽权限的做法。',
-  'next.sandbox_escalate.cancelled': '问用户是否还要申请更宽的权限，或者给出不需要更宽权限的做法。',
-  'next.sandbox_escalate.unavailable': '请用户在 DSH 里接一个审批通道，或者给出不需要更宽权限的做法。',
-  'next.sandbox_escalate.absent': '直接重试这一步；这个组合不限制文件写入。',
-  'next.sandbox_escalate.failed': '稍后重试，或者向用户说明当前无法取得更宽的权限。',
   'next.workspace.reclaim': '不需要处理：这个工作区不随窗口结束删除。',
   // ---- the file tools' refusals -----------------------------------------
   'refused.file.denied': '{marker}\n{detail}',
-  'next.file.denied.readonly': '当前沙箱是只读，任何写入都会被拒绝。要让用户批准更宽的模式：调用 '
-    + 'sandbox_escalate(mode, justification)，用一句话说明这一步为什么需要更宽的权限；'
-    + '批准后本窗口后续的文件操作和命令按批准的模式执行。',
-  'next.file.denied.workspace': '当前沙箱是 workspace-write，只有 {root} 里的写入被允许。'
-    + '要写别处：调用 sandbox_escalate(mode, justification) 请用户批准更宽的模式，或把路径改到 {root} 内。',
+  'next.file.denied.readonly': '当前沙箱是只读，任何写入都会被拒绝：停下来向用户说明这一步需要写文件，'
+    + '请用户自己决定要不要放宽沙箱模式，不要尝试绕过。',
+  'next.file.denied.workspace': '当前沙箱是 workspace-write，只有 {root} 里的写入被允许：'
+    + '把路径改到 {root} 内，或者停下来向用户说明这一步要写别处，请用户自己决定要不要放宽沙箱模式。',
 }
 
 /** The method's points, one text-table key per line, in order. */
@@ -77,7 +54,6 @@ const METHOD_LINES = [
   'workspace.method.root',
   'workspace.method.sandbox',
   'workspace.method.readonly',
-  'workspace.method.escalate',
   'workspace.method.env',
   'workspace.method.means',
 ]

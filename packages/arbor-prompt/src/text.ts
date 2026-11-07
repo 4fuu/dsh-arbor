@@ -19,9 +19,6 @@ export const DSH_TEXT_KEYS: readonly string[] = [
   'dsh.harness.lead',
   'dsh.harness.approval.ask',
   'dsh.harness.approval.never',
-  'dsh.harness.sandbox.read-only',
-  'dsh.harness.sandbox.workspace-write',
-  'dsh.harness.sandbox.danger-full-access',
   'dsh.harness.send.image',
   'dsh.harness.send.file',
   'dsh.harness.send.present',
@@ -43,29 +40,13 @@ export const dshTextTable: TextTable = {
 
   // Approval policy: DSH's two policies, in this bridge's words. The routing
   // itself is DSH's — a call that needs approval goes through the session's
-  // approval path, and an absent answerer fails closed. The `never` wording
-  // names `sandbox_escalate` rather than DSH's own per-call
-  // `sandbox_permissions` argument, because the tools that carry that argument
-  // are dropped for an arbor session: here the ask is a tool of its own, and
-  // under `never` the approval service answers `rejected` for it too.
+  // approval path, and an absent answerer fails closed. Nothing here names an
+  // escalation: an arbor session has none, so the `never` line states only what
+  // the policy does.
   'dsh.harness.approval.ask':
     '本会话会弹出审批：需要审批的操作会请用户批准；没有人能批准时按拒绝处理。',
   'dsh.harness.approval.never':
-    '本会话不弹出审批：需要审批的操作一律自动拒绝；沙箱提权 sandbox_escalate 也要经过审批，同样会被拒绝，不要调用它。',
-
-  // Sandbox policy: one line per DSH sandbox mode. The session's own root is
-  // written by arbor's <workspace> section, so no path appears here. These
-  // lines are written only when the host reports
-  // `ctx.arborHost.fileToolsSandboxed` — arbor's file and bash calls really
-  // running through DSH's sandbox (B3) — so the line never promises
-  // enforcement the file tools do not have.
-  'dsh.harness.sandbox.read-only':
-    '当前 DSH 文件策略为只读：经 DSH 沙箱强制执行的操作在默认模式下不能修改文件。'
-    + '不要仅因这条策略就拒绝必要的修改——按正常方式调用可用工具，并按工具返回的拒绝和提权指引处理。',
-  'dsh.harness.sandbox.workspace-write':
-    '当前 DSH 文件策略为工作区可写：经 DSH 沙箱强制执行的操作可以修改本会话工作区内的文件；部分平台临时目录同样可写。',
-  'dsh.harness.sandbox.danger-full-access':
-    '当前 DSH 文件策略为完全访问：DSH 沙箱不限制可用操作对文件的修改。',
+    '本会话不弹出审批：需要审批的操作一律自动拒绝。',
 
   // How to write links into `send`, so DSH renders them. DSH's own
   // `ui:deliverable-file-references` section speaks of the final response; in
@@ -87,8 +68,12 @@ export const dshTextTable: TextTable = {
     + '本部署只有这一个对外通道，内容会作为本会话的一条助手消息送到 DSH 的会话记录里。',
 
   // `@path` references: DSH's `context:file-reference`, rewritten for arbor.
+  // The root is arbor's own workspace root rather than the DSH session's cwd,
+  // because arbor takes over project management for an arbor session: the
+  // project is arbor's shared folder and a window works in its own checkout of
+  // it, and arbor's <workspace> section names that root.
   'dsh.harness.reference':
-    '用户消息里以 @ 开头的是用户引用的路径：相对路径从本会话的工作区算起，以 / 结尾的是目录，其余用 read 读。',
+    '用户消息里以 @ 开头的是用户引用的路径：相对路径从 arbor 的工作区根目录算起，以 / 结尾的是目录，其余用 read 读。',
 
   // Plan mode: the deployment's own guidance, kept verbatim, with a lead line
   // of this bridge's. Written only while plan mode is active.

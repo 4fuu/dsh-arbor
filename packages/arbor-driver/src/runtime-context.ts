@@ -2,21 +2,23 @@
  * The per-session runtime-context snapshot.
  *
  * Arbor's system prompt is frozen per epoch and shared by every window of that
- * epoch, so a fact that belongs to one session — above all its working
- * directory — cannot be written into a section: a section would tell every
- * other session in the epoch the wrong value. The official loop solves the same
- * problem with a snapshot message it appends at every step and replaces when it
- * changes (`@deepseek-ai/dsh-agent-loop` RuntimeContextProjection), and this is
- * that projection for the arbor path: the same source kind, the same "none"
- * line, and the same rule that a message which is not exactly one text block is
- * never treated as a retained snapshot, so a snapshot a window received before
- * a restart is recognised as one on replay.
+ * epoch, so a fact that belongs to one session cannot be written into a section:
+ * a section would tell every other session in the epoch the wrong value. The
+ * official loop solves the same problem with a snapshot message it appends at
+ * every step and replaces when it changes
+ * (`@deepseek-ai/dsh-agent-loop` RuntimeContextProjection), and this is that
+ * projection for the arbor path: the same source kind, the same "none" line,
+ * and the same rule that a message which is not exactly one text block is never
+ * treated as a retained snapshot, so a snapshot a window received before a
+ * restart is recognised as one on replay.
  *
  * What it carries is deliberately narrow — see
- * {@link snapshotContextNames} in `@4fu/dsh-arbor-prompt`. The approval policy,
- * the sandbox policy and plan mode are written into the `<harness>` section
- * instead, in dsh-arbor's own wording, and reach a running window as a
- * `prompt_delta` carrying only the changed lines.
+ * {@link snapshotContextNames} in `@4fu/dsh-arbor-prompt`. Only a third party's
+ * runtime context travels here, because nothing else can carry per-session
+ * state from outside the framework. The approval policy and plan mode are
+ * written into the `<harness>` section instead, in dsh-arbor's own wording, and
+ * reach a running window as a `prompt_delta` carrying only the changed lines;
+ * the paths are arbor's own `<workspace>` section's.
  */
 
 import type { Context } from '@deepseek-ai/cordis'

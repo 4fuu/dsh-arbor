@@ -191,7 +191,6 @@ interface HostState {
   readonly backend: DshBackend
   readonly host: Arbor
   readonly settings: Settings
-  readonly sandboxedFileTools: boolean
 }
 
 /** The one Arbor host per DSH process, and the storage it runs on. */
@@ -329,7 +328,7 @@ export class ArborHostService extends Service {
       settings,
       executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
     })
-    this.state = { root, journal, notes, backend, host, settings, sandboxedFileTools: seam.confined }
+    this.state = { root, journal, notes, backend, host, settings }
     this.cwds = cwds
     // Plan mode's projection is registered here rather than only in the plan
     // row, because the <harness> section reads it once per step. Registration
@@ -377,16 +376,9 @@ export class ArborHostService extends Service {
     const approval = session === undefined
       ? undefined
       : approvalService?.overrideOf(session) ?? approvalService?.config.policy
-    // The sandbox line is written only when the file tools really are confined:
-    // `fileToolsSandboxed` is the capability fact, and the mode is read per step
-    // so a mid-window switch reaches the window as a delta.
-    const sandbox = this.fileToolsSandboxed && session !== undefined
-      ? ctx.get('sandboxPolicy')?.resolve({ session }).mode
-      : undefined
     const planActive = session === undefined ? false : this.planReader(session).active === true
     return {
       approval,
-      sandbox,
       planActive,
       exposedTools: this.state?.backend.externalToolNames() ?? [],
     }
@@ -444,25 +436,6 @@ export class ArborHostService extends Service {
   /** The one Arbor host of this process. */
   get host(): Arbor {
     return this.requireState().host
-  }
-
-  /**
-   * Whether arbor's own `bash`, `read`, `write` and `edit` really run through
-   * DSH's sandbox.
-   *
-   * This is the capability fact the prompt bridge reads before it states the
-   * sandbox policy in `<harness>`: the B2 plan's `sandbox:policy` row is to be
-   * written only when this is true, because a line that claims confinement the
-   * file tools do not have is a lie the model would act on. It is true when
-   * this process mounts a confining filesystem or shell backend
-   * (`ctx.fs.sandboxMode` / `ctx.shell.sandboxMode`,
-   * `@deepseek-ai/dsh-fs` / `@deepseek-ai/dsh-shell`), which is what the
-   * workspace routes every file access and command through.
-   *
-   * Read it as `ctx.arborHost.fileToolsSandboxed`.
-   */
-  get fileToolsSandboxed(): boolean {
-    return this.requireState().sandboxedFileTools
   }
 
   /** The durable journal every window of this process records into. */

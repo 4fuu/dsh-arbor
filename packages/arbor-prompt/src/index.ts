@@ -75,21 +75,25 @@ export interface DshSystemPrompt {
 /**
  * The DSH runtime contexts a window's snapshot carries.
  *
- * DSH's own `working-directory:current`, because the session's working
- * directory is a per-session fact that a section — frozen per epoch and shared
- * by every window of it — cannot state without telling the other sessions the
- * wrong path. Every context the table decides `outside`, because a third
- * party's runtime context is dynamic per-session state rather than a prompt
- * section, so the snapshot is where it belongs.
+ * Every context the table decides `outside`, because a third party's runtime
+ * context is dynamic per-session state rather than a prompt section, so the
+ * snapshot is the only place it can reach the model.
  *
- * The approval policy, the sandbox policy and plan mode are not here: the
- * `<harness>` section writes them in dsh-arbor's own wording and reaches a
- * running window as a `prompt_delta` of the changed lines.
+ * DSH's own `working-directory:current` is deliberately not carried: decisions
+ * table revision 2 hands project management to arbor for an arbor session, the
+ * project is arbor's own shared folder, and arbor's `<workspace>` section states
+ * the paths. A second statement of the session's cwd would be a second
+ * mechanism for one fact, and after the workspace moves off the session cwd it
+ * would be a wrong one.
+ *
+ * The approval policy and plan mode are not here either: the `<harness>`
+ * section writes them in dsh-arbor's own wording and reaches a running window
+ * as a `prompt_delta` of the changed lines.
  */
 export function snapshotContextNames(assembly: PromptAssembly): readonly string[] {
   return assembly.contexts
     .map(context => context.name)
-    .filter(name => name === 'working-directory:current' || decideSection(name) === 'outside')
+    .filter(name => decideSection(name) === 'outside')
 }
 
 /** Inputs for {@link renderDshSections}. */
@@ -255,16 +259,15 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
   /**
    * The digest every input of both sections contributes to. It is cheap — no
    * assembly — and it covers everything the content reads: DSH's prompt
-   * generation, the approval policy, the sandbox mode, plan mode, and the set
-   * of DSH tools exposed. A revision that moves without the text changing
-   * costs one re-render that produces no delta.
+   * generation, the approval policy, plan mode, and the set of DSH tools
+   * exposed. A revision that moves without the text changing costs one
+   * re-render that produces no delta.
    */
   const stateKey = (): string => {
     const state = options.state()
     return [
       options.changeCounter(),
       state.approval ?? '',
-      state.sandbox ?? '',
       state.planActive ? 'plan' : '',
       [...state.exposedTools].sort().join(','),
     ].join('|')
@@ -275,9 +278,9 @@ export function dshPromptPlugins(options: DshPromptPluginOptions): readonly Plug
    * depends on.
    *
    * DSH's `plan:policy` and `tool:*` texts read the agent and the tool set, so
-   * the assembly has to be redone when either moves; the approval policy and the
-   * sandbox mode are read from the state rather than from DSH's sections, so
-   * they do not. Keeping the two keys apart is what stops an approval switch —
+   * the assembly has to be redone when either moves; the approval policy is
+   * read from the state rather than from DSH's sections, so it does not.
+   * Keeping the two keys apart is what stops an approval switch —
    * which happens between turns — from re-assembling DSH's prompt in the host's
    * watch loop, where the turn that would have supplied a live signal has
    * already ended.
