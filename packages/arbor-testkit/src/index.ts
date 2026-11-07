@@ -21,6 +21,7 @@ export {
   SCRIPTED_MODEL,
   SCRIPTED_PROVIDER,
   SCRIPTED_SELECTION,
+  proofLive,
   installScriptedLlm,
 } from './scripted-llm.ts'
 export type { ScriptedResponse } from './scripted-llm.ts'

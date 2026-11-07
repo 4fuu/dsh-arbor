@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, b1]
+  pull_request:
+
+jobs:
+  # The whole suite runs against the scripted model, so it needs no key, no
+  # network and no flake from a real provider.
+  check-and-proofs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check
+        run: pnpm check
+      - name: Proofs
+        run: pnpm proofs
+
+  # The same three proofs against the real DeepSeek model. The job is skipped
+  # until a DEEPSEEK_API_KEY secret is set on the repository, because a run
+  # without one fails on the provider's model listing.
+  live-model:
+    if: ${{ secrets.DEEPSEEK_API_KEY != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Live proofs
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ARBOR_PROOF_LIVE: '1'
+        run: |
+          pnpm proof:boot
+          pnpm proof:routing
+          pnpm proof:roundtrip

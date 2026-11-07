@@ -110,5 +110,12 @@ export function installScriptedLlm(ctx: Context, script: ScriptedLlm): () => voi
   return ctx.llm.registerAdapter([SCRIPTED_PROVIDER], new ScriptedAdapter(script))
 }
 
+/**
+ * Whether a proof runs against the real DeepSeek model. The default is the
+ * scripted one, so the whole suite is deterministic and needs neither a key
+ * nor the network; `ARBOR_PROOF_LIVE=1` runs the profile's own default model.
+ */
+export const proofLive = process.env['ARBOR_PROOF_LIVE'] === '1'
+
 /** The model selection that routes to the scripted model. */
 export const SCRIPTED_SELECTION = { provider: SCRIPTED_PROVIDER, model: SCRIPTED_MODEL } as const
