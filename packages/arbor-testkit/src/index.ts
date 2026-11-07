@@ -4,6 +4,7 @@
  */
 
 export { bootArborProfile, freshDshHome, installAnchor, arborPatch } from './boot.ts'
+export { finishProof } from './finish.ts'
 export type { ArborProfileOptions } from './boot.ts'
 export {
   arborDriverOf,

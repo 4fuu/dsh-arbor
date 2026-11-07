@@ -29,6 +29,7 @@ import { runFixtureTurn } from '@deepseek-ai/dsh-loader-smoke'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import { arborPatch, bootArborProfile, freshDshHome } from '../packages/arbor-testkit/src/boot.ts'
+import { finishProof } from '../packages/arbor-testkit/src/finish.ts'
 
 const NAME = 'arbor-spike-proof-1'
 const arborOverlay = fileURLToPath(new URL('../patches/arbor.patch.yml', import.meta.url))
@@ -86,10 +87,17 @@ try {
   // A. ordinary session: the embedded official loop drives it end to end.
   const ordinary = await createRootAgent(ctx)
   check('ordinary session created', ctx.agents.get(ordinary.id) === ordinary, `agent ${ordinary.id}`)
-  const ordinaryResult = await runFixtureTurn(ctx, { task: 'Reply with the single word: pong' })
+  // The real model now and then answers a one-word prompt with reasoning only,
+  // which is the model's mood and not the loop's; the claim here is that the
+  // loop runs the turn, so an empty answer is retried a couple of times.
+  let ordinaryOutput = ''
+  for (let attempt = 0; attempt < 3 && ordinaryOutput.trim() === ''; attempt++) {
+    const ordinaryResult = await runFixtureTurn(ctx, { task: 'Reply with the single word: pong' })
+    ordinaryOutput = ordinaryResult.output
+  }
   check('ordinary session turn ran on the embedded loop',
-    ordinaryResult.output.trim().toLowerCase().includes('pong'),
-    `assistant output=${JSON.stringify(ordinaryResult.output)}`)
+    ordinaryOutput.trim().toLowerCase().includes('pong'),
+    `assistant output=${JSON.stringify(ordinaryOutput)}`)
 
   // B. arbor-preset session: created through the arbor driver.
   const arborAgent = await createRootAgent(ctx, 'arbor')
@@ -116,5 +124,4 @@ try {
   await ctx?.fiber.dispose()
   uninstallFailLoud()
 }
-console.log(failures.length === 0 ? 'PROOF 1 OK' : `PROOF 1 FAILED: ${failures.join('; ')}`)
-process.exitCode = failures.length === 0 ? 0 : 1
+finishProof('PROOF 1', failures)

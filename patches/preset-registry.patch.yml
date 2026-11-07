@@ -1,0 +1,18 @@
+# The preset-registry overlay for the arbor preset proof: mounts the roster a
+# deployment with a preset picker has, beside one ordinary declaration, the way
+# a shipped profile's presets/ layer does. The arbor preset itself comes from
+# the bundle patch, which is the point: what a user picks is what the bundle
+# declares.
+
+- insert:
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      config:
+        default: standard
+
+    - id: preset-standard
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: standard
+        order: 1
+        plugins: []
