@@ -41,6 +41,7 @@ import {
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
+  windowOf,
   finishProof,
 } from '../packages/arbor-testkit/src/index.ts'
 import { relayToolCalls, windowToolCalls } from '../packages/arbor-driver/src/relay.ts'
@@ -307,8 +308,7 @@ async function cleanRestart(): Promise<void> {
     check('the resumed session is an arbor session', resumed.session.header.agentPreset === 'arbor',
       `header agentPreset=${resumed.session.header.agentPreset ?? 'none'}`)
     check('the resumed session is bound to the continued window',
-      continued !== undefined && arborHostOf(ctx).backend['windows' as never] !== undefined
-      && await host.windowFor(sessionId) === continued,
+      continued !== undefined && await host.windowFor(sessionId) === continued,
       `window: ${continued}`)
     check('the log survived the restart whole',
       danglingToolCalls(resumed).length === 0
@@ -329,6 +329,9 @@ async function cleanRestart(): Promise<void> {
     const chain = await host.windowChainOf(sessionId)
     check('the session kept one window chain across the restart', chain.length === 2,
       `the session window chain: ${chain.join(' -> ')}`)
+    check('the resumed turn drove the continued window',
+      windowOf(ctx, sessionId) === continued,
+      `the driver's window: ${windowOf(ctx, sessionId) ?? 'none'}; the host continued: ${continued}`)
     const headers = logOf(resumed).filter(entry => entry.type === 'request/header')
     check('the resumed request header says resume',
       headers.some(entry => (entry.data as { reason?: string }).reason === 'resume'),
