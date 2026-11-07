@@ -14,7 +14,10 @@
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "@types/node": "^26.6.6",
+    "typescript": "^5.9.3",
+    "@4fu/dsh-arbor-agent": "workspace:*",
+    "@4fu/dsh-arbor-testkit": "workspace:*"
   },
   "engines": {
     "node": ">=24.9.0"

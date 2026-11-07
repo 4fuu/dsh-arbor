@@ -1,9 +1,12 @@
 /**
  * An in-memory arbor `Journal` for the B0 spike.
  *
- * The arbor core ships no journal implementation: a deployment provides one.
- * This one keeps every event in memory, which is all the proofs need, and
- * implements the whole interface so the host runs the real code paths.
+ * The arbor core ships no journal implementation: a deployment provides one
+ * (docs/architecture.md#interfaces). This one keeps every event in memory,
+ * which is all the proofs need, and implements the whole interface so the
+ * host runs the real code paths. B1 replaces it with a durable journal: the
+ * arbor host rebuilds every running window from the journal after a restart,
+ * so the journal is what makes an arbor session survive one.
  */
 
 import type {

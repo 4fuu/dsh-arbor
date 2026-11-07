@@ -35,6 +35,10 @@
   disabled: true
 
 - insert:
+    # The deployment-provided arbor journal (B0: in-memory).
+    - id: arbor-journal
+      name: '@4fu/dsh-arbor-testkit/journal'
+
     - id: arbor-agent
       name: '@4fu/dsh-arbor-agent'
 

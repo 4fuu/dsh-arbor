@@ -1,0 +1,465 @@
+/**
+ * The arbor session agent: one DSH user session driven through one arbor
+ * window.
+ *
+ * It implements the full `Agent` contract that
+ * `packages/core/agent/src/runtime-types.ts` augments onto `Agent` — the same
+ * surface `ReactLoopAgent` implements — but the model call and every tool call
+ * run through the arbor window instead of the in-process loop:
+ *
+ *  - `followup()`/`steer()`/`inject()` splice the durable inbox and wake the
+ *    driver, exactly like the official loop (inbox.ts in dsh-agent-loop).
+ *  - The driver runs turns and steps over the arbor window: `turn/start`,
+ *    `step/start`, `user/message`, streamed `agent/assistant-stream` frames,
+ *    `assistant/message`, `ctx.tools.execute` through arbor's tool path,
+ *    `step/end`, `agent/turn-stopping`, `turn/end`.
+ *  - Model requests are derived from the session log (`session.deriveMessages()`)
+ *    exactly like `ReactLoopAgent.buildRequest`.
+ */
+
+import type { Context } from '@deepseek-ai/cordis'
+import type {
+  Agent,
+  AgentCancelCause,
+  AgentEventDispatch,
+  AgentOptions,
+  AgentStatus,
+  CancelOptions,
+  InboxTarget,
+  ModelSelection,
+  ModelSelectionProjectionState,
+  PreStepDecision,
+  RequestErrorAction,
+} from '@deepseek-ai/dsh-agent'
+import { AgentModel, agentEvents } from '@deepseek-ai/dsh-agent'
+import type { InboxState } from '@deepseek-ai/dsh-agent'
+import type { StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
+import type { ToolCallBlock } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createSystemMessage, errorChain, LlmError } from '@deepseek-ai/dsh-llm'
+import type { Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import type { Scope } from '@deepseek-ai/dsh-scope'
+import type { ToolResult, WindowEvent } from '@4fu/arbor-interfaces'
+import { ArborInbox } from './inbox.ts'
+import { ArborStreamAttempt } from './assistant-stream.ts'
+
+/** One model call's inputs, supplied by the DSH-side session agent. */
+export interface ModelCallInput {
+  readonly selection: Readonly<ModelSelection>
+  readonly maxTokens?: number
+  readonly position: { turn: number; step: number }
+  readonly signal: AbortSignal
+  /** One streamed chunk, for the durable attempt and the window's live output. */
+  readonly onChunk: (chunk: StreamChunk) => void
+}
+
+/** One model call's settled facts. */
+export interface ModelCallOutcome {
+  readonly usage?: TokenUsage
+  readonly finish: string
+}
+
+/**
+ * The arbor window this session drives. Implemented by the driver, which owns
+ * the Arbor host; the agent never imports arbor-core directly.
+ */
+export interface ArborWindowBridge {
+  /** Open the window on first use and return its ref. */
+  ensureWindow(): Promise<string>
+  /** The system prompt rendered for this window's epoch. */
+  systemPrompt(): string
+  /** One model call through DSH's `ctx.llm`. */
+  modelCall(input: ModelCallInput): Promise<ModelCallOutcome>
+  /** Run one model-produced tool call through arbor's tool path into `ctx.tools.execute`. */
+  runToolCall(call: ToolCallBlock, position: { turn: number; step: number }): Promise<ToolResult>
+  /** Publish one window event to the arbor window. */
+  publish(event: WindowEvent): void
+  /** The turn's work settled: the window's run ends and it goes idle. */
+  finishRun(): void
+  /** Release the arbor host and its window. */
+  close(): Promise<void>
+}
+
+type Phase =
+  | { kind: 'idle'; lastTurn: number }
+  | { kind: 'maintenance'; abort: AbortController; lastTurn: number; wakeRequested: boolean }
+  | { kind: 'running'; abort: AbortController; turn: number; step: number; wakeRequested: boolean }
+
+/** Read the cause `cancel()` passed when aborting a loop-owned signal. */
+function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
+  if (!signal.aborted) return undefined
+  const cause = signal.reason as AgentCancelCause
+  switch (cause.kind) {
+    case 'user':
+    case 'parent':
+    case 'disposed':
+      return { kind: cause.kind }
+    case 'hook':
+      return { kind: 'hook', reason: cause.reason }
+    default:
+      return { kind: 'user' }
+  }
+}
+
+/** One DSH session driven through one arbor window. */
+export class ArborSessionAgent implements Agent {
+  readonly model: AgentModel
+  readonly inbox: ArborInbox
+  readonly scope: Scope
+  readonly ctx: Context
+  private readonly dispatch: AgentEventDispatch
+  private bridge!: ArborWindowBridge
+  private phase: Phase
+  private activityDone: Promise<void> = Promise.resolve()
+  private assistantStreamRevision = 0
+  private assistantAttemptCounter = 0
+  private systemPromptLogged = false
+
+  private readonly loopCtx: Context
+  public readonly id: SessionId
+  public readonly options: AgentOptions
+  public readonly session: Session
+
+  constructor(
+    loopCtx: Context,
+    id: SessionId,
+    options: AgentOptions,
+    session: Session,
+    projections: {
+      readonly modelSelection: () => ModelSelectionProjectionState
+      readonly inbox: () => InboxState
+    },
+    lastTurn: number,
+  ) {
+    this.loopCtx = loopCtx
+    this.id = id
+    this.options = options
+    this.session = session
+    this.dispatch = agentEvents(loopCtx, this)
+    this.scope = createScope(loopCtx, this)
+    this.ctx = this.scope.ctx
+    this.model = new AgentModel(projections.modelSelection, session, options)
+    this.inbox = new ArborInbox(projections.inbox, session, this.dispatch)
+    this.phase = { kind: 'idle', lastTurn }
+  }
+
+  /** Attach the arbor window bridge; the driver calls this once the host exists. */
+  attachBridge(bridge: ArborWindowBridge): void {
+    this.bridge = bridge
+  }
+
+  get status(): AgentStatus {
+    return this.phase.kind === 'idle' || this.phase.kind === 'maintenance' ? 'idle' : 'running'
+  }
+
+  /** The turn/step position the live model step logs its tool events at. */
+  currentLogPosition(): { turn: number; step: number } | undefined {
+    return this.phase.kind === 'running' ? { turn: this.phase.turn, step: this.phase.step } : undefined
+  }
+
+  /** The live turn's abort signal, for tool execution. */
+  currentSignal(): AbortSignal | undefined {
+    return this.phase.kind === 'running' ? this.phase.abort.signal : undefined
+  }
+
+  private setPhase(next: Phase): void {
+    const previousStatus = this.status
+    this.phase = next
+    const status = this.status
+    if (status !== previousStatus) this.dispatch.emit('agent/status', { status })
+  }
+
+  send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {
+    const wakingAfterAbort = wakeup && this.phase.kind !== 'idle' && this.phase.abort.signal.aborted
+    const resolvedTarget = wakingAfterAbort ? 'next-turn' : target
+    this.inbox.splice(resolvedTarget, Infinity, 0, [message])
+    if (wakeup) this.wakeDriver(wakingAfterAbort)
+  }
+
+  followup(input: UserMessage): void {
+    this.send(input, 'next-turn', true)
+  }
+
+  steer(input: UserMessage): void {
+    this.send(input, 'next-step', true)
+  }
+
+  inject(input: UserMessage): void {
+    this.send(input, 'next-step', false)
+  }
+
+  cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
+    if (!options.keepInbox) {
+      this.inbox.clear()
+      if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+    }
+    if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
+  }
+
+  runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    if (this.phase.kind !== 'idle') throw new Error(`agent "${this.id}" already has active work`)
+    const done = Promise.withResolvers<void>()
+    const maintenance: Phase = {
+      kind: 'maintenance',
+      abort: new AbortController(),
+      lastTurn: this.phase.lastTurn,
+      wakeRequested: false,
+    }
+    this.setPhase(maintenance)
+    this.activityDone = done.promise
+    return (async () => {
+      try {
+        return await job(maintenance.abort.signal)
+      } finally {
+        this.setPhase({ kind: 'idle', lastTurn: maintenance.lastTurn })
+        const cause = abortedCancelCause(maintenance.abort.signal)
+        if (cause?.kind !== 'disposed' && maintenance.wakeRequested && this.inbox.hasPending) this.wakeDriver()
+        done.resolve()
+      }
+    })()
+  }
+
+  private wakeDriver(wakeAfterAbort = false): void {
+    if (this.phase.kind !== 'idle') {
+      const reason = abortedCancelCause(this.phase.abort.signal)
+      if (reason?.kind !== 'disposed' && (this.phase.kind === 'maintenance' || wakeAfterAbort)) {
+        this.phase.wakeRequested = true
+      }
+      return
+    }
+    const driver = Promise.withResolvers<void>()
+    this.activityDone = driver.promise
+    this.setPhase({ kind: 'running', abort: new AbortController(), turn: this.phase.lastTurn, step: 0, wakeRequested: false })
+    this.loopCtx.agents.withInitiator(this, () => this.kick()).then(driver.resolve, driver.reject)
+  }
+
+  async whenIdle(): Promise<void> {
+    let activity: Promise<void>
+    do {
+      await (activity = this.activityDone)
+    } while (activity !== this.activityDone)
+  }
+
+  private throwError(error: unknown): never {
+    const turn = this.phase.kind === 'running' ? this.phase.turn : this.phase.lastTurn
+    const step = this.phase.kind === 'running' ? this.phase.step : 0
+    this.dispatch.emit('agent/error', { turn, step, error })
+    throw error
+  }
+
+  private async kick(): Promise<void> {
+    try {
+      while (await this.turn()) { /* the next queued turn runs in the same driver */ }
+    } catch {
+      // Reported failures and cancellation are contained at the driver boundary.
+    } finally {
+      if (this.phase.kind === 'running') {
+        const { turn, wakeRequested } = this.phase
+        this.setPhase({ kind: 'idle', lastTurn: turn })
+        if (wakeRequested && this.inbox.hasPending) this.wakeDriver()
+      }
+    }
+  }
+
+  private async turn(): Promise<boolean> {
+    if (this.phase.kind !== 'running') {
+      this.throwError(new Error(`agent "${this.id}": turn without driver reservation`))
+    }
+    const phase = this.phase
+    const { signal } = phase.abort
+    signal.throwIfAborted()
+    const turn = phase.turn + 1
+    try {
+      this.session.append('turn/start', { turn })
+    } catch (error: unknown) {
+      this.throwError(error)
+    }
+    phase.turn = turn
+    let turnEnds: TurnEndReason | null = null
+    let target: InboxTarget = 'next-turn'
+    try {
+      while (true) {
+        signal.throwIfAborted()
+        const step = phase.step + 1
+        const claimed = this.inbox.claim(target, turn)
+        const selection = this.model.current()
+        if (selection === undefined) {
+          throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and model or record a model selection`)
+        }
+        const decision = await this.dispatch.waterfall(
+          'agent/pre-step',
+          { messages: claimed, turn, step, signal, modelSelection: selection },
+          (): Promise<PreStepDecision> => Promise.resolve({ kind: 'enter', messages: claimed }),
+        )
+        signal.throwIfAborted()
+        if (decision.kind === 'reject') {
+          turnEnds = { kind: 'blocked' }
+          return false
+        }
+        if (turnEnds && decision.messages.length === 0) break
+        if (phase.step === 0 && decision.messages.length === 0) {
+          turnEnds = { kind: 'completed' }
+          return false
+        }
+        signal.throwIfAborted()
+        this.session.append('step/start', { turn, step })
+        phase.step = step
+        try {
+          const stepEnd = await this.step(decision.messages, turn, step, selection, signal)
+          if (turnEnds === null || turnEnds.kind !== 'max-tokens') turnEnds = stepEnd
+        } finally {
+          this.session.append('step/end', { turn, step })
+        }
+        signal.throwIfAborted()
+        if (turnEnds && this.inbox.nextStep.length === 0) {
+          await this.dispatch.serial('agent/turn-stopping', { turn, signal })
+          signal.throwIfAborted()
+        }
+        if (turnEnds && this.inbox.nextStep.length === 0) break
+        target = 'next-step'
+      }
+    } catch (error: unknown) {
+      const cause = abortedCancelCause(signal)
+      if (cause !== undefined) {
+        turnEnds = { kind: 'aborted', reason: cause }
+        throw error
+      }
+      turnEnds = {
+        kind: 'error',
+        error: error instanceof LlmError
+          ? error.failure
+          : { message: errorChain(error), code: 'UNKNOWN' },
+      }
+      this.throwError(error)
+    } finally {
+      try {
+        this.session.append('turn/end', { turn, reason: turnEnds! })
+      } catch (error: unknown) {
+        this.throwError(error)
+      }
+      // The window's run ends with the turn; it stays open for the next one.
+      this.bridge.finishRun()
+    }
+    if (!this.inbox.hasPending) return false
+    phase.abort = new AbortController()
+    phase.wakeRequested = false
+    phase.step = 0
+    return true
+  }
+
+  /** One model call plus the tool executions it requested. */
+  private async step(
+    messages: readonly UserMessage[],
+    turn: number,
+    step: number,
+    selection: Readonly<ModelSelection>,
+    signal: AbortSignal,
+  ): Promise<Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }> | null> {
+    signal.throwIfAborted()
+    await this.bridge.ensureWindow()
+    // The system prompt the window's epoch rendered, admitted once per session.
+    if (!this.systemPromptLogged) {
+      const system = this.bridge.systemPrompt()
+      if (system.length > 0) {
+        this.session.append('system/message', {
+          turn,
+          step,
+          message: createSystemMessage(system),
+        }, { surfaceOp: 'append' })
+      }
+      this.systemPromptLogged = true
+    }
+    for (const message of messages) {
+      this.session.append('user/message', message, { surfaceOp: 'append' })
+    }
+    const config = {
+      ...selection,
+      ...this.options.maxTokens === undefined ? {} : { maxTokens: this.options.maxTokens },
+    }
+    const attempt = new ArborStreamAttempt(
+      this.session.id,
+      ++this.assistantAttemptCounter,
+      () => ++this.assistantStreamRevision,
+      turn,
+      step,
+      (frame) => { this.dispatch.emit('agent/assistant-stream', { frame }) },
+    )
+    attempt.start()
+    try {
+      await this.bridge.modelCall({
+        selection,
+        ...this.options.maxTokens === undefined ? {} : { maxTokens: this.options.maxTokens },
+        position: { turn, step },
+        signal,
+        onChunk: (chunk) => {
+          attempt.push(chunk)
+          if (chunk.type === 'text-delta') {
+            this.bridge.publish({ kind: 'text_delta', delta: chunk.text })
+          }
+        },
+      })
+    } catch (error: unknown) {
+      if (!attempt.ended) {
+        if (signal.aborted) {
+          const content = attempt.interruptedBlocks()
+          if (content.length > 0) {
+            attempt.settle('assistant/message', () => this.session.append('assistant/message', {
+              turn,
+              step,
+              message: createAssistantMessage({
+                content,
+                source: { provider: config.provider, model: config.model },
+              }),
+              interrupted: true,
+              ...attempt.usage === undefined ? {} : { usage: attempt.usage },
+              stream: attempt.stream,
+            }, { surfaceOp: 'append' }).seq)
+          } else {
+            attempt.settle('assistant/attempt', () => this.session.append('assistant/attempt', { turn, step, stream: attempt.stream }).seq)
+          }
+        } else {
+          attempt.settle('assistant/attempt', () => this.session.append('assistant/attempt', { turn, step, stream: attempt.stream }).seq)
+        }
+      }
+      throw error
+    }
+    const message = createAssistantMessage({
+      content: attempt.blocks(),
+      source: {
+        provider: config.provider,
+        model: config.model,
+        ...attempt.replayState === undefined ? {} : { replayState: attempt.replayState as never },
+      },
+    })
+    attempt.settle('assistant/message', () => this.session.append('assistant/message', {
+      turn,
+      step,
+      message,
+      ...attempt.usage === undefined ? {} : { usage: attempt.usage },
+      stream: attempt.stream,
+    }, { surfaceOp: 'append' }).seq)
+    if (attempt.finish.kind === 'max-tokens') return { kind: 'max-tokens' }
+    const toolCalls = message.content.filter(block => block.type === 'tool-call')
+    if (toolCalls.length === 0) return { kind: 'completed' }
+    for (const block of toolCalls) {
+      if (block.type !== 'tool-call') continue
+      const result = await this.bridge.runToolCall(block, { turn, step })
+      const call = { name: block.name, args: safeParseArgs(block.arguments), callId: block.id }
+      this.bridge.publish({ kind: 'tool_call', call })
+      this.bridge.publish({ kind: 'tool_result', call, result })
+    }
+    return null
+  }
+}
+
+/** Parse a model-produced arguments string; invalid JSON becomes an empty object. */
+function safeParseArgs(raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
+}

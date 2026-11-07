@@ -11,6 +11,7 @@
   "dependencies": {
     "@4fu/arbor-interfaces": "2026.1106.1",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1"
   }
 }
