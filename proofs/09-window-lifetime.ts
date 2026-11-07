@@ -157,10 +157,13 @@ async function partA(): Promise<void> {
     const agent = await turn(ctx, sessionId, 'end the window with a handoff')
     const first = windowOf(ctx, sessionId)!
     // The host settles the end and opens the continuation after the tool call
-    // has answered, so the proof waits for the journal to say so.
+    // has answered, so the proof waits for the journal to say so — and waits for
+    // the continuation itself, not merely for the end: the two are separate
+    // commits, and the end lands a few milliseconds first.
     const afterFirst = await waitFor(async (): Promise<string[] | undefined> => {
       const events = await windowEventsOf(ctx, sessionId)
       return events.some(entry => entry.includes('window_end') && entry.includes('model_ended'))
+        && events.some(entry => entry.includes('window_start') && entry.includes(`"continuation":"${first}"`))
         ? events
         : undefined
     }, 15_000)
