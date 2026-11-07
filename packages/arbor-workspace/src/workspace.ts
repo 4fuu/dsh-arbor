@@ -76,7 +76,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { DshSandboxSeam } from './seam.ts'
 import { DshWorkspaceGroup } from './group.ts'
-import { dshWorkspaceSection, dshWorkspaceTable, dshWorkspaceTextOf } from './text.ts'
+import { dshWorkspaceSection, dshWorkspaceTextOf } from './text.ts'
 
 /** The target prefix that names the DSH session a window belongs to. */
 const SESSION_TARGET_PREFIX = 'dsh:session:'
@@ -120,9 +120,6 @@ export class DshSandboxWorkspace implements Workspace {
   private readonly grants = new Map<SessionId, Grant>()
   /** The root the last session to run noted, for a render outside any turn. */
   private lastRoot: string | undefined
-
-  /** This implementation's own fixed strings, merged over the framework's. */
-  readonly text: TextTable = dshWorkspaceTable
 
   constructor(options: DshWorkspaceOptions) {
     this.seam = options.seam
@@ -306,7 +303,7 @@ export class DshSandboxWorkspace implements Workspace {
     // `@deepseek-ai/dsh-sandbox`), and a name outside the vocabulary is a
     // malformed ask rather than one the user should be shown.
     if (!this.seam.escalationModes.includes(mode as SandboxMode)) {
-      throw this.refusalOf(new Error(`unknown escalation target: ${mode}`), mode, standing.mode)
+      throw this.refusal('sandbox_escalate.mode', mode, standing.mode)
     }
     let granted: SandboxMode
     try {
@@ -331,7 +328,11 @@ export class DshSandboxWorkspace implements Workspace {
    */
   private refusalOf(error: unknown, mode: string, standing: SandboxMode): Error {
     const detail = error instanceof Error ? error.message : String(error)
-    const rule = escalationRule(detail, mode)
+    return this.refusal(escalationRule(detail), mode, standing)
+  }
+
+  /** One refusal this implementation raises, in arbor's error shape. */
+  private refusal(rule: string, mode: string, standing: SandboxMode): Error {
     return arborError({
       code: rule === 'sandbox_escalate.rejected' ? 'denied' : 'invalid',
       rule,
@@ -377,7 +378,7 @@ function windowOfRef(ref: WorkspaceRef): WindowRef | undefined {
  * rule is read off that text, which is the one thing about the answer a
  * deployment may rely on.
  */
-function escalationRule(detail: string, mode: string): string {
+function escalationRule(detail: string): string {
   if (detail.includes('requires a justification') || detail.includes('justification is only valid')) {
     return 'sandbox_escalate.justification'
   }
@@ -388,6 +389,5 @@ function escalationRule(detail: string, mode: string): string {
     return 'sandbox_escalate.unavailable'
   }
   if (detail.includes('non-empty sentence')) return 'sandbox_escalate.justification'
-  if (mode !== 'workspace-write' && mode !== 'danger-full-access') return 'sandbox_escalate.mode'
   return 'sandbox_escalate.failed'
 }
