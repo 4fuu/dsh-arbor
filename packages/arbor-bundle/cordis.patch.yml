@@ -1,0 +1,40 @@
+# The dsh-arbor bundle patch: arbor as DSH's agent driver.
+#
+# A bundle patch is the layer a profile composes, applied above the bundle
+# layers it lists. This one does four things:
+#
+#   1. Disables the base `agent` row. DSH allows exactly one AgentFactory per
+#      process — `AgentRegistry.setFactory` throws on a second registration and
+#      AgentLoop claims that slot in its own init — and `applyPatches` treats a
+#      patch's `name` as a check only, so a row is replaced, never re-pointed.
+#   2. Inserts the routing registry (`@4fu/dsh-arbor-driver`) in its place. It
+#      captures the embedded AgentLoop's self-registration and routes per
+#      session: `meta.agentPreset === 'arbor'` goes to arbor, every other
+#      session keeps running on the official loop. The `agent-loop` row itself
+#      is untouched.
+#   3. Inserts the one Arbor host (`@4fu/dsh-arbor-host`) with its durable
+#      SQLite journal and note store under `DSH_HOME/arbor/`, and the driver
+#      (`@4fu/dsh-arbor-driver/driver`) that runs arbor-preset sessions on it.
+#   4. Inserts the arbor preset (`@4fu/dsh-arbor-preset`), which is what puts
+#      arbor in the preset roster a user picks from. On a profile with no preset
+#      registry the row simply never activates, and a session still selects
+#      arbor through `meta.agentPreset`.
+#
+# Row order carries no load semantics: activation is service-availability
+# driven, so the insert position does not matter.
+
+- id: agent
+  disabled: true
+
+- insert:
+    - id: arbor-agent
+      name: '@4fu/dsh-arbor-driver'
+
+    - id: arbor-host
+      name: '@4fu/dsh-arbor-host'
+
+    - id: arbor-driver
+      name: '@4fu/dsh-arbor-driver/driver'
+
+    - id: arbor-preset
+      name: '@4fu/dsh-arbor-preset'

@@ -2,7 +2,7 @@
  * Proof 1: per-preset routing with an embedded AgentLoop.
  *
  * Boots the shipped `headless` profile with the arbor overlay, which disables
- * the base `agent` row and inserts `@4fu/dsh-arbor-agent` (the routing
+ * the base `agent` row and inserts `@4fu/dsh-arbor-driver` (the routing
  * registry subclass) plus the arbor driver row, leaving the `agent-loop` row
  * exactly as shipped. Then:
  *
@@ -28,7 +28,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { runFixtureTurn } from '@deepseek-ai/dsh-loader-smoke'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
-import { bootArborProfile, freshDshHome } from '../packages/arbor-testkit/src/boot.ts'
+import { arborPatch, bootArborProfile, freshDshHome } from '../packages/arbor-testkit/src/boot.ts'
 
 const NAME = 'arbor-spike-proof-1'
 const arborOverlay = fileURLToPath(new URL('../patches/arbor.patch.yml', import.meta.url))
@@ -57,7 +57,7 @@ try {
   const home = await freshDshHome('arbor-spike')
   console.log(`DSH_HOME=${home}`)
   loadEnv(NAME)
-  ctx = await bootArborProfile({ binName: NAME, profile: 'headless', overlayPaths: [arborOverlay] })
+  ctx = await bootArborProfile({ binName: NAME, profile: 'headless', overlayPaths: [arborPatch, arborOverlay] })
   const entries = [...ctx.loader.entries()]
   const active = entries.filter(e => e.fiber !== undefined).length
   console.log(`booted: ${entries.length} loader entries, ${active} active`)
@@ -68,7 +68,7 @@ try {
   const loopRow = entries.find(e => e.options.id === 'agent-loop')
   const driverRow = entries.find(e => e.options.id === 'arbor-driver')
   check('registry row swapped', agentRow?.options.disabled === true
-    && registryRow?.options.name === '@4fu/dsh-arbor-agent'
+    && registryRow?.options.name === '@4fu/dsh-arbor-driver'
     && registryRow.fiber !== undefined,
     `base agent row disabled=${agentRow?.options.disabled === true}; inserted row -> ${registryRow?.options.name} (active=${registryRow?.fiber !== undefined})`)
   check('agent-loop row untouched', loopRow?.options.name === '@deepseek-ai/dsh-agent-loop'

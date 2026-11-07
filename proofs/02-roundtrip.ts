@@ -37,10 +37,14 @@ import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import {
   SCRIPTED_SELECTION,
+  arborHostOf,
+  arborPatch,
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
   spikeToolRuns,
+  waitFor,
+  windowOf,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-2'
@@ -70,7 +74,7 @@ async function main(): Promise<void> {
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: live ? [arborOverlay] : [arborOverlay, scriptedOverlay],
+    overlayPaths: live ? [arborPatch, arborOverlay] : [arborPatch, arborOverlay, scriptedOverlay],
   })
   try {
     const agentOptions: AgentOptions = live
@@ -84,21 +88,12 @@ async function main(): Promise<void> {
       setup: (agentCtx) => { installModelSelection(agentCtx) },
     })
 
-    // Observe the window's own event stream beside the host's watch loop.
+    // Observe the window's own event stream beside the host's watch loop. The
+    // scripted model is held at its gate until the window has opened and the
+    // observer is attached, so no event of the turn is missed.
     const windowEvents: string[] = []
-    const arborWorld = (ctx.get('arborDriver') as {
-      sessionArbor(id: SessionId): { windowEvents(): AsyncIterable<{ kind: string }> } | undefined
-    }).sessionArbor(sessionId)
-    const events = arborWorld?.windowEvents()
-    if (events !== undefined) {
-      void (async () => {
-        try {
-          for await (const event of events) windowEvents.push(event.kind)
-        } catch {
-          // The bus closes with the window; observers stop here.
-        }
-      })()
-    }
+    let releaseGate!: () => void
+    scriptedLlm.gate = new Promise<void>(resolve => { releaseGate = resolve })
 
     // Observe the DSH assistant stream frames.
     const frames: string[] = []
@@ -110,7 +105,18 @@ async function main(): Promise<void> {
       ? 'Reply with exactly: pong from the arbor window'
       : 'Say pong, and call spike_echo once.'
     agent.followup(createUserMessage({ content: [{ type: 'text', text: task }], source: { kind: 'user' } }))
+    const window = await waitFor(() => windowOf(ctx, sessionId))
+    const events = arborHostOf(ctx).backend.events(window)
+    void (async () => {
+      try {
+        for await (const event of events) windowEvents.push(event.kind)
+      } catch {
+        // The bus closes with the window; observers stop here.
+      }
+    })()
+    releaseGate()
     await agent.whenIdle()
+    scriptedLlm.gate = undefined
     stopFrames()
 
     // Read the durable session log.
@@ -173,13 +179,8 @@ async function main(): Promise<void> {
       `turn/end: ${JSON.stringify(turnEnd[0]?.data)}`)
 
     // The arbor window itself recorded the session's task.
-    const host = arborWorld?.windowEvents
-    void host
     const journalTypes = await (async () => {
-      const world = (ctx.get('arborDriver') as {
-        sessionArbor(id: SessionId): { arborHost(): { journal: { list(options?: { limit?: number }): Promise<{ items: { kind: string; targets: string[] }[] }> } } } | undefined
-      }).sessionArbor(sessionId)
-      const page = await world?.arborHost().journal.list({ limit: 50 })
+      const page = await arborHostOf(ctx).host.journal.list({ limit: 50 })
       return (page?.items ?? []).map(item => `${item.kind}:[${item.targets.join(',')}]`)
     })()
     check('arbor window recorded the session task',

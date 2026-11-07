@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor agent driver",
+    "description": "Runs a session through arbor: one shared journal, note store and board across every session, with the reply streamed back as an assistant message. Ordinary sessions keep running on the embedded official agent loop."
+  }
+}

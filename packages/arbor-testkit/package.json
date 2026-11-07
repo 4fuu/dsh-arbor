@@ -3,14 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "B0 spike testkit: boot a DSH profile with arbor overlay patches, a memory journal, and a scripted model",
+  "description": "The dsh-arbor testkit: the boot harness over the arbor bundle patch, the in-memory journal, the scripted model and the proof fixtures",
   "exports": {
     ".": "./src/index.ts",
-    "./journal": "./src/journal-plugin.ts",
     "./scripted-llm": "./src/scripted-plugin.ts",
-    "./prompt-sections": "./src/prompt-sections.ts"
+    "./prompt-sections": "./src/prompt-sections.ts",
+    "./package.json": "./package.json"
   },
   "dependencies": {
+    "@4fu/dsh-arbor-bundle": "workspace:*",
+    "@4fu/dsh-arbor-driver": "workspace:*",
+    "@4fu/dsh-arbor-host": "workspace:*",
     "@4fu/arbor-errors": "2026.1106.1",
     "@4fu/arbor-interfaces": "2026.1106.1",
     "@deepseek-ai/cordis": "4.1.0",

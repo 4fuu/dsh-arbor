@@ -36,6 +36,7 @@ import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import {
   ACME_POLICY_TEXT,
   SCRIPTED_SELECTION,
+  arborPatch,
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
@@ -60,7 +61,7 @@ async function main(): Promise<void> {
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborOverlay, scriptedOverlay, promptOverlay],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, promptOverlay],
   })
   try {
     const agentOptions: AgentOptions = { ...SCRIPTED_SELECTION }

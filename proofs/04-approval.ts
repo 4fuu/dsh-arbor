@@ -34,6 +34,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import {
   SCRIPTED_SELECTION,
+  arborPatch,
   bootArborProfile,
   freshDshHome,
   scriptedLlm,
@@ -68,7 +69,7 @@ async function main(): Promise<void> {
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborOverlay, scriptedOverlay],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay],
   })
   try {
     // ---- granted: the ask reaches the user session's agent, inside its turn.

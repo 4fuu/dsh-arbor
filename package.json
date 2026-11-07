@@ -1,8 +1,8 @@
 {
-  "name": "dsh-arbor-spike",
+  "name": "dsh-arbor",
   "private": true,
   "type": "module",
-  "description": "B0 spike: running arbor as DeepSeek Harness's agent driver",
+  "description": "arbor as DeepSeek Harness's agent driver: one arbor host per DSH process, one window per user session, streamed replies on the session log",
   "packageManager": "pnpm@11.28.5",
   "scripts": {
     "proof:boot": "node --experimental-strip-types --no-warnings proofs/00-boot.ts",
@@ -12,13 +12,17 @@
     "proof:approval": "node --experimental-strip-types --no-warnings proofs/04-approval.ts",
     "proof:prompt": "node --experimental-strip-types --no-warnings proofs/05-prompt.ts",
     "proof:plugins": "node --experimental-strip-types --no-warnings proofs/06-plugins.ts",
-    "proofs": "node --experimental-strip-types --no-warnings proofs/00-boot.ts && node --experimental-strip-types --no-warnings proofs/01-routing.ts && node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts && node --experimental-strip-types --no-warnings proofs/03-hidden-windows.ts && node --experimental-strip-types --no-warnings proofs/04-approval.ts && node --experimental-strip-types --no-warnings proofs/05-prompt.ts && node --experimental-strip-types --no-warnings proofs/06-plugins.ts",
+    "proof:preset": "node --experimental-strip-types --no-warnings proofs/07-preset.ts",
+    "proof:storage": "node --experimental-strip-types --no-warnings proofs/08-storage.ts",
+    "proof:lifetime": "node --experimental-strip-types --no-warnings proofs/09-window-lifetime.ts",
+    "proof:resume": "node --experimental-strip-types --no-warnings proofs/10-resume.ts",
+    "proofs": "node --experimental-strip-types --no-warnings proofs/00-boot.ts && node --experimental-strip-types --no-warnings proofs/01-routing.ts && node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts && node --experimental-strip-types --no-warnings proofs/03-hidden-windows.ts && node --experimental-strip-types --no-warnings proofs/04-approval.ts && node --experimental-strip-types --no-warnings proofs/05-prompt.ts && node --experimental-strip-types --no-warnings proofs/06-plugins.ts && node --experimental-strip-types --no-warnings proofs/07-preset.ts && node --experimental-strip-types --no-warnings proofs/08-storage.ts && node --experimental-strip-types --no-warnings proofs/09-window-lifetime.ts && node --experimental-strip-types --no-warnings proofs/10-resume.ts",
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "^5.9.3",
-    "@4fu/dsh-arbor-agent": "workspace:*",
+    "@4fu/dsh-arbor-driver": "workspace:*",
     "@4fu/dsh-arbor-testkit": "workspace:*"
   },
   "engines": {

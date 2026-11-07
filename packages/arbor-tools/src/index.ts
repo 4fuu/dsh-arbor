@@ -12,12 +12,13 @@
  * serviceAsk → `packages/interaction/user-approval`), and appends the durable
  * `tool/call` + `tool/result` pair to the user session's log.
  *
- * B0 note: every registered DSH tool is exposed as-is. B1 drops the official
- * same-name tools that arbor's own file/bash tools replace and restricts the
- * rest, per the plan.
+ * B1 note: every registered DSH tool is exposed as-is, host-level and
+ * session-free. Dropping the official same-name tools that arbor's own
+ * file/bash tools replace, restricting the rest, and the faithful JSON Schema
+ * mapping are the next stage's work.
  */
 
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentRegistry } from '@deepseek-ai/dsh-agent'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolsService } from '@deepseek-ai/dsh-tools'
 import type { DirectToolSpec, ExternalTool, ParameterSpec, ToolCall, ToolResult } from '@4fu/arbor-interfaces'
@@ -80,34 +81,53 @@ export function schemaOf(spec: DirectToolSpec): Record<string, unknown> {
   }
 }
 
+/**
+ * The live-turn facts a running session agent exposes, so a tool call is
+ * logged at the position of the turn executing it and aborted with it. The
+ * arbor session agent implements them; any other agent simply does not, and
+ * the call then runs without a log position, the way a standalone call does.
+ */
+export interface LiveTurnFacts {
+  currentLogPosition(): { turn: number; step: number } | undefined
+  currentSignal(): AbortSignal | undefined
+}
+
 /** Inputs for {@link dshExternalTools}. */
 export interface DshExternalToolsOptions {
   /** DSH's tool registry. */
   readonly tools: ToolsService
-  /** The user session's agent: scope, log position, and approval routing. */
-  readonly agent: Agent
-  /** The live turn/step position tool events are logged at. */
-  readonly position: () => { turn: number; step: number } | undefined
-  /** The live turn's abort signal. */
-  readonly signal: () => AbortSignal | undefined
+  /**
+   * DSH's agent registry. One backend serves every session, so the agent a
+   * call runs as is read per call: the initiating agent of the turn executing
+   * it, which is the session whose window asked for the call.
+   */
+  readonly agents: AgentRegistry
 }
 
 /**
  * Every registered DSH tool as arbor external tools.
  *
+ * The specs are host-level and session-free: the same declarations reach the
+ * model whichever session's window is running, and each call executes as the
+ * session whose turn is running it. With no initiating agent — a call outside
+ * any turn — DSH's own pipeline degrades the execution to a deny, which is the
+ * correct fail-closed answer.
+ *
  * The parameter round-trip (DSH JSON Schema → arbor ParameterSpec → DSH JSON
- * Schema) is lossy for exotic schemas; B1 maps the official tool set
- * faithfully and replaces the same-name official tools with arbor's own.
+ * Schema) is lossy for exotic schemas; the faithful mapping and the
+ * official-tool replacement are the next stage's work.
  */
 export function dshExternalTools(options: DshExternalToolsOptions): readonly ExternalTool[] {
-  const { tools, agent } = options
+  const { tools, agents } = options
   return tools.schemas().map(schema => ({
     name: schema.name,
     description: schema.description,
     parameters: parametersOf(schema),
     execute: async (request: ToolCall): Promise<ToolResult> => {
-      const position = options.position()
-      const signal = options.signal()
+      const agent = agents.currentInitiator()
+      const live = agent as (Agent & Partial<LiveTurnFacts>) | undefined
+      const position = live?.currentLogPosition?.()
+      const signal = live?.currentSignal?.() ?? new AbortController().signal
       const call: ToolCallBlock = {
         type: 'tool-call',
         id: request.callId as ToolCallBlock['id'],
@@ -116,8 +136,8 @@ export function dshExternalTools(options: DshExternalToolsOptions): readonly Ext
       }
       const batch = await tools.execute({
         calls: [call],
-        agent,
-        signal: signal ?? new AbortController().signal,
+        ...agent === undefined ? {} : { agent },
+        signal,
         ...position === undefined ? {} : { log: position },
       })
       const settled = batch.results.find(result => result.callId === request.callId) ?? batch.results[0]

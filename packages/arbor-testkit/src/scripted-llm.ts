@@ -26,6 +26,11 @@ export interface ScriptedResponse {
 export class ScriptedLlm {
   /** Responses consumed in order; the last one repeats when the list runs out. */
   responses: ScriptedResponse[] = []
+  /**
+   * When set, every stream waits for this promise before its first chunk, so a
+   * proof can observe a window that has opened but has not answered yet.
+   */
+  gate: Promise<void> | undefined
   /** Every assembled request, in call order. */
   readonly seen: GenerateOptions[] = []
 }
@@ -81,12 +86,16 @@ export class ScriptedAdapter extends LlmAdapter {
   }
 
   override stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    this.script.seen.push(options)
-    const response = this.script.responses.length > 1
-      ? (this.script.responses.shift() as ScriptedResponse)
-      : (this.script.responses[0] ?? {})
+    const script = this.script
+    script.seen.push(options)
+    const response = script.responses.length > 1
+      ? (script.responses.shift() as ScriptedResponse)
+      : (script.responses[0] ?? {})
     return {
       async *[Symbol.asyncIterator]() {
+        // The gate is awaited before the first chunk, so a proof can watch a
+        // window that has opened and has not answered yet.
+        if (script.gate !== undefined) await script.gate
         for (const chunk of chunksOf(response)) {
           options.signal?.throwIfAborted()
           yield chunk

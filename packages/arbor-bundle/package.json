@@ -1,0 +1,26 @@
+{
+  "name": "@4fu/dsh-arbor-bundle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The dsh-arbor bundle: the patch layer that replaces DSH's agent row with arbor's routing registry and mounts the arbor host, driver and preset",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "locale/*.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@4fu/dsh-arbor-driver": "workspace:*",
+    "@4fu/dsh-arbor-host": "workspace:*",
+    "@4fu/dsh-arbor-preset": "workspace:*"
+  }
+}

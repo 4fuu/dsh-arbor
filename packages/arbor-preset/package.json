@@ -1,0 +1,17 @@
+{
+  "name": "@4fu/dsh-arbor-preset",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The arbor agent preset: the row that declares arbor in DSH's preset roster, so a user can pick it for a session",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "~1.1.0",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "~3.19.0"
+  }
+}

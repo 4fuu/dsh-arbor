@@ -1,31 +1,40 @@
 /**
  * The arbor `AgentBackend` that runs each window through DSH.
  *
+ * One DSH process mounts one Arbor host (see `@4fu/dsh-arbor-host`), so this
+ * backend is one object that serves every session's windows. Per window it
+ * holds the frozen epoch the host opened it with — the rendered system prompt
+ * and the declared direct tools, DSH's among them — plus the window's live
+ * event bus. Per window it also holds the DSH session agent whose turns drive
+ * it, bound by the driver when the session is created or resumed.
+ *
  * This is the seam where arbor's window lifecycle meets DSH's services:
  *
- *  - `open(request)` captures the window's frozen epoch (the rendered system
- *    prompt and the declared direct tools, DSH's among them) and returns the
- *    window session the host watches.
+ *  - `open(request)` captures the window's frozen epoch and returns the window
+ *    session the host watches. It needs no agent: a window a restart continued
+ *    opens before any session is resumed onto it.
  *  - `modelCall` — used by the DSH-side session agent for each of its steps —
  *    resolves the route, logs the `request/header`, and streams through
  *    `ctx.llm.stream`; the request itself is derived from the session log by
- *    the agent's owner (this backend reads `session.deriveMessages()`).
+ *    the agent's owner.
  *  - `externalTools()` hands DSH's registered tools to arbor, so the model
  *    declares and calls them like any other direct tool; execution lands back
- *    in `ctx.tools.execute` with the user session's agent, which is what
- *    routes approvals through DSH's approval path.
+ *    in `ctx.tools.execute` with the session agent of the turn that is running,
+ *    which is what routes approvals through DSH's approval path and appends the
+ *    durable `tool/call` + `tool/result` pair to that session's log.
  *
  * The window session is a live event bus: the agent publishes text deltas,
  * tool calls and run boundaries, and the host's `watch` loop consumes them
  * like any backend's.
  */
 
-import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentRegistry, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { LlmRuntime, PreparedLlmCall, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { BlockAssembler, createDeveloperMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
+import type { ToolsService } from '@deepseek-ai/dsh-tools'
 import type {
   AgentBackend,
   Delivery,
@@ -42,10 +51,14 @@ import type {
   WindowSession,
   WindowState,
 } from '@4fu/arbor-interfaces'
-import { schemaOf } from '@4fu/dsh-arbor-tools'
+import { dshExternalTools, schemaOf } from '@4fu/dsh-arbor-tools'
 
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface DshModelCall {
+  /** The window whose frozen epoch this call runs under. */
+  readonly window: WindowRef
+  /** The session agent whose log the request is derived from. */
+  readonly agent: Agent
   readonly selection: Readonly<ModelSelection>
   readonly maxTokens?: number
   readonly position: { turn: number; step: number }
@@ -62,12 +75,16 @@ export interface DshModelOutcome {
 
 /** Inputs for {@link createDshBackend}. */
 export interface DshBackendOptions {
-  /** The DSH session agent this window belongs to. */
-  readonly agent: Agent
   /** DSH's LLM runtime (`ctx.llm`). */
   readonly llm: LlmRuntime
-  /** DSH's registered tools, as arbor external tools. */
-  readonly externalTools: () => readonly ExternalTool[]
+  /** DSH's tool registry (`ctx.tools`). */
+  readonly tools: ToolsService
+  /**
+   * DSH's agent registry (`ctx.agents`). One backend serves every session, so
+   * the agent a tool call runs as is read per call from the initiating agent of
+   * the turn executing it — the same attribution DSH itself uses.
+   */
+  readonly agents: AgentRegistry
 }
 
 /** A minimal publish/subscribe bus for one window's events. */
@@ -139,14 +156,22 @@ class DshWindowSession implements WindowSession {
   private currentState: WindowState = 'running'
   private readonly usageValue = { used: 0, limit: 0, reserve: 0 }
   private readonly queued: Delivery[] = []
+  private readonly onEnd: () => void
 
-  constructor(window: WindowRef, bus: WindowEventBus) {
+  constructor(window: WindowRef, bus: WindowEventBus, onEnd: () => void) {
     this.window = window
     this.bus = bus
+    this.onEnd = onEnd
   }
 
   get state(): WindowState {
     return this.currentState
+  }
+
+  /** One live event of this window, from the session agent that drives it. */
+  publish(event: WindowEvent): void {
+    if (this.currentState === 'ended') return
+    this.bus.publish(event)
   }
 
   async steer(delivery: Delivery): Promise<void> {
@@ -164,6 +189,7 @@ class DshWindowSession implements WindowSession {
     this.bus.publish({ kind: 'ended', outcome })
     this.bus.close()
     this.ended.resolve(outcome)
+    this.onEnd()
   }
 
   async pause(): Promise<void> {
@@ -196,15 +222,25 @@ class DshWindowSession implements WindowSession {
   }
 }
 
-/** The DSH-backed arbor agent backend. */
+/** One window's epoch, its bus, and the session agent bound to it. */
+interface WindowEntry {
+  readonly session: DshWindowSession
+  request: OpenWindowRequest | undefined
+  agent: Agent | undefined
+}
+
+/** What one session's request-header logging carries between calls. */
+interface HeaderLog {
+  logged: boolean
+  toolNames: readonly string[]
+}
+
+/** The DSH-backed arbor agent backend: one per process, one entry per window. */
 export class DshBackend implements AgentBackend {
   readonly name = 'dsh'
-  private session: DshWindowSession | undefined
-  private request: OpenWindowRequest | undefined
-  private requestHeaderLogged = false
-  private loggedToolNames: readonly string[] = []
-  private readonly opened = Promise.withResolvers<void>()
-  private readonly bus = new WindowEventBus()
+  private readonly windows = new Map<WindowRef, WindowEntry>()
+  private readonly waiting = new Map<WindowRef, PromiseWithResolvers<void>>()
+  private readonly headers = new WeakMap<Agent, HeaderLog>()
 
   private readonly options: DshBackendOptions
 
@@ -213,8 +249,14 @@ export class DshBackend implements AgentBackend {
   }
 
   /** Resolves once `open` has captured this window's frozen epoch. */
-  whenOpen(): Promise<void> {
-    return this.opened.promise
+  whenOpen(window: WindowRef): Promise<void> {
+    const waiting = this.waiting.get(window)
+    if (waiting !== undefined) return waiting.promise
+    const entry = this.windows.get(window)
+    if (entry !== undefined && entry.request !== undefined) return Promise.resolve()
+    const deferred = Promise.withResolvers<void>()
+    this.waiting.set(window, deferred)
+    return deferred.promise
   }
 
   async models(): Promise<ModelInfo[]> {
@@ -226,61 +268,88 @@ export class DshBackend implements AgentBackend {
   }
 
   externalTools(): readonly ExternalTool[] {
-    return this.options.externalTools()
+    return dshExternalTools({
+      tools: this.options.tools,
+      agents: this.options.agents,
+    })
   }
 
   async open(request: OpenWindowRequest): Promise<WindowSession> {
-    this.request = request
-    const session = new DshWindowSession(request.window, this.bus)
-    this.session = session
-    this.opened.resolve()
+    const bus = new WindowEventBus()
+    const session = new DshWindowSession(request.window, bus, () => { this.release(request.window) })
+    this.windows.set(request.window, { session, request, agent: undefined })
+    this.waiting.get(request.window)?.resolve()
+    this.waiting.delete(request.window)
     return session
   }
 
+  /**
+   * Bind the DSH session agent whose turns drive this window. A window a
+   * restart continued opens before its session is resumed, so the binding is
+   * made when the session comes back, not when the window does.
+   */
+  bind(window: WindowRef, agent: Agent): void {
+    const entry = this.windows.get(window)
+    if (entry !== undefined) entry.agent = agent
+  }
+
+  /**
+   * Drop one window's binding, the way a session's disposal does: the window
+   * itself is the host's and lives out arbor's own idle policy.
+   */
+  unbind(window: WindowRef): void {
+    const entry = this.windows.get(window)
+    if (entry !== undefined) entry.agent = undefined
+  }
+
+  /** Drop one ended window's state, so nothing retains its agent or its bus. */
+  private release(window: WindowRef): void {
+    this.windows.delete(window)
+    this.waiting.get(window)?.resolve()
+    this.waiting.delete(window)
+  }
+
   /** The window's live events, observable beside the host's own watch loop. */
-  events(): AsyncIterable<WindowEvent> {
-    return this.bus.subscribe()
+  events(window: WindowRef): AsyncIterable<WindowEvent> {
+    return this.requireEntry(window).session.events()
   }
 
   /** The system prompt this window's epoch rendered. */
-  systemPrompt(): string {
-    return this.request?.prompt.system ?? ''
+  systemPrompt(window: WindowRef): string {
+    return this.requireEntry(window).request?.prompt.system ?? ''
   }
 
   /** The direct tools declared to the model for this window. */
-  toolSpecs(): readonly DirectToolSpec[] {
-    return this.request?.tools ?? []
+  toolSpecs(window: WindowRef): readonly DirectToolSpec[] {
+    return this.requireEntry(window).request?.tools ?? []
   }
 
   /** Publish one live stream event to the window. */
-  publish(event: WindowEvent): void {
-    this.bus.publish(event)
+  publish(window: WindowRef, event: WindowEvent): void {
+    this.windows.get(window)?.session.publish(event)
   }
 
   /** The turn's work settled: the window's run ends and it stays open for more. */
-  finishRun(): void {
-    const session = this.session
+  finishRun(window: WindowRef): void {
+    const session = this.windows.get(window)?.session
     if (session === undefined || session.state === 'ended') return
-    this.bus.publish({
+    session.publish({
       kind: 'run_ended',
-      outcome: { window: session.window, reason: 'model_ended', usage: session.usage() },
+      outcome: { window, reason: 'model_ended', usage: session.usage() },
     })
   }
 
   /** End the window, the way a host shutdown does. */
-  async endWindow(reason: WindowEndReason = 'host_restart'): Promise<void> {
-    await this.session?.end(undefined, reason)
-    this.bus.close()
+  async endWindow(window: WindowRef, reason: WindowEndReason = 'host_restart'): Promise<void> {
+    await this.windows.get(window)?.session.end(undefined, reason)
   }
 
-  /** The live window session, for the driver's bridge. */
-  get live(): DshWindowSession | undefined {
-    return this.session
-  }
-
-  /** Close the window's event bus, releasing every observer. */
-  closeEvents(): void {
-    this.bus.close()
+  private requireEntry(window: WindowRef): WindowEntry {
+    const entry = this.windows.get(window)
+    if (entry === undefined) {
+      throw new Error(`arbor backend: no open window "${window}"`)
+    }
+    return entry
   }
 
   /**
@@ -290,7 +359,8 @@ export class DshBackend implements AgentBackend {
    * `buildRequest`.
    */
   async modelCall(input: DshModelCall): Promise<DshModelOutcome> {
-    const { agent, llm } = this.options
+    const { agent } = input
+    const llm = this.options.llm
     const { signal } = input
     const proposed = {
       provider: input.selection.provider,
@@ -301,8 +371,8 @@ export class DshBackend implements AgentBackend {
     const prepared: PreparedLlmCall = await llm.prepareCall(proposed, signal)
     signal.throwIfAborted()
     const config = prepared.config
-    const tools = this.toolSpecs().map(schemaOf)
-    this.logRequestHeader(config, tools, input.position)
+    const tools = this.toolSpecs(input.window).map(schemaOf)
+    this.logRequestHeader(agent, config, tools, input.position)
     const messages = agent.session.deriveMessages() as Message[]
     const request = markAgentLoopRequest({
       ...config,
@@ -325,42 +395,40 @@ export class DshBackend implements AgentBackend {
 
   /** Log the resolved request header the way `ReactLoopAgent.buildRequest` does. */
   private logRequestHeader(
+    agent: Agent,
     config: LlmCallConfig,
     tools: readonly Record<string, unknown>[],
     position: { turn: number; step: number },
   ): void {
-    const { agent } = this.options
     const header = canonicalHeader({
       config,
       ...tools.length > 0 ? { tools: tools as never } : {},
     })
     const baseline = agent.session.requestHeader()
-    if (!this.requestHeaderLogged) {
+    const log = this.headers.get(agent)
+    if (log === undefined || !log.logged) {
       agent.session.append('request/header', {
         header,
         reason: baseline === undefined ? 'initial' : 'resume',
       })
-      this.requestHeaderLogged = true
-      this.loggedToolNames = tools.map(tool => String(tool['name']))
+      this.headers.set(agent, { logged: true, toolNames: tools.map(tool => String(tool['name'])) })
       return
     }
     if (baseline === undefined || !headerEquals(baseline, header)) {
       agent.session.append('request/header', { header, reason: 'change' })
-      if (baseline !== undefined) {
-        const previousNames = new Set(this.loggedToolNames)
-        const currentNames = new Set(tools.map(tool => String(tool['name'])))
-        const additions = [...currentNames].filter(name => !previousNames.has(name))
-          .map(name => ({ type: 'tool-addition' as const, toolName: name }))
-        const removals = [...previousNames].filter(name => !currentNames.has(name))
-          .map(name => ({ type: 'tool-removal' as const, toolName: name }))
-        if (additions.length > 0 || removals.length > 0) {
-          agent.session.append('developer/message', {
-            ...position,
-            message: createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [...additions, ...removals] }),
-          }, { surfaceOp: 'append' })
-        }
+      const previousNames = new Set(log.toolNames)
+      const currentNames = new Set(tools.map(tool => String(tool['name'])))
+      const additions = [...currentNames].filter(name => !previousNames.has(name))
+        .map(name => ({ type: 'tool-addition' as const, toolName: name }))
+      const removals = [...previousNames].filter(name => !currentNames.has(name))
+        .map(name => ({ type: 'tool-removal' as const, toolName: name }))
+      if (additions.length > 0 || removals.length > 0) {
+        agent.session.append('developer/message', {
+          ...position,
+          message: createDeveloperMessage({ source: { kind: 'tool-registry' }, content: [...additions, ...removals] }),
+        }, { surfaceOp: 'append' })
       }
-      this.loggedToolNames = tools.map(tool => String(tool['name']))
+      this.headers.set(agent, { logged: true, toolNames: tools.map(tool => String(tool['name'])) })
     }
   }
 }

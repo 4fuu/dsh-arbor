@@ -86,8 +86,14 @@ export interface DshSystemPrompt {
 export interface DshPromptSource {
   /** DSH's system-prompt registry. */
   readonly systemPrompt: DshSystemPrompt
-  /** The agent whose scope the assembly runs in. */
-  readonly agent: Agent
+  /**
+   * The agent whose scope the assembly runs in. Omitted by the process-wide
+   * host: arbor's prompt epochs are shared by every window of one epoch, so the
+   * `<dsh>` block renders the sections the composition registers at its root.
+   * A section registered inside one session's own scope — by its preset or its
+   * setup — is not carried yet.
+   */
+  readonly agent?: Agent
   /** The current turn's signal, when the render belongs to a turn. */
   readonly signal?: AbortSignal
 }
@@ -99,8 +105,7 @@ export interface DshPromptSource {
  */
 export async function renderDshSections(source: DshPromptSource): Promise<string> {
   const assembly: PromptAssembly = await source.systemPrompt.assemble({
-    agent: source.agent,
-    scope: source.agent,
+    ...source.agent === undefined ? {} : { agent: source.agent, scope: source.agent },
     ...source.signal === undefined ? {} : { signal: source.signal },
   })
   const thirdParty: PromptAssembly = {

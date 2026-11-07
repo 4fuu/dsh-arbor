@@ -40,11 +40,16 @@ import type { Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-a
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import type { ToolResult, WindowEvent } from '@4fu/arbor-interfaces'
+import type { WindowRef } from '@4fu/arbor-interfaces'
 import { ArborInbox } from './inbox.ts'
 import { ArborStreamAttempt } from './assistant-stream.ts'
 
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface ModelCallInput {
+  /** The window whose frozen epoch this call runs under. */
+  readonly window: WindowRef
+  /** The session agent whose log the request is derived from. */
+  readonly agent: Agent
   readonly selection: Readonly<ModelSelection>
   readonly maxTokens?: number
   readonly position: { turn: number; step: number }
@@ -61,22 +66,25 @@ export interface ModelCallOutcome {
 
 /**
  * The arbor window this session drives. Implemented by the driver, which owns
- * the Arbor host; the agent never imports arbor-core directly.
+ * the Arbor host; the agent never imports arbor-core directly. Every method
+ * that touches the window takes its ref, because the session's window changes
+ * over its life: arbor ends a window that goes quiet and the next turn drives
+ * the window that follows it.
  */
 export interface ArborWindowBridge {
   /** Open the window on first use and return its ref. */
-  ensureWindow(): Promise<string>
+  ensureWindow(): Promise<WindowRef>
   /** The system prompt rendered for this window's epoch. */
-  systemPrompt(): string
+  systemPrompt(window: WindowRef): string
   /** One model call through DSH's `ctx.llm`. */
   modelCall(input: ModelCallInput): Promise<ModelCallOutcome>
   /** Run one model-produced tool call through arbor's tool path into `ctx.tools.execute`. */
   runToolCall(call: ToolCallBlock, position: { turn: number; step: number }): Promise<ToolResult>
   /** Publish one window event to the arbor window. */
-  publish(event: WindowEvent): void
+  publish(window: WindowRef, event: WindowEvent): void
   /** The turn's work settled: the window's run ends and it goes idle. */
-  finishRun(): void
-  /** Release the arbor host and its window. */
+  finishRun(window: WindowRef): void
+  /** Release the session's hold on its window. */
   close(): Promise<void>
 }
 
@@ -84,6 +92,14 @@ type Phase =
   | { kind: 'idle'; lastTurn: number }
   | { kind: 'maintenance'; abort: AbortController; lastTurn: number; wakeRequested: boolean }
   | { kind: 'running'; abort: AbortController; turn: number; step: number; wakeRequested: boolean }
+
+/** Whether this session's log already carries the system prompt it opened with. */
+function hasSystemMessage(session: Session): boolean {
+  for (let seq = 0; seq < session.seq; seq++) {
+    if (session.eventAt(seq as never)?.type === 'system/message') return true
+  }
+  return false
+}
 
 /** Read the cause `cancel()` passed when aborting a loop-owned signal. */
 function abortedCancelCause(signal: AbortSignal): AgentCancelCause | undefined {
@@ -119,6 +135,8 @@ export class ArborSessionAgent implements Agent {
   public readonly id: SessionId
   public readonly options: AgentOptions
   public readonly session: Session
+  /** The window the live step drives, so the turn can end its run. */
+  private currentWindow: WindowRef | undefined
 
   constructor(
     loopCtx: Context,
@@ -141,6 +159,9 @@ export class ArborSessionAgent implements Agent {
     this.model = new AgentModel(projections.modelSelection, session, options)
     this.inbox = new ArborInbox(projections.inbox, session, this.dispatch)
     this.phase = { kind: 'idle', lastTurn }
+    // A session resumed from its log already carries the system prompt it
+    // opened with, exactly like the official loop's in-history projection.
+    this.systemPromptLogged = hasSystemMessage(session)
   }
 
   /** Attach the arbor window bridge; the driver calls this once the host exists. */
@@ -338,7 +359,9 @@ export class ArborSessionAgent implements Agent {
         this.throwError(error)
       }
       // The window's run ends with the turn; it stays open for the next one.
-      this.bridge.finishRun()
+      const ended = this.currentWindow
+      this.currentWindow = undefined
+      if (ended !== undefined) this.bridge.finishRun(ended)
     }
     if (!this.inbox.hasPending) return false
     phase.abort = new AbortController()
@@ -356,10 +379,12 @@ export class ArborSessionAgent implements Agent {
     signal: AbortSignal,
   ): Promise<Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }> | null> {
     signal.throwIfAborted()
-    await this.bridge.ensureWindow()
-    // The system prompt the window's epoch rendered, admitted once per session.
+    const window = await this.bridge.ensureWindow()
+    this.currentWindow = window
+    // The system prompt the window's epoch rendered, admitted once per session:
+    // a session resumed from its log already carries the one it opened with.
     if (!this.systemPromptLogged) {
-      const system = this.bridge.systemPrompt()
+      const system = this.bridge.systemPrompt(window)
       if (system.length > 0) {
         this.session.append('system/message', {
           turn,
@@ -387,6 +412,8 @@ export class ArborSessionAgent implements Agent {
     attempt.start()
     try {
       await this.bridge.modelCall({
+        window,
+        agent: this,
         selection,
         ...this.options.maxTokens === undefined ? {} : { maxTokens: this.options.maxTokens },
         position: { turn, step },
@@ -394,7 +421,7 @@ export class ArborSessionAgent implements Agent {
         onChunk: (chunk) => {
           attempt.push(chunk)
           if (chunk.type === 'text-delta') {
-            this.bridge.publish({ kind: 'text_delta', delta: chunk.text })
+            this.bridge.publish(window, { kind: 'text_delta', delta: chunk.text })
           }
         },
       })
@@ -445,8 +472,8 @@ export class ArborSessionAgent implements Agent {
       if (block.type !== 'tool-call') continue
       const result = await this.bridge.runToolCall(block, { turn, step })
       const call = { name: block.name, args: safeParseArgs(block.arguments), callId: block.id }
-      this.bridge.publish({ kind: 'tool_call', call })
-      this.bridge.publish({ kind: 'tool_result', call, result })
+      this.bridge.publish(window, { kind: 'tool_call', call })
+      this.bridge.publish(window, { kind: 'tool_result', call, result })
     }
     return null
   }

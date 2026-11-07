@@ -1,10 +1,16 @@
 /**
- * B0 spike testkit: boot a real DeepSeek Harness profile with arbor overlay
- * patches, the way `packages/test-support/loader-smoke/tests/fixtures/
- * production-profile.ts` does inside the DSH monorepo, but anchored on the
- * npm-published `@deepseek-ai/dsh` installation instead of `apps/cli`.
+ * B1 testkit: boot a DSH profile with the arbor bundle patch, a scripted model
+ * and the proof fixtures.
  *
- * Every proof in this repository boots through {@link bootArborProfile}.
+ * `bootArborProfile` loads and composes one shipped DSH profile with overlay
+ * patch files, the way `packages/test-support/loader-smoke/tests/fixtures/
+ * production-profile.ts` does inside the DSH monorepo, but anchored on the
+ * npm-published `@deepseek-ai/dsh` installation instead of `apps/cli`. Every
+ * proof in this repository boots through it.
+ *
+ * The arbor overlay the proofs use is the bundle's own patch file
+ * (`@4fu/dsh-arbor-bundle/cordis.patch.yml`), so what a proof boots is exactly
+ * what an installed bundle composes.
  */
 
 import { existsSync } from 'node:fs'
@@ -27,6 +33,9 @@ import {
 
 /** The dsh installation anchor: the published CLI package's own package.json. */
 export const installAnchor: string = createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json')
+
+/** The arbor bundle's patch file, as an overlay path. */
+export const arborPatch: string = createRequire(import.meta.url).resolve('@4fu/dsh-arbor-bundle/cordis.patch.yml')
 
 function insertedPluginNames(entries: readonly EntryOptions[]): string[] {
   return entries.flatMap((entry) => {
@@ -86,7 +95,7 @@ export interface ArborProfileOptions {
 }
 
 /**
- * Load and compose one shipped DSH profile with the arbor overlay patches.
+ * Load and compose one shipped DSH profile with overlay patches.
  * @param options - profile, overlay files, and optional host setup.
  * @returns the settled Loader root context.
  */

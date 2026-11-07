@@ -1,10 +1,17 @@
 /**
- * B0 spike testkit: boot a DSH profile with arbor overlay patches, a memory
- * journal, and a scripted model.
+ * B1 testkit: boot a DSH profile with the arbor bundle patch, a memory journal
+ * and a scripted model.
  */
 
-export { bootArborProfile, freshDshHome, installAnchor } from './boot.ts'
+export { bootArborProfile, freshDshHome, installAnchor, arborPatch } from './boot.ts'
 export type { ArborProfileOptions } from './boot.ts'
+export {
+  arborDriverOf,
+  arborHostOf,
+  sessionArborOf,
+  waitFor,
+  windowOf,
+} from './access.ts'
 export { MemoryJournal } from './journal.ts'
 export {
   ScriptedAdapter,
