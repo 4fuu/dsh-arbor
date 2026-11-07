@@ -19,6 +19,16 @@
 #      arbor in the preset roster a user picks from. On a profile with no preset
 #      registry the row simply never activates, and a session still selects
 #      arbor through `meta.agentPreset`.
+#   5. Inserts `@4fu/dsh-arbor-ui`, which shadows DSH's client
+#      `ui-permission` composer seat: it reads the seat permission-presets
+#      registers (arbor-ui depends on it, so it is registered first) and
+#      re-registers that one `single` slot at a lower priority, rendering the
+#      real control for an ordinary session and nothing for an arbor one, whose
+#      tools run on the host with no sandbox. permission-presets itself is left
+#      enabled — its `/permission` popup and settings row are kept for both — so
+#      only the composer chip is gated. On a profile with no browser (headless,
+#      acp, sdk) the inserted package declares no host behavior and does not
+#      activate.
 #
 # Row order carries no load semantics: activation is service-availability
 # driven, so the insert position does not matter.
@@ -38,3 +48,6 @@
 
     - id: arbor-preset
       name: '@4fu/dsh-arbor-preset'
+
+    - id: arbor-ui
+      name: '@4fu/dsh-arbor-ui'

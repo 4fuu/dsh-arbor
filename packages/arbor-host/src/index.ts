@@ -75,7 +75,7 @@ import {
   type PersonaVariables,
 } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
-import { openArborWorkspace, DshProjectBridge, type DshProject } from '@4fu/dsh-arbor-workspace'
+import { openArborWorkspace, DshProjectBridge, type DshProject, type ExternalPointer } from '@4fu/dsh-arbor-workspace'
 import type { WorkspaceBackend } from '@4fu/arbor-core'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { DshSendExecutor } from './send.ts'
@@ -478,12 +478,28 @@ export class ArborHostService extends Service {
   }
 
   /**
-   * Adopt an existing directory into the shared folder as a project, once. The
-   * explicit way an existing DSH project with its own path joins the shared
-   * folder; the UI's add-existing-project action or the model calls it.
+   * Record an existing directory as an external pointer: no copy, no link, no
+   * adoption, never a registered project. The owner's decision for an existing
+   * DSH project with its own path — the session works in arbor's own directory
+   * (the shared folder) and the user's original directory is named in arbor's
+   * prompt as a pointer, so the model reaches it directly. The UI's
+   * add-workspace action or the model calls it.
    */
-  adoptArborProject(path: string): Promise<string> {
-    return this.requireState().projects.adopt(path)
+  pointerArborProject(path: string): ExternalPointer {
+    return this.requireState().projects.addPointer(path)
+  }
+
+  /** Drop a recorded external pointer by name. */
+  removeArborPointer(name: string): void {
+    this.requireState().projects.removePointer(name)
+  }
+
+  /**
+   * Every recorded external pointer whose directory still exists, true at read.
+   * This is what arbor's `<workspace>` prompt section names.
+   */
+  listArborPointers(): Promise<readonly ExternalPointer[]> {
+    return this.requireState().projects.listPointers()
   }
 
   /** Every project registered from the shared folder, as DSH lists them. */

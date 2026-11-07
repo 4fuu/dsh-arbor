@@ -24,9 +24,9 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { sep } from 'node:path'
+import { basename, sep } from 'node:path'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
@@ -165,15 +165,29 @@ async function main(): Promise<void> {
       (ctx.get('sandboxPolicy') as unknown) !== undefined,
       `sandboxPolicy service: ${ctx.get('sandboxPolicy') === undefined ? 'absent' : 'present'}`)
 
-    // ---- an existing directory joins the shared folder by explicit adoption.
-    const external = await mkdtemp(join(tmpdir(), 'arbor-adopt-'))
+    // ---- an existing directory is a pointer, never copied into the shared folder.
+    // The owner's decision (no copy, no mount, no adoption): the session works in
+    // the shared folder and the user's own directory is recorded as a pointer, so
+    // arbor's prompt names it and the model reaches it on the host directly.
+    const external = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
     await writeFile(join(external, 'code.py'), 'print("hi")', 'utf8')
-    const adopted = await host.adoptArborProject(external)
-    check('an existing directory is adopted into the shared folder as a project',
-      adopted.startsWith(shared + sep) && existsSync(join(adopted, 'code.py')),
-      `adopted ${external} -> ${adopted}; code.py present: ${existsSync(join(adopted, 'code.py'))}`)
-    const adoptedAgain = await host.adoptArborProject(external)
-    check('adoption is idempotent', adoptedAgain === adopted, `second adoption: ${adoptedAgain}`)
+    const pointer = host.pointerArborProject(external)
+    check('an existing directory is recorded as a pointer, not copied into the shared folder',
+      pointer.path === external
+        && !existsSync(join(shared, basename(external)))
+        && existsSync(join(external, 'code.py')),
+      `pointer name=${pointer.name} path=${pointer.path}; a same-named project in the shared folder: ${existsSync(join(shared, basename(external)))}; the original file intact: ${existsSync(join(external, 'code.py'))}`)
+    const pointers = await host.listArborPointers()
+    check('the pointer is listed for the prompt',
+      pointers.length === 1 && pointers[0]?.path === external,
+      `pointers: ${pointers.map(p => `${p.name}=${p.path}`).join(', ')}`)
+    // True at read: remove the directory and the pointer drops, so the prompt
+    // never names a path that no longer exists.
+    await rm(external, { recursive: true, force: true })
+    const afterGone = await host.listArborPointers()
+    check('a pointer whose directory is gone drops from the list',
+      afterGone.length === 0,
+      `pointers after the directory is removed: ${afterGone.map(p => p.name).join(', ') || '(none)'}`)
   } finally {
     await ctx.fiber.dispose()
   }

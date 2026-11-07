@@ -27,14 +27,16 @@ session; "kept" means it still does.
 | DSH mechanism | Arbor sessions | DSH source location |
 | --- | --- | --- |
 | **Projects** (`Workspace` registry) | Arbor's shared folder is the source of truth. A DSH project is a project subfolder of the shared folder, registered in the registry so the UI lists it. | `@deepseek-ai/dsh-workspace` (`WorkspaceRegistry`, `Workspace`, `ctx.workspaceRegistry`); served by `@deepseek-ai/dsh-api-workspace-controller` |
-| **Project list / picker / creation** (client) | Reflects arbor's projects, because the client reads the registry the bridge fills. Scoping the list to arbor sessions in the picker is a client concern (the later UI stage). | `@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`, `WorkspaceBrowser`); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`) |
+| **Project list / picker / creation** (client) | Reads arbor's projects because the client reads the registry the bridge fills. **Decision (item 2): ordinary sessions do not see arbor's shared-folder projects** — an ordinary session's cwd inside the shared folder would put the embedded AgentLoop's sandboxed tools writing into ovnfs's source (read-only by convention, written only by `apply`), which would either fail or corrupt arbor's model, and ordinary sessions must not change. The registry is process-global, so this is a client filter that hides shared-folder projects for a non-arbor preset; it is the remaining client work (the filter needs the shared-folder path). | `@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`, `WorkspaceBrowser`); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`); the registry `ctx.workspaceRegistry` in `@deepseek-ai/dsh-workspace` |
 | **Session cwd** (`working-directory:current`) | Not bound to one cwd. The session's cwd is the shared folder; a window works in its ovnfs checkout of whichever project it needs, and `<workspace>` names the shared folder. | `@deepseek-ai/dsh-working-directory` (`WorkingDirectoryService`, `working-directory/change`); prompt section `working-directory:current` |
 | **Sandbox modes** (`sandbox/mode`, policy) | Removed. Arbor's file tools run on the host; no mode is resolved for an arbor window and no `sandbox/mode` event is emitted for it. | `@deepseek-ai/dsh-sandbox-policy` (`SandboxPolicyService`, `ctx.sandboxPolicy`, `sandboxMode` projection); `@deepseek-ai/dsh-sandbox` (`SandboxMode`) |
 | **Sandbox enforcement** (`ctx.fs`, `ctx.shell`) | Not used by arbor's tools. They reach files through arbor's own workspace (`node:fs`, `spawn('/bin/sh')` on the host), exactly as in standalone arbor. The sandbox rows stay mounted for ordinary sessions. | `@deepseek-ai/dsh-fs-sandbox` (`SandboxedFileSystem`); `@deepseek-ai/dsh-bash-sandbox` (`SandboxBashExecutor`); `@deepseek-ai/dsh-sandbox-local` |
 | **Escalation** (`sandbox_escalate`, `approveEscalation`, `sandbox_permissions`) | Removed. There is no escalation tool and no per-call permission argument to widen; nothing a window does is confined, so there is nothing to widen. | `@deepseek-ai/dsh-sandbox` (`escalation.d.ts`, `approveEscalation`, `ESCALATION_TARGETS`); `@deepseek-ai/dsh-tool-fs` / `dsh-tool-bash` |
 | **Tool approval** (`approval:policy`, `ctx.approval`) | **Kept.** It is separate from the sandbox: a tool call that needs approval still routes through DSH's approval on the user session's agent, and arbor's tools run through `ctx.tools.execute` the same way. | `@deepseek-ai/dsh-user-approval` (`ctx.approval`, `approval/request`); `@deepseek-ai/dsh-tools` (`pipeline.ts`, `serviceAsk`) |
-| **Sandbox mode switch** (client) | Hidden for arbor sessions: there is no sandbox mode to switch. The server emits no `sandbox/mode` for an arbor session; the client switch is the remaining client-side item (see UI below). | `@deepseek-ai/dsh-client-ui-permission-presets` |
-| **cwd display** (client) | Replaced with what is true: the arbor shared folder. The session's cwd *is* the shared folder, so the display is honest without a client change. | `@deepseek-ai/dsh-client-ui-workspace` (`path-suffix`, session header cwd) |
+| **Sandbox mode switch** (client) | Hidden for arbor sessions. `@4fu/dsh-arbor-ui` shadows the `conversation.input.permission` `single` slot one priority below `@deepseek-ai/dsh-client-ui-permission-presets`' occupant and renders the real control for an ordinary session, nothing for an arbor one (whose `useProjection("agentPreset")` is `"arbor"`). The switch is gone from an arbor composer; an ordinary composer keeps it byte-for-byte. | `@deepseek-ai/dsh-client-ui-permission-presets` (`PermissionSelect`, seat `conversation.input.permission`); `@deepseek-ai/dsh-client-ui-conversation` (the `single` slot, `entriesOfSlot`); the preset projection `agentPreset` in `@deepseek-ai/dsh-agent-preset-registry` |
+| **cwd display** (client) | Unchanged and honest: the session's cwd *is* the arbor shared folder, so the display names a real directory. No client change is needed. | `@deepseek-ai/dsh-client-ui-workspace` (session header cwd, `path-suffix`) |
+| **External-project pointer** (prompt) | An existing directory with its own path is recorded as a pointer (name + absolute path), never copied, linked, adopted or registered as a project. It is named in arbor's prompt so the model reaches it on the host directly. Recording it inside arbor's `<workspace>` section is gated on arbor's coming `PromptSection.content(window)` with `perWindow: true` (see the UI half below). | `@4fu/dsh-arbor-workspace` (`DshProjectBridge.addPointer`/`listPointers`/`removePointer`); arbor's `<workspace>` section from `@4fu/arbor-prompt` / arbor-core |
+| **Add workspace…** (client) | For an arbor session it should record a pointer rather than register an arbitrary path as a project. The host API is ready (`ArborHost.pointerArborProject`); the client action that calls it is the remaining client wiring. | `@deepseek-ai/dsh-client-ui-workspace` (the add-workspace action); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`) |
 | **Prompt sections** `working-directory:current`, `sandbox:policy` | Dropped for arbor sessions. Arbor's own `<workspace>` section carries the method instead. The per-section decision table is the prompt bridge's (B2). | `@deepseek-ai/dsh-*` `systemPrompt.section` registrations; the prompt bridge in `@4fu/dsh-arbor-prompt` |
 
 ## What arbor's workspace is now
@@ -95,26 +97,72 @@ backend's own — arbor's wording, arbor's method, no sandbox line and no
 
 ## The UI, honestly
 
-The DSH web client ships as compiled browser bundles (`lib/client.js` in each
-`@deepseek-ai/dsh-client-ui-*`), so it cannot be patched in a way that survives a
-clean `pnpm install`. The clean extension point is a `dsh.client` plugin module
-(the full arbor UI, a later stage). What this step delivers is the **server-side
-truth** the client already reads:
+The DSH web client ships as compiled browser bundles, but it is **not one sealed
+bundle**: the web profile composes the browser roster from `dsh.client` plugin
+packages (`@deepseek-ai/dsh-web-app`'s `cordis.patch.yml`, the `dsh.client`
+section). The client module system (`@deepseek-ai/dsh-client-modules`) scans the
+host loader's entries for packages declaring `dsh.client`, composes the boot
+graph in module-graph order, and serves each package's `exports["./client"]` as a
+classic script in the `window.__ModuleLoader__.load({ id, factory })` format; a
+plugin's `require` of another client package resolves against that graph, and a
+package's `dsh.client.inject` lists the client packages it depends on. A bundle
+patch can `disabled: true` a row, and `applyPatches` treats a patch's `name` as a
+check only, so a row is replaced, never re-pointed. That is the clean seam this
+step uses — a `dsh-arbor` client package — with no patch to any compiled bundle.
 
-- the project list, picker and creation reflect arbor's projects, because they
-  read `ctx.workspaceRegistry`, which the bridge fills from the shared folder;
-- the cwd display shows the shared folder, because the arbor session's cwd *is*
-  the shared folder;
-- the sandbox has no mode for an arbor session, so the switch has nothing to
-  govern.
+**The sandbox mode switch is gone for arbor sessions** (`@4fu/dsh-arbor-ui`, a
+`dsh.client` package). `conversation.input.permission` is a `single` composer
+slot (`@deepseek-ai/dsh-client-ui-conversation`); a `single` slot renders its
+lowest-priority occupant, and `ctx.slots.entriesOfSlot` reads an occupant with
+its registration options (its inject face and locale). arbor-ui registers its
+own occupant one priority below `@deepseek-ai/dsh-client-ui-permission-presets`'
+`PermissionSelect`, reusing that component, inject face and locale verbatim, and
+gates it on `useProjection("agentPreset")` — the same per-session projection the
+composer's own preset selector reads: `"arbor"` renders nothing, any other preset
+renders the real control. permission-presets stays enabled, so its `/permission`
+popup and General-settings row are untouched for both. The shipped occupant
+registers through permission-presets' own deferred `inject`, on a timeline a
+plugin cannot subscribe to, so arbor-ui reads it by polling `entriesOfSlot`
+(bounded, stopped on success and on dispose) until it appears.
 
-The one remaining client-side item is **hiding the sandbox mode switch and
-filtering the project picker to arbor sessions**: both are per-session client
-rendering that the compiled bundles do not yet key on the preset. The exact patch
-points are `@deepseek-ai/dsh-client-ui-permission-presets` (the switch) and
-`@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`); delivering them
-cleanly is a `dsh.client` module in the later UI stage, and patching the compiled
-bundle is not a change that survives reinstall.
+Verified by booting the `web` profile headless with the arbor bundle and driving
+it in Chromium: the gate registers, and a **Standard** composer still shows
+"Access mode, current: Workspace Write" — the ordinary path is unchanged. The
+arbor path hides the switch by construction: the `agentPreset` projection is
+`init: (header) => header.agentPreset` (`@deepseek-ai/dsh-agent-preset-registry`),
+so a real arbor session (created with `meta.agentPreset: "arbor"`, as the proofs
+and the routing registry do) reads `"arbor"` and the gate renders null. In the
+scripted web boot the hero's preset selection did not reach a created arbor
+session (the staged preset lives in the agent-preset seat's store, not the
+projection, until a session commits it), so the arbor case is verified by the
+projection's definition and by the ordinary case rendering the control, not by a
+live arbor session in that boot.
+
+**The external-project pointer is recorded, not copied** (`@4fu/dsh-arbor-workspace`).
+`DshProjectBridge.adopt`'s copy is gone; `addPointer` / `listPointers` /
+`removePointer` record a name and absolute path, `listPointers` renders only
+paths that still exist (true at read, a gone directory drops), and
+`pointerRevision` moves on add/remove so a running window's section is re-rendered
+and handed a delta of only the changed line. `ArborHost.pointerArborProject` /
+`listArborPointers` / `removeArborPointer` expose it. Proof 8 proves the pointer
+is recorded without a copy, is listed, and drops when its directory is removed.
+
+The pointer's prompt line belongs in arbor's `<workspace>` section, one home
+beside "where the window works". Arbor's `<workspace>` is a **fixed** section
+built by arbor-core from the workspace; a plugin's `promptSection` renders in a
+tag named after the plugin (`<harness>`, `<dsh>`), so a plugin cannot contribute
+to `<workspace>` today. Putting the pointer inside `<workspace>` — rather than as
+a second line in the bridge's `<harness>`, which the owner's "one home" forbids —
+is gated on arbor's coming `PromptSection.content(window)` with `perWindow: true`
+(see below), which is exactly the seam that would let a per-session section be
+exact. Until it lands, the pointer is recorded and proven server-side, and its
+rendering is the one remaining step of this feature.
+
+The remaining client work, both smaller than the switch: the **project-picker
+filter** (hide shared-folder projects for a non-arbor preset — item 2's decision)
+and wiring **"Add workspace…"** in an arbor session to `pointerArborProject`
+(item 3's UI action). Both belong in the same `@4fu/dsh-arbor-ui` package B4
+grows; the host APIs they call are already in place.
 
 ## What arbor's core still lacks (back to the arbor repo)
 
@@ -126,11 +174,14 @@ bundle is not a change that survives reinstall.
    set, so nothing is reclaimed.
 2. **`PromptSection.content(window)` with `perWindow: true`** — a host-level
    section is registered once per process and rendered per window, so a
-   per-session section has to be declared per window. It would let the
-   `<workspace>` section (and any arbor-session-only section) be exact per
-   session rather than shared. The ovnfs section is per-host here (one shared
-   folder), so it is already exact; the gap shows when a section must differ
-   between an arbor and an ordinary session in one process.
+   per-session section has to be declared per window. It is the seam the
+   external-project pointer needs: arbor's `<workspace>` is a fixed arbor-core
+   section a plugin cannot contribute to, so the pointer (a per-session fact that
+   must reach a running window as a delta) cannot live inside `<workspace>` until
+   a plugin section can be per-window and exact. The ovnfs section is per-host
+   here (one shared folder), so it is already exact; the gap shows for a section
+   that must differ per session — the pointer, and any arbor-vs-ordinary
+   difference in one process.
 3. **The judge is still off**, and with it the routing policy: one window per
    session, opened on the session's first turn.
 4. **`models()` / `login()` are still placeholders**; the window's model comes

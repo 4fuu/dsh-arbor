@@ -20,10 +20,12 @@
  *  - {@link DshProjectBridge.resolveProject} answers where an arbor session
  *    works: a requested directory that is already inside the shared folder is a
  *    project; the shared folder itself means "no specific project yet"; and a
- *    directory outside the shared folder is **adopted** — copied once into a
- *    same-named project subfolder, the original left untouched — because ovnfs
- *    can only check out a subfolder of its source. That is the stated decision
- *    for how an existing DSH project with its own path joins the shared folder.
+ *    directory outside the shared folder is answered as the shared folder too —
+ *    an arbor session always works in arbor's own directory, and the outside
+ *    directory is recorded as a {@link ExternalPointer} (name and absolute path)
+ *    rather than copied, linked or adopted, because the owner's decision is no
+ *    copy: arbor's tools run on the host, so the model can work in the user's
+ *    own directory directly, and the pointer line in arbor's prompt says so.
  *
  * The registry is process-global, so this reflects arbor's projects for every
  * reader; scoping the list to arbor sessions in the picker is a client concern
@@ -32,7 +34,7 @@
  * directory or its log.
  */
 
-import { cp, mkdir, readdir, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import { watch, type FSWatcher } from 'node:fs'
 import type { Workspace, WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
@@ -42,6 +44,24 @@ export interface DshProject {
   readonly id: WorkspaceId
   readonly path: string
   readonly title: string
+}
+
+/**
+ * One external directory recorded as a pointer.
+ *
+ * The owner's decision for an existing DSH project with its own path is no copy,
+ * no mount and no adoption: the session goes to arbor's own directory (the
+ * shared folder) and the user's original directory is recorded as a pointer, so
+ * arbor's prompt can name it and the model can work in it directly (arbor's
+ * tools run on the host, so the absolute path is reachable). A pointer is never
+ * registered as a project arbor works in — it is a fact in the prompt, not a
+ * checkout.
+ */
+export interface ExternalPointer {
+  /** The directory's basename, the name the prompt shows. */
+  readonly name: string
+  /** The absolute path the prompt names, where the user's own files are. */
+  readonly path: string
 }
 
 /** What this bridge needs. */
@@ -60,6 +80,10 @@ export class DshProjectBridge {
   private readonly warn: (message: string) => void
   private watcher: FSWatcher | undefined
   private debounce: NodeJS.Timeout | undefined
+  /** Recorded external directories: name -> absolute path. Never projects. */
+  private readonly pointers = new Map<string, string>()
+  /** Bumped whenever a pointer is added, removed, or drops for a gone path. */
+  private pointerEpoch = 0
 
   constructor(options: DshProjectBridgeOptions) {
     this.registry = options.registry
@@ -85,10 +109,11 @@ export class DshProjectBridge {
    * the shared folder and opens a checkout of whichever project it needs, which
    * is what "an arbor session is not bound to one cwd" means. A path already
    * inside the shared folder is a project and is answered as-is. A directory
-   * outside the shared folder is **not** silently copied: the shared folder is
-   * the source of truth, and an existing project joins it by explicit
-   * {@link adopt}, never by a session being pointed at a copy of an arbitrary
-   * directory the caller happened to name.
+   * outside the shared folder is answered as the shared folder too: an arbor
+   * session always works in arbor's own directory, and the outside directory is
+   * recorded as a pointer (see {@link addPointer}) rather than copied — the
+   * shared folder is the source of truth for what arbor checks out and applies,
+   * and a pointer is a fact in the prompt, never a second project.
    */
   async resolveProject(requested: string | undefined): Promise<string> {
     if (requested === undefined || this.isSharedFolder(requested)) return this.sharedFolder
@@ -100,33 +125,53 @@ export class DshProjectBridge {
   }
 
   /**
-   * Adopt an existing directory into the shared folder as a project, once.
-   *
-   * This is the explicit way an existing DSH project with its own path joins the
-   * shared folder: a caller that means it — the UI's add-existing-project action,
-   * or the model — names the directory, and it is copied to
-   * `<shared>/<basename>`; an existing project folder of that name is reused
-   * rather than overwritten, so adoption is idempotent and a second adoption
-   * does not clobber the first's work. The original directory is never modified.
-   * The copy is recursive and skips nothing the caller did not already have; a
-   * `.git` directory travels with it, which is what lets a checkout get the
-   * private git directory `apply --branch` needs.
+   * Record an existing directory as an external pointer: no copy, no link, no
+   * adoption, and never a registered project. The caller that means it — the
+   * UI's add-workspace action, or the model — names the directory, and its name
+   * and absolute path are recorded so arbor's prompt can name where the user's
+   * own files are; arbor's tools run on the host, so the model reaches the path
+   * directly and a change there lands on the user's files with no checkout and
+   * no apply. A second call for the same name overwrites the path, so pointing
+   * a name at a new directory is one edit.
    */
-  async adopt(externalPath: string): Promise<string> {
-    const name = basename(resolve(externalPath).replace(/\/+$/, '')) || 'project'
-    const target = join(this.sharedFolder, name)
-    try {
-      await mkdir(target, { recursive: true })
-      const existing = await readdir(target)
-      if (existing.length === 0) {
-        await cp(resolve(externalPath), target, { recursive: true })
+  addPointer(externalPath: string): ExternalPointer {
+    const path = resolve(externalPath)
+    const name = basename(path.replace(/\/+$/, '')) || 'project'
+    this.pointers.set(name, path)
+    this.pointerEpoch += 1
+    return { name, path }
+  }
+
+  /** Drop a pointer by name; a no-op when the name is not recorded. */
+  removePointer(name: string): void {
+    if (this.pointers.delete(name)) this.pointerEpoch += 1
+  }
+
+  /**
+   * Every recorded pointer whose directory still exists, true at the moment it
+   * is read: a pointer whose directory is gone is dropped here, so the prompt
+   * never names a path that no longer exists. Sorted by name for a stable line.
+   */
+  async listPointers(): Promise<readonly ExternalPointer[]> {
+    const result: ExternalPointer[] = []
+    for (const [name, path] of [...this.pointers]) {
+      try {
+        if ((await stat(path)).isDirectory()) result.push({ name, path })
+      } catch {
+        this.pointers.delete(name)
+        this.pointerEpoch += 1
       }
-    } catch (error: unknown) {
-      this.warn(`arbor projects: adopting ${externalPath} failed: ${error instanceof Error ? error.message : String(error)}`)
-      return this.sharedFolder
     }
-    await this.sync()
-    return target
+    return result.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * A revision that moves whenever a pointer is added or removed, so a running
+   * window's prompt is re-rendered — and handed a delta of only the changed
+   * line — the moment the set of pointers changes.
+   */
+  get pointerRevision(): number {
+    return this.pointerEpoch
   }
 
   /** Every project subfolder of the shared folder, registered in DSH's registry. */

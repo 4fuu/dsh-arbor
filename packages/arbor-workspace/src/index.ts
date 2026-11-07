@@ -11,8 +11,9 @@
  *
  * `DshProjectBridge` is the other half of arbor taking over DSH's project
  * management: it makes the shared folder's project subfolders the DSH project
- * list (`ctx.workspaceRegistry`) and decides how an existing directory joins the
- * shared folder.
+ * list (`ctx.workspaceRegistry`), and it records an existing directory with its
+ * own path as an external pointer (name and absolute path, no copy) that
+ * arbor's prompt names, rather than adopting it into the shared folder.
  */
 
 export {
@@ -25,4 +26,5 @@ export {
   DshProjectBridge,
   type DshProject,
   type DshProjectBridgeOptions,
+  type ExternalPointer,
 } from './projects.ts'
