@@ -225,7 +225,7 @@ async function main(): Promise<void> {
   await neverCase.ctx.fiber.dispose()
 
   // ---- case 4: an MCP server and a third-party plugin ------------------------
-  const mcpCase = await renderCase('CASE 5 MCP server and third-party plugin', [mcpOverlay])
+  const mcpCase = await renderCase('CASE 4 MCP server and third-party plugin', [mcpOverlay])
   const mcpDsh = /<dsh>\n([\s\S]*?)\n<\/dsh>/.exec(mcpCase.prompt)?.[1] ?? ''
   check('case 4 puts the MCP server instructions in <dsh>', mcpDsh.includes(MCP_INSTRUCTIONS_TEXT),
     'the server instructions are data in <dsh>')

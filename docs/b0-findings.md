@@ -132,13 +132,19 @@ result), a rejection (the tool does not run, the model sees
 `the user rejected tool "spike_ask"`), and no answerer at all (the ask fails
 closed as `unavailable`).
 
-## 5. Prompt assembly: official sections dropped, third party in `<dsh>` — works
+## 5. Prompt assembly: third party in `<dsh>`, official sections decided — works
+
+> B2 rewrote this. The prefix rule that dropped every official section is
+> withdrawn: the decisions table (`dsh-arbor 提示词、工具与环境对照表`) now decides
+> each official section one by one, most of them rewritten into a trusted
+> `<harness>` section of dsh-arbor's own. What follows is B0's finding, kept for
+> where each seam lives.
 
 The prompt bridge (`packages/arbor-prompt`) registers an arbor `Plugin` whose
 prompt section is a `<dsh>` block with `outside: true`
 (`@4fu/arbor-interfaces/plugin.d.ts`, `PromptSection.outside`: "material from
-outside the framework … the framework's own prompt wins on conflict"). Its
-content is DSH's assembly with the official sections removed:
+outside the framework … the framework's own prompt wins on conflict"). B0's
+content was DSH's assembly with the official sections removed:
 `ctx.systemPrompt.assemble({ agent, scope: agent })`
 (`packages/core/system-prompt/src/index.ts`, `assemble` ~L621) filtered by
 section name and rendered with DSH's own `renderPrompt` (~L297), so the
@@ -161,9 +167,11 @@ Proof 5 registers a third-party section (`acme:policy`) as a plugin would, runs
 one arbor turn, and checks what the model saw: the window's prompt carries
 arbor's own `<identity>`, `<agent>` (with the precedence rule, present because
 an outside section exists) and `<tools>`; the third-party text is inside
-`<dsh>`; and not one of the 18 official section texts (2587 rendered
-characters) survives. The split is taken from DSH's own assembly, not a
-hardcoded list, so the check covers whatever the shipped profile registers.
+`<dsh>`; and no official section the table decides `drop` leaves any text
+behind. The split is taken from DSH's own assembly, not a hardcoded list, so the
+check covers whatever the shipped profile registers. B2's proof 12 pins the
+table to `dsh-v0.2.2-rc.1` and fails when the pinned DSH registers an official
+section name the table does not decide.
 
 ## 6. Common DSH plugins still working — works
 
@@ -256,17 +264,21 @@ adds the host, workspace, env, client, bundle and preset modules:
 @4fu/dsh-arbor-llm         the AgentBackend over ctx.llm, the window session,
                            the request/header logging and the relay cursor
                            for resume. (B0: packages/arbor-llm.)
-@4fu/dsh-arbor-prompt      the <dsh> bridge: official sections dropped,
-                           third-party sections carried, revisions following
-                           system-prompt/change, prompt_delta applied to live
-                           turns. (B0: packages/arbor-prompt.)
-@4fu/dsh-arbor-tools       the tool bridge: DSH tools as external tools, the
-                           faithful schema mapping, official same-name tools
-                           replaced by arbor's own and the rest restricted.
-                           (B0: packages/arbor-tools.)
+@4fu/dsh-arbor-prompt      the prompt bridge: the <dsh> data block for
+                           third-party material, the trusted <harness> section
+                           dsh-arbor writes itself, the per-section decision
+                           table pinned to a DSH version, the deployment
+                           persona carried into <identity>, revisions following
+                           system-prompt/change, and prompt_delta applied to
+                           live turns. (B0: packages/arbor-prompt.)
+@4fu/dsh-arbor-tools       the tool bridge: DSH tools as arbor external tools
+                           with DSH's own JSON Schema verbatim, the same-name
+                           tools arbor replaces restricted away, and calls run
+                           through ctx.tools.execute. (B0: packages/arbor-tools.)
 @4fu/dsh-arbor-workspace   the arbor Workspace implementation over DSH's
                            sandboxed fs (ctx.fs), so windows work in the
-                           session's cwd.
+                           session's cwd. B3b moves this onto arbor's own
+                           shared folder and drops the sandbox.
 @4fu/dsh-arbor-env         /env: DSH's skills and MCP servers mounted read-only
                            into arbor's environment catalog.
 @4fu/dsh-arbor-client      the UI surface for arbor windows (board, streaming,

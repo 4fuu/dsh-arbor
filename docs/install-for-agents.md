@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3
+git checkout b2
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all fourteen, in order, against the scripted model
+pnpm proofs         # all seventeen, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -72,15 +72,18 @@ pnpm proof:routing     # 01 per-preset routing with an embedded AgentLoop
 pnpm proof:roundtrip   # 02 message -> arbor window -> streamed assistant message
 pnpm proof:hidden      # 03 window agents hidden from the session list
 pnpm proof:approval    # 04 a tool call needing approval reaches DSH's path
-pnpm proof:prompt      # 05 prompt assembly (B0's rule, kept until B2)
+pnpm proof:prompt      # 05 prompt assembly: drops decided, third party in <dsh>
 pnpm proof:plugins     # 06 common DSH plugins still working
 pnpm proof:preset      # 07 the arbor preset in the roster and selectable
 pnpm proof:storage     # 08 durable storage, one host, workspace root
 pnpm proof:lifetime    # 09 window end, continuation, idle timeout
 pnpm proof:resume      # 10 resume of a persisted session after a restart
-pnpm proof:sandbox     # 11 arbor's own file tools inside DSH's sandbox
+pnpm proof:sandbox     # 11 the workspace a window works in, and a refused write
+pnpm proof:harness     # 11 the rendered system prompts, the deltas, the tool sets
 pnpm proof:env         # 12 /env: DSH's skills and MCP servers, read-only
+pnpm proof:sections    # 12 the decision table against the pinned DSH
 pnpm proof:loop        # 13 the closed loop, across a restart (live-capable)
+pnpm proof:send-links  # 13 what <harness> promises about send and @path
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -97,6 +100,10 @@ Two known behaviours, neither a failure of the code under test:
 
 - The real model now and then answers a one-word prompt with reasoning only, so
   the assistant output is empty. Proof 1 retries that turn a couple of times.
+- `ARBOR_PROOF_LIVE=1` runs every proof against the profile's own default model.
+  Only proof 13 changes what it asserts under it (which tools the live model
+  reaches for is its own choice); the others keep the scripted path and need no
+  key.
 - A proof process exits as soon as its report is printed. A handle that DSH's
   profile or arbor's host leaves open must not hang the suite; DSH's own smoke
   harness runs each fixture in a subprocess with a timeout for the same reason.
@@ -203,11 +210,12 @@ packages/
                     replays the journal onto a resumed session
   arbor-llm/        the arbor AgentBackend: each window's turns run through
                     DSH's ctx.llm and ctx.tools
-  arbor-prompt/     the prompt bridge: the <dsh> outside block
-  arbor-tools/      the tool bridge: DSH tools as arbor external tools
+  arbor-prompt/     the prompt bridge: the <dsh> data block, the trusted
+                    <harness> section, and the per-section decision table
+  arbor-tools/      the tool bridge: DSH tools as arbor external tools with
+                    DSH's own JSON Schema, the same-name tools restricted away
   arbor-workspace/  the Workspace over DSH's sandbox: the session's cwd, every
-                    file access and command through ctx.fs and ctx.shell, and
-                    the sandbox_escalate tool
+                    file access and command through ctx.fs and ctx.shell
   arbor-env/        /env: arbor's own environment under DSH_HOME/arbor/env, with
                     DSH's skills and MCP servers mounted read-only beside it
   arbor-bundle/     the installable bundle: the patch layer that replaces DSH's
@@ -243,9 +251,8 @@ Works, and is covered by a proof:
 - A window's workspace is its session's cwd, and every file access and command
   runs through DSH's own `ctx.fs` and `ctx.shell` under the session's sandbox
   policy — so `read-only` refuses a write and the model reads the refusal with
-  the next action, and a `sandbox_escalate` asks the user through DSH's
-  approval. The `<workspace>` prompt section names the cwd and the standing
-  mode, and only what is true is written.
+  the next action. The `<workspace>` prompt section names the cwd and the
+  standing mode, and only what is true is written.
 - `/env` carries DSH's skills (readable by path) and MCP servers (listed, with
   their tools staying DSH tools) beside arbor's own settings, built-in skills
   and the model's own installs.
@@ -258,16 +265,20 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- The prompt bridge is still B0's: it drops DSH's official sections by name
-  prefix. B2 replaces it with the per-section decisions in the B2 plan.
-- The tool bridge maps DSH's JSON Schema to arbor's parameter specs lossily for
-  exotic schemas, and no official same-name tool is replaced yet. (Arbor's own
-  tools now run sandboxed; that was B3.)
+- **B3b, in flight on branch `b3b`.** Decisions table revision 2 gives arbor
+  project management for arbor sessions and drops DSH's sandbox for them: the
+  workspace moves onto arbor's own shared folder (ovnfs, with a directory
+  workspace as the fallback) and per-window checkouts, `DshSandboxSeam` /
+  `DshSandboxWorkspace` / `sandbox_escalate` go away, and the UI's project list
+  and sandbox switch follow. Until it lands, `packages/arbor-workspace` still
+  routes through DSH's sandbox and its `<workspace>` section still describes it,
+  which is true of the code as it stands.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
-- ovnfs is deliberately not offered inside DSH. Its file tools are `node:fs`
-  calls on the host, its mount carries no `exec`, and its checkout operations
-  spawn the binary directly — all outside `ctx.shell` and `ctx.fs`, so DSH's
-  sandbox would not apply to them. The reasoning is at the top of
+- ovnfs is deliberately not offered inside DSH *yet*. Its file tools are
+  `node:fs` calls on the host, its mount carries no `exec`, and its checkout
+  operations spawn the binary directly — all outside `ctx.shell` and `ctx.fs`,
+  so DSH's sandbox would not apply to them. B3b is the work that makes it the
+  arbor session's project store. The reasoning is at the top of
   `packages/arbor-workspace/src/workspace.ts`.
 - The UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
@@ -307,11 +318,10 @@ through the arbor routing registry and the embedded official loop, and
 `$DSH_HOME/arbor/` holds `journal.sqlite`, `notes.sqlite` and the `env/`
 directory the environment lives in.
 
-The bundle needs the sandbox rows a real installation already has: the base
-profile's `bash-sandbox`, `fs-sandbox`, `sandbox`, `sandbox-policy` and
-`approval` rows. Without `fs-sandbox` and `bash-sandbox` nothing confines,
-`ctx.arborHost.fileToolsSandboxed` is `false`, and arbor's file tools run
-unconfined — which the host reports rather than hides.
+The bundle needs the rows a real installation already has: the base profile's
+`bash-sandbox`, `fs-sandbox`, `sandbox`, `sandbox-policy` and `approval` rows.
+Without `fs-sandbox` and `bash-sandbox` nothing confines and arbor's file tools
+run unconfined. B3b removes this dependency together with the sandbox.
 
 What the installed CLI cannot do yet: drive an arbor-preset session. The
 one-shot runner refuses to adopt any session that runs under a preset —
@@ -322,21 +332,42 @@ web client (the picker is B4), or the SDK path the proofs use
 (`ctx.agents.create` with that meta, then `ctx.agents.resume`). The proofs in
 step 2 are the verified path for the arbor preset today.
 
-## 8. The capability the prompt bridge reads
+## 8. The prompt bridge: `<harness>`, `<dsh>`, and the decision table
 
-`ctx.arborHost.fileToolsSandboxed` is the one fact B2's prompt bridge needs
-before it states the sandbox policy in `<harness>`: it is `true` exactly when
-this process mounts a confining filesystem or shell backend, which is what every
-window's file access and command runs through. The B2 plan's `sandbox:policy`
-row is to be written only when this is true — a line that claims confinement the
-file tools do not have is a lie the model would act on.
+Two sections the bridge owns, and they are different in kind:
 
-Read it as:
+- **`<harness>`** is trusted framework prompt, written by dsh-arbor itself and
+  not marked as data. It carries what is still true of DSH for an arbor window:
+  that the window runs inside DeepSeek Harness and the user only sees what
+  `send` writes, the approval policy in force, how to write image and file links
+  into `send` so DSH renders them, how `@path` references arrive, the
+  deployment's plan-mode guidance while plan mode is active, and the usage text
+  of the DSH tools that are actually exposed. Its fixed lines come from
+  `packages/arbor-prompt/src/text.ts`, in Chinese like arbor's own table.
+- **`<dsh>`** is a data block with `outside: true`. Third-party plugin sections
+  and the instructions an MCP server hands down go here, marked as data, with
+  arbor's rules winning on conflict. No official section goes here.
 
-```ts
-const host = ctx.get('arborHost') as { fileToolsSandboxed: boolean }
-if (!host.fileToolsSandboxed) return ''   // do not write the sandbox line
-```
+Everything official is decided one by one in
+`packages/arbor-prompt/src/sections.ts`, and the table is pinned to
+`dsh-v0.2.2-rc.1`: `proofs/12-official-sections.ts` fails when the pinned DSH
+registers an official section name the table does not decide, so a DSH upgrade
+cannot let a new section in silently.
+
+Three decisions from revision 2 of the table, which is what this branch ships:
+
+- `sandbox:policy` is dropped. An arbor session does not run through DSH's
+  sandbox, so `<harness>` writes no sandbox line and the host reports no
+  `fileToolsSandboxed` any more.
+- `working-directory:current` is dropped, and it is dropped from the
+  runtime-context snapshot too, so the paths have exactly one home: arbor's own
+  `<workspace>` section.
+- `@path` references resolve from arbor's workspace root, which stays true when
+  the workspace moves onto arbor's shared folder.
+
+The dynamic parts — the approval policy and plan mode — reach a running window
+as a `prompt_delta` carrying only the changed lines, and a delta never starts a
+turn: it goes in at the next step boundary and is read by the turn that follows.
 
 ## 9. If something fails
 
@@ -350,6 +381,7 @@ if (!host.fileToolsSandboxed) return ''   // do not write the sandbox line
 - A proof reports that a write was refused when you expected it to succeed: the
   profile's sandbox mode is `workspace-write` unless `DSH_PERMISSION_MODE` says
   otherwise, and `workspace-write` allows only the session's cwd. Check the
-  session's `cwd` and the mode the `<workspace>` section names.
+  session's `cwd` and the mode the `<workspace>` section names. B3b removes the
+  sandbox from this path altogether.
 - Anything else: the findings in `docs/b0-findings.md` and `docs/b3-findings.md`
   record where each integration point lives in DSH's own sources.
