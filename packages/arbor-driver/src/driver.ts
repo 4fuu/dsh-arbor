@@ -325,12 +325,43 @@ export class ArborDriver extends Service implements AgentFactory {
       )
       return
     }
+    // The re-routed session keeps the cwd it was created with — the directory the
+    // user picked for it in DSH's own project picker — and arbor works in the
+    // shared folder, so the picked directory is what the pointer names. It is
+    // read before the embedded agent is ended, and recorded once, at the moment
+    // the session becomes an arbor session: that is the ask, and it is not
+    // repeated on a later resume.
+    const requested = hold.handle.agent.session.header.cwd
     await hold.handle.dispose()
     await this.resumeArbor(this.runtime.ctx, {
       resumeSessionId: sessionId,
       agentOptions: hold.agentOptions,
       setup: hold.setup,
     })
+    this.noteExternalProject(requested, sessionId)
+  }
+
+  /**
+   * Record a directory an arbor session named as an external pointer for that
+   * session, when the user had added the directory through DSH's own
+   * add-workspace action.
+   *
+   * The host answers whether the directory was added, because that is a fact
+   * about the project list rather than about this session; a directory that was
+   * never added — a cwd the session inherited — is left alone, which is the
+   * mistake the earlier resolve-time recording made.
+   */
+  private noteExternalProject(requested: string | undefined, sessionId: SessionId): void {
+    if (requested === undefined) return
+    try {
+      if (this.hostService.isAddedArborDirectory(requested)) {
+        this.hostService.pointerArborProject(requested, sessionId)
+      }
+    } catch (error: unknown) {
+      this.runtime.ctx.logger.warn(
+        `arbor driver: recording an external pointer for session ${sessionId} failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   /** The driver's own DSH context, for the per-session arbor worlds. */
@@ -421,15 +452,23 @@ export class ArborDriver extends Service implements AgentFactory {
     // session's cwd is therefore resolved into the shared folder before the
     // session is prepared, so the DSH session, its cwd display and the project
     // picker all name a folder that is really there.
+    const requested = options.meta?.cwd as string | undefined
     const meta = options.meta === undefined
       ? { cwd: await this.hostService.resolveArborCwd(undefined) }
-      : { ...options.meta, cwd: await this.hostService.resolveArborCwd(options.meta.cwd as string | undefined) }
+      : { ...options.meta, cwd: await this.hostService.resolveArborCwd(requested) }
     const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, {
       ...options.seed === undefined ? {} : { seed: options.seed },
       meta,
       ...options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount },
     }))
     const id = preparation.session.id
+    // A directory the user added through DSH's own add-workspace action, named by
+    // a session that is starting under arbor, is a pointer for that session: the
+    // user chose the directory for this session, and arbor's prompt names it so
+    // the model can work in the user's own files. A cwd the session merely
+    // inherited is not, which is why the question is asked of the host rather
+    // than assumed here.
+    this.noteExternalProject(requested, id)
     const agent = this.agentFor(preparation.session, options.agentOptions)
     const arbor = new SessionArbor(this, agent)
     agent.attachBridge(arbor.bridge())

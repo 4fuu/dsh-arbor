@@ -55,7 +55,7 @@ import { join } from 'node:path'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { Journal, NoteStore, Settings, Target, WindowRef } from '@4fu/arbor-interfaces'
+import type { Journal, NoteStore, Plugin, Settings, Target, WindowRef } from '@4fu/arbor-interfaces'
 import { MAX_PAGE_LIMIT } from '@4fu/arbor-interfaces'
 import { Arbor } from '@4fu/arbor-core'
 import { SqliteJournal } from '@4fu/arbor-journal-sqlite'
@@ -147,6 +147,43 @@ export function sessionTarget(sessionId: string): Target {
   return `${SESSION_TARGET_PREFIX}${sessionId}` as Target
 }
 
+/** The DSH session a conversation target names, or undefined for any other target. */
+export function sessionOfTarget(target: Target): SessionId | undefined {
+  return target.startsWith(SESSION_TARGET_PREFIX)
+    ? target.slice(SESSION_TARGET_PREFIX.length) as SessionId
+    : undefined
+}
+
+/**
+ * The plugin that records which DSH session each window serves.
+ *
+ * Arbor's `windowStart` hook runs before the `window_start` event is appended
+ * and before the window's prompt epoch is rendered, and it carries the window
+ * ref together with the task's targets — the only moment at which a window can
+ * be attributed to a session before its prefix is built. A prompt section that
+ * answers per session (the external-project pointers) is rendered for a window,
+ * and a window's prefix is frozen when it opens, so the attribution has to
+ * exist by then: reading it later would put the pointer in a delta of the
+ * window's opening instead of in the prefix it opens with.
+ *
+ * The hook observes and changes nothing, so a window it cannot attribute — one
+ * dispatched from outside a DSH session — opens exactly as it would without it.
+ */
+export function windowSessionPlugin(note: (window: WindowRef, sessionId: SessionId) => void): Plugin {
+  return {
+    name: 'dsh-arbor-window-session',
+    hooks: {
+      windowStart: (context) => {
+        for (const target of context.task.targets) {
+          const sessionId = sessionOfTarget(target)
+          if (sessionId !== undefined) note(context.window, sessionId)
+        }
+        return { allow: true as const, context }
+      },
+    },
+  }
+}
+
 /** The window a `window_start` continues, when it continues one. */
 function continuedWindow(body: string | null): WindowRef | undefined {
   if (body === null) return undefined
@@ -193,6 +230,13 @@ export class ArborHostService extends Service {
   readonly config: Config
 
   private state: HostState | undefined
+  /**
+   * Which DSH session each window serves, written by the `windowStart` hook
+   * before the window's prefix is built. Arbor's own `WindowRef` carries no
+   * session identity, and a per-session prompt section is rendered for a window,
+   * so this is the mapping that section reads.
+   */
+  private readonly windowSessions = new Map<WindowRef, SessionId>()
   /** Raised whenever a DSH prompt provider changes, so both sections follow. */
   private promptChanges = 0
   /** Plan mode's projection, so the `<harness>` section can read it per step. */
@@ -286,7 +330,14 @@ export class ArborHostService extends Service {
       journal,
       warn: message => ctx.logger.warn(message),
       pointers: {
-        list: () => projects.listPointers(),
+        // The section is rendered for one window, and the window names the
+        // session whose pointers it answers with. The attribution is the
+        // `windowStart` hook's, which runs before the window's prefix is built,
+        // so the pointer is in the prefix the window opens with rather than in a
+        // delta of its own opening. A window nothing attributes (one dispatched
+        // from outside a DSH session) names no session, and an unnamed session
+        // has no pointers rather than another session's.
+        list: (window) => projects.listPointers(window === undefined ? undefined : this.sessionOfWindow(window)),
         revision: () => projects.pointerRevision(),
       },
     })
@@ -305,26 +356,29 @@ export class ArborHostService extends Service {
       backend,
       workspace: arborWorkspace.workspace,
       environment,
-      plugins: dshPromptPlugins({
-        systemPrompt: ctx.systemPrompt,
-        // The assembly runs in the scope of the session whose turn is rendering
-        // the section, which is what lets DSH's own `plan:policy` say whether
-        // plan mode is active. Arbor rebuilds an epoch whenever a section's
-        // revision moves, and the revision covers this session's state, so two
-        // sessions of different states never share one epoch.
-        agent: () => ctx.agents.currentInitiator(),
-        // A fresh signal per assembly: a section is re-rendered by the host's
-        // own watch loop, after the turn that opened the window has ended, and
-        // DSH's working-directory context provider does filesystem I/O under
-        // this signal — a finished turn's would abort it.
-        signal: new AbortController().signal,
-        changeCounter: () => this.promptChanges,
-        state: () => this.harnessState(),
-        onWarning: (message) => {
-          this.warnings.push(message)
-          ctx.logger.warn(message)
-        },
-      }),
+      plugins: [
+        ...dshPromptPlugins({
+          systemPrompt: ctx.systemPrompt,
+          // The assembly runs in the scope of the session whose turn is rendering
+          // the section, which is what lets DSH's own `plan:policy` say whether
+          // plan mode is active. Arbor rebuilds an epoch whenever a section's
+          // revision moves, and the revision covers this session's state, so two
+          // sessions of different states never share one epoch.
+          agent: () => ctx.agents.currentInitiator(),
+          // A fresh signal per assembly: a section is re-rendered by the host's
+          // own watch loop, after the turn that opened the window has ended, and
+          // DSH's working-directory context provider does filesystem I/O under
+          // this signal — a finished turn's would abort it.
+          signal: new AbortController().signal,
+          changeCounter: () => this.promptChanges,
+          state: () => this.harnessState(),
+          onWarning: (message) => {
+            this.warnings.push(message)
+            ctx.logger.warn(message)
+          },
+        }),
+        windowSessionPlugin((window, sessionId) => { this.windowSessions.set(window, sessionId) }),
+      ],
       settings,
       executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
     })
@@ -479,6 +533,17 @@ export class ArborHostService extends Service {
   }
 
   /**
+   * The DSH session whose work this window runs, or undefined while nothing
+   * attributes it. A window a restart continued before its session came back
+   * answers undefined until the session resumes and its next turn opens the
+   * window's own chain entry; the pointer section then reads no pointers rather
+   * than another session's.
+   */
+  sessionOfWindow(window: WindowRef): SessionId | undefined {
+    return this.windowSessions.get(window)
+  }
+
+  /**
    * Where one arbor session works: a project folder inside the shared folder.
    *
    * The driver calls this for an arbor session's requested cwd and sets the
@@ -492,28 +557,44 @@ export class ArborHostService extends Service {
   }
 
   /**
-   * Record an existing directory as an external pointer: no copy, no link, no
-   * adoption, never a registered project. The owner's decision for an existing
-   * DSH project with its own path — the session works in arbor's own directory
-   * (the shared folder) and the user's original directory is named in arbor's
-   * prompt as a pointer, so the model reaches it directly. The UI's
-   * add-workspace action or the model calls it.
+   * Whether the user added this directory through DSH's own add-workspace
+   * action, outside the shared folder.
+   *
+   * This is what separates a directory the user means arbor to name from a cwd a
+   * session merely inherited: the add-workspace action is the one path in DSH
+   * that registers a directory of the user's choosing, so it is the only one
+   * that may turn that directory into a pointer. The driver asks before it
+   * records one.
    */
-  pointerArborProject(path: string): ExternalPointer {
-    return this.requireState().projects.addPointer(path)
-  }
-
-  /** Drop a recorded external pointer by name. */
-  removeArborPointer(name: string): void {
-    this.requireState().projects.removePointer(name)
+  isAddedArborDirectory(path: string): boolean {
+    return this.requireState().projects.isAddedDirectory(path)
   }
 
   /**
-   * Every recorded external pointer whose directory still exists, true at read.
-   * This is what arbor's `<workspace>` prompt section names.
+   * Record an existing directory as an external pointer for one session: no
+   * copy, no link, no adoption, never a registered project. The owner's decision
+   * for an existing DSH project with its own path — the session works in arbor's
+   * own directory (the shared folder) and the user's original directory is named
+   * in arbor's prompt as a pointer, so the model reaches it directly. The driver
+   * calls it for a session that became an arbor session while naming an added
+   * directory; the model calls it for one it was asked about.
    */
-  listArborPointers(): Promise<readonly ExternalPointer[]> {
-    return this.requireState().projects.listPointers()
+  pointerArborProject(path: string, sessionId: SessionId): ExternalPointer {
+    return this.requireState().projects.addPointer(sessionId, path)
+  }
+
+  /** Drop a recorded external pointer by name for one session. */
+  removeArborPointer(name: string, sessionId: SessionId): void {
+    this.requireState().projects.removePointer(sessionId, name)
+  }
+
+  /**
+   * Every external pointer one session recorded whose directory still exists,
+   * true at read. This is what that session's `<workspace>` prompt section
+   * names, and only that session's.
+   */
+  listArborPointers(sessionId: SessionId): Promise<readonly ExternalPointer[]> {
+    return this.requireState().projects.listPointers(sessionId)
   }
 
   /** Every project registered from the shared folder, as DSH lists them. */

@@ -26,18 +26,23 @@
  *    rather than copied, linked or adopted, because the owner's decision is no
  *    copy: arbor's tools run on the host, so the model can work in the user's
  *    own directory directly, and the pointer line in arbor's prompt says so.
+ *    The pointer is recorded for the session that asked for it — see
+ *    {@link addedDirectories} for which directory counts as asked for — so a
+ *    session that never asked never has the line in its prompt.
  *
  * The registry is process-global, so this reflects arbor's projects for every
- * reader; scoping the list to arbor sessions in the picker is a client concern
- * (the later UI stage). Ordinary sessions keep their own cwd and sandbox on the
- * embedded AgentLoop regardless — this bridge never touches a session's own
- * directory or its log.
+ * reader; DSH offers no per-session view of the workspace list (see
+ * `docs/b3b-projects-and-sandbox.md`), so hiding arbor's projects from an
+ * ordinary session's picker is not something this bridge can do. Ordinary
+ * sessions keep their own cwd and sandbox on the embedded AgentLoop regardless —
+ * this bridge never touches a session's own directory or its log.
  */
 
 import { readdir, stat } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import { watch, type FSWatcher } from 'node:fs'
 import type { Workspace, WorkspaceId, WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 
 /** One project as this bridge reports it. */
 export interface DshProject {
@@ -86,8 +91,22 @@ export class DshProjectBridge {
   private readonly warn: (message: string) => void
   private watcher: FSWatcher | undefined
   private debounce: NodeJS.Timeout | undefined
-  /** Recorded external directories: name -> absolute path. Never projects. */
-  private readonly pointers = new Map<string, string>()
+  /**
+   * Recorded external directories, per session: name -> absolute path. Never
+   * projects. A session's set is what that session's `<workspace>` section
+   * names, so a directory one session's user added is invisible to a session
+   * that never asked for it.
+   */
+  private readonly pointers = new Map<SessionId, Map<string, string>>()
+  /**
+   * Canonical paths of directories the user added through DSH's own
+   * add-workspace action, recorded by the {@link watchCreates} hook on the
+   * registry. A pointer is recorded for an arbor session only when the session
+   * names one of these: a directory the user deliberately added is a directory
+   * the user means arbor to name, while a cwd a session merely inherited (DSH's
+   * first-use default workspace, the most recent workspace) is not.
+   */
+  private readonly added = new Set<string>()
 
   constructor(options: DshProjectBridgeOptions) {
     this.registry = options.registry
@@ -106,10 +125,54 @@ export class DshProjectBridge {
    */
   attach(registry: WorkspaceRegistry): () => void {
     this.registry = registry
+    this.watchCreates(registry)
     void this.sync().catch((error: unknown) => {
       this.warn(`arbor projects: the first sync failed: ${error instanceof Error ? error.message : String(error)}`)
     })
     return this.start()
+  }
+
+  /**
+   * Watch `WorkspaceRegistry.create` and remember every directory it registers
+   * outside the shared folder.
+   *
+   * This is the seam that makes DSH's own add-workspace action record a pointer
+   * for an arbor session with no new verb and no client change: the client's
+   * add-workspace action calls the `workspace/create` remote verb
+   * (`@deepseek-ai/dsh-api-workspace-controller`, `create`), which is the one
+   * caller of `WorkspaceRegistry.create` in a DSH installation besides this
+   * bridge's own {@link sync} — and `sync` only ever names project subfolders of
+   * the shared folder, which the outside-shared-folder rule already excludes.
+   * DSH's first-use default workspace is registered by
+   * `WorkspaceRegistry.initializeDefault`, a different method that never reaches
+   * `create`, so an inherited cwd is never mistaken for an added directory.
+   *
+   * The hook is a wrapper on the registry instance this bridge was handed,
+   * restored never: the instance lives as long as the process, and the wrapper
+   * delegates to the original for every call.
+   */
+  private watchCreates(registry: WorkspaceRegistry): void {
+    const original = registry.create.bind(registry)
+    const create = async (path: string, title?: string): Promise<Workspace> => {
+      const workspace = await original(path, title)
+      if (!this.insideSharedFolder(workspace.path)) this.added.add(workspace.path)
+      return workspace
+    }
+    Object.defineProperty(registry, 'create', { value: create, configurable: true, writable: true })
+  }
+
+  /**
+   * Every canonical path the user added through DSH's add-workspace action, in
+   * add order. A directory is added once and stays added: it is a fact about
+   * what the user put in the project list, not about the session that asked.
+   */
+  addedDirectories(): readonly string[] {
+    return [...this.added]
+  }
+
+  /** Whether the user added this directory through DSH's add-workspace action. */
+  isAddedDirectory(path: string): boolean {
+    return this.added.has(resolve(path))
   }
 
   /** Whether a requested directory already names the shared folder itself. */
@@ -139,8 +202,9 @@ export class DshProjectBridge {
    * here. This runs for every arbor session, whatever directory its caller
    * happened to name, and a pointer is a deliberate record of a directory the
    * user means arbor to name — a session's requested cwd is not that. The
-   * deliberate callers are {@link addPointer}'s: the UI's add-workspace action
-   * and the model.
+   * deliberate callers are {@link addPointer}: the driver, for a session that
+   * became an arbor session while naming a directory the user had added through
+   * DSH's own add-workspace action ({@link addedDirectories}), and the model.
    */
   async resolveProject(requested: string | undefined): Promise<string> {
     if (requested === undefined || this.isSharedFolder(requested)) return this.sharedFolder
@@ -152,56 +216,73 @@ export class DshProjectBridge {
   }
 
   /**
-   * Record an existing directory as an external pointer: no copy, no link, no
-   * adoption, and never a registered project. The caller that means it — the
-   * UI's add-workspace action, or the model — names the directory, and its name
-   * and absolute path are recorded so arbor's prompt can name where the user's
-   * own files are; arbor's tools run on the host, so the model reaches the path
-   * directly and a change there lands on the user's files with no checkout and
-   * no apply. A second call for the same name overwrites the path, so pointing
-   * a name at a new directory is one edit.
+   * Record an existing directory as an external pointer for one session: no
+   * copy, no link, no adoption, and never a registered project. The caller that
+   * means it — the driver, for a session that became an arbor session while
+   * naming a directory the user added, or the model — names the directory and
+   * the session it belongs to, and its name and absolute path are recorded so
+   * arbor's prompt can name where the user's own files are; arbor's tools run
+   * on the host, so the model reaches the path directly and a change there
+   * lands on the user's files with no checkout and no apply. A second call for
+   * the same name overwrites the path, so pointing a name at a new directory is
+   * one edit.
    */
-  addPointer(externalPath: string): ExternalPointer {
+  addPointer(sessionId: SessionId, externalPath: string): ExternalPointer {
     const path = resolve(externalPath)
     const name = basename(path.replace(/\/+$/, '')) || 'project'
-    this.pointers.set(name, path)
+    const recorded = this.pointers.get(sessionId) ?? new Map<string, string>()
+    recorded.set(name, path)
+    this.pointers.set(sessionId, recorded)
     return { name, path }
   }
 
-  /** Drop a pointer by name; a no-op when the name is not recorded. */
-  removePointer(name: string): void {
-    this.pointers.delete(name)
+  /** Drop a pointer by name for one session; a no-op when the name is not recorded. */
+  removePointer(sessionId: SessionId, name: string): void {
+    const recorded = this.pointers.get(sessionId)
+    if (recorded === undefined) return
+    recorded.delete(name)
+    if (recorded.size === 0) this.pointers.delete(sessionId)
   }
 
   /**
-   * Every recorded pointer whose directory still exists, true at the moment it
-   * is read: a pointer whose directory is gone is dropped here, so the prompt
-   * never names a path that no longer exists. Sorted by name for a stable line.
+   * Every pointer one session recorded whose directory still exists, true at the
+   * moment it is read: a pointer whose directory is gone is dropped here, so the
+   * prompt never names a path that no longer exists. Sorted by name for a stable
+   * line. An unknown session has none, which is the answer a window whose
+   * session cannot be named gives — never another session's list.
    */
-  async listPointers(): Promise<readonly ExternalPointer[]> {
+  async listPointers(sessionId: SessionId | undefined): Promise<readonly ExternalPointer[]> {
+    const recorded = sessionId === undefined ? undefined : this.pointers.get(sessionId)
+    if (recorded === undefined) return []
     const result: ExternalPointer[] = []
-    for (const [name, path] of [...this.pointers]) {
+    for (const [name, path] of [...recorded]) {
       try {
         if ((await stat(path)).isDirectory()) result.push({ name, path })
       } catch {
-        this.pointers.delete(name)
+        recorded.delete(name)
       }
     }
+    if (recorded.size === 0 && sessionId !== undefined) this.pointers.delete(sessionId)
     return result.sort((a, b) => a.name.localeCompare(b.name))
   }
 
   /**
-   * A revision that moves whenever the live pointer set moves, so a running
-   * window's section is re-rendered — and handed a delta of only the changed
-   * line — the moment the set changes. The host asks for it once per step, so
-   * the existence check lives here: reading it drops a pointer whose directory
-   * has gone, which moves the revision, which drops the line from the prompt.
-   * It is a digest of the live set rather than a counter, so a pointer removed
-   * and re-added at the same path costs nothing.
+   * A revision that moves whenever any session's live pointer set moves, so a
+   * running window's section is re-rendered — and handed a delta of only the
+   * changed line — the moment the set changes. The host asks for it once per
+   * step, so the existence check lives here: reading it drops a pointer whose
+   * directory has gone, which moves the revision, which drops the line from the
+   * prompt. It is a digest of every session's live set rather than a counter, so
+   * a pointer removed and re-added at the same path costs nothing.
    */
   async pointerRevision(): Promise<string> {
-    const live = await this.listPointers()
-    return live.map(pointer => `${pointer.name}=${pointer.path}`).join('|')
+    const parts: string[] = []
+    for (const sessionId of [...this.pointers.keys()].sort()) {
+      const listed = await this.listPointers(sessionId)
+      if (listed.length === 0) continue
+      parts.push(`${sessionId}:${listed.map(pointer => `${pointer.name}=${pointer.path}`).join('|')}`)
+    }
+    return parts.join(';')
   }
 
   /** Every project subfolder of the shared folder, registered in DSH's registry. */

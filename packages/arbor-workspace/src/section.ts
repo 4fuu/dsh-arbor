@@ -33,17 +33,19 @@
  * rendered half-empty.
  */
 
-import type { Block, BlockKindSpec, PromptSection, TextTable } from '@4fu/arbor-interfaces'
+import type { Block, BlockKindSpec, PromptSection, TextTable, WindowRef } from '@4fu/arbor-interfaces'
 import type { ExternalPointer } from './projects.ts'
 
 /** Where the pointers come from, read at every render of the section. */
 export interface PointerSource {
   /**
-   * Every recorded pointer whose directory still exists, true at the moment it
-   * is read: a pointer whose directory is gone is not listed, so the prompt
-   * never names a path that no longer exists.
+   * Every recorded pointer of the session the named window serves whose
+   * directory still exists, true at the moment it is read: a pointer whose
+   * directory is gone is not listed, so the prompt never names a path that no
+   * longer exists. The window is what the section is rendered for, so the
+   * answer is that window's session's list and never another session's.
    */
-  list(): Promise<readonly ExternalPointer[]>
+  list(window?: WindowRef): Promise<readonly ExternalPointer[]>
   /**
    * A revision that moves whenever that set moves, so the host re-renders the
    * section and hands a live window a delta of only the changed lines. It is
@@ -58,7 +60,12 @@ export interface PointerSource {
  * model-facing line arbor and dsh-arbor write. Identifiers stay as they are.
  */
 export const POINTER_TEXT: TextTable = {
-  'workspace.external.lead': '用户另外添加的目录（未复制、未挂载，不在共享目录里）：',
+  // Worded for either workspace implementation: the ovnfs workspace has a shared
+  // folder the pointer is outside of, and the plain-directory workspace has no
+  // shared folder at all, so the line states only what is true of both — the
+  // directory is the user's own, at its original path, and arbor works in it
+  // directly rather than through a copy or a mount.
+  'workspace.external.lead': '用户另外添加的目录（未复制、未挂载，arbor 按原路径直接使用）：',
   'workspace.external.item': '外部项目 {name}：{path}',
   'workspace.external.reason': '用户添加的是已有目录，arbor 没有复制它：这些路径上的改动直接落在用户自己的文件上。',
   'workspace.external.consequence': '要改外部项目就在原处改：按上面的绝对路径直接读写执行，没有检出、没有 apply，也没有可合并的东西。',
@@ -123,7 +130,7 @@ export function withPointerSection(base: PromptSection, pointers: PointerSource)
       // whose content failed keeps what it last said, so this is awaited inside
       // the same try the host renders under.
       const method: readonly Block[] = await base.content(window)
-      const listed = await pointers.list()
+      const listed = await pointers.list(window)
       // Nothing recorded, or nothing that still exists: no line at all, rather
       // than a lead line about nothing.
       if (listed.length === 0) return method

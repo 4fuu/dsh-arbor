@@ -67,6 +67,7 @@ async function runSession(
   cwd: string,
   responses: readonly { toolCalls?: readonly { name: string; args: Record<string, unknown> }[]; text?: string }[] = [{ text: 'pong' }],
   existing?: SessionId,
+  prepare?: (sessionId: SessionId) => void | Promise<void>,
 ): Promise<SessionId> {
   let agent: Agent
   if (existing === undefined) {
@@ -81,6 +82,10 @@ async function runSession(
   } else {
     agent = ctx.agents.get(existing) as Agent
   }
+  // A pointer belongs to the session that asked for it, so it has to be recorded
+  // against the session's own id — which only exists once the agent does. The
+  // hook runs before the first turn, which is when the prompt is assembled.
+  await prepare?.(agent.session.id)
   scriptedLlm.responses = [...responses]
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'say pong' }], source: { kind: 'user' } }))
   await agent.whenIdle()
@@ -244,13 +249,19 @@ async function main(): Promise<void> {
     // arbor's prompt names it and the model reaches it on the host directly.
     const external = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
     await writeFile(join(external, 'code.py'), 'print("hi")', 'utf8')
-    const pointer = host.pointerArborProject(external)
+    const pointerSession = await runSession(ctx, first, [
+      { toolCalls: [{ name: 'read', args: { path: join(external, 'code.py') } }] },
+      { text: 'read the pointed file' },
+    ], undefined, (sessionId) => {
+      host.pointerArborProject(external, sessionId)
+    })
+    const pointer = { name: basename(external), path: external }
     check('an existing directory is recorded as a pointer, not copied into the shared folder',
       pointer.path === external
         && !existsSync(join(shared, basename(external)))
         && existsSync(join(external, 'code.py')),
       `pointer name=${pointer.name} path=${pointer.path}; a same-named project in the shared folder: ${existsSync(join(shared, basename(external)))}; the original file intact: ${existsSync(join(external, 'code.py'))}`)
-    const pointers = await host.listArborPointers()
+    const pointers = await host.listArborPointers(pointerSession)
     check('the pointer is listed for the prompt',
       pointers.length === 1 && pointers[0]?.path === external,
       `pointers: ${pointers.map(p => `${p.name}=${p.path}`).join(', ')}`)
@@ -258,10 +269,6 @@ async function main(): Promise<void> {
     // ---- the pointer is named inside arbor's own <workspace> section, and a
     // window reaches the path it names on its first call, with no exploratory
     // call before it: the prompt is the only thing the window was given.
-    const pointerSession = await runSession(ctx, first, [
-      { toolCalls: [{ name: 'read', args: { path: join(external, 'code.py') } }] },
-      { text: 'read the pointed file' },
-    ])
     const pointerPrompt = driver.systemPromptOf(pointerSession) ?? ''
     const workspace = /<workspace>([\s\S]*?)<\/workspace>/.exec(pointerPrompt)?.[1] ?? ''
     check('the pointer line is inside the one <workspace> section',
@@ -286,7 +293,7 @@ async function main(): Promise<void> {
     // than inside it, so the proof waits for what it asserts.
     const secondPointer = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
     await writeFile(join(secondPointer, 'notes.md'), 'the second directory', 'utf8')
-    host.pointerArborProject(secondPointer)
+    host.pointerArborProject(secondPointer, pointerSession)
     await runSession(ctx, first, [{ text: 'one more turn' }], pointerSession)
     const wanted = `外部项目 ${basename(secondPointer)}：${secondPointer}`
     const delta = await waitFor(() => {
@@ -306,7 +313,7 @@ async function main(): Promise<void> {
     // frozen, so the drop reaches it as a delta of the line that went, and a
     // window that opens afterwards never sees the line at all.
     await rm(external, { recursive: true, force: true })
-    const afterGone = await host.listArborPointers()
+    const afterGone = await host.listArborPointers(pointerSession)
     check('a pointer whose directory is gone drops from the list',
       afterGone.length === 1 && afterGone[0]?.path === secondPointer,
       `pointers after the directory is removed: ${afterGone.map(p => p.name).join(', ')}`)
@@ -321,9 +328,9 @@ async function main(): Promise<void> {
         && /<workspace>\n([\s\S]*?)\n<\/workspace>/.exec(dropped)?.[1] === `- ${gone}`,
       `delta: ${JSON.stringify(dropped ?? '(none)')}`)
     const laterPrompt = driver.systemPromptOf(await runSession(ctx, first)) ?? ''
-    check('a window that opens afterwards never sees the dropped pointer',
-      !laterPrompt.includes(external) && laterPrompt.includes(secondPointer),
-      `the removed path is still named: ${laterPrompt.includes(external)}`)
+    check("a session that asked for nothing never sees another session's pointers",
+      !laterPrompt.includes(external) && !laterPrompt.includes(secondPointer),
+      `the removed path is still named: ${laterPrompt.includes(external)}; the other session's pointer is named: ${laterPrompt.includes(secondPointer)}`)
   } finally {
     await ctx.fiber.dispose()
   }
