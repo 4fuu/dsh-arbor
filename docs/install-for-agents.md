@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3g
+git checkout b3h
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty-four, in order, against the scripted model
+pnpm proofs         # all twenty-five, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -91,6 +91,7 @@ pnpm proof:project-section    # 17 the session's project is named once in <works
 pnpm proof:picker-pin         # 18 the picker filter is pinned to the shipped plugin
 pnpm proof:hero-create-routing # 19 the hero pick creates the session as arbor
 pnpm proof:ovnfs-project       # 20 the ovnfs project line: where paths start, read in place
+pnpm proof:arbor-workspace-membership  # 21 the session belongs to the workspace the user picked
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -341,7 +342,7 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- **B3b, B3c, B3d, b3e, b3f and b3g have landed** (see
+- **B3b, B3c, B3d, b3e, b3f, b3g and b3h have landed** (see
   `docs/b3b-projects-and-sandbox.md`):
   arbor owns project management for arbor sessions and DSH's sandbox is gone for
   them. The workspace is arbor's own over the shared folder (ovnfs, with the
@@ -352,10 +353,13 @@ Not finished, and not to be worked around here:
   `<workspace>` and the per-preset picker filter; branch `b3e` carries the Arbor
   pick across a workspace switch; branch `b3f` mints the session under the picked
   preset instead of re-routing a live blank, and carries the pick into a
-  workspace switch at create; branch `b3g` never switches an Arbor composer to a
-  directory outside the shared folder (it adds it as a pointer for a session
-  created in it) and states in the ovnfs `<workspace>` line where commands and
-  relative paths start and that reading the project in place is fine.
+  workspace switch at create; branch `b3g` adds a directory outside the shared
+  folder as a pointer for a session created in it and states in the ovnfs
+  `<workspace>` line where commands and relative paths start and that reading the
+  project in place is fine; branch `b3h` keeps the arbor session's cwd the
+  directory the user picked, so the sidebar shows it under that row instead of
+  under a "shared" row, never registers the shared folder as a DSH workspace, and
+  marks arbor's rows `（Arbor）` in the sidebar browser.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
 - ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
   `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through

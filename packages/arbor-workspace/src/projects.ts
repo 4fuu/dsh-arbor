@@ -214,18 +214,35 @@ export class DshProjectBridge {
   }
 
   /**
-   * Where one arbor session works: a project folder inside the shared folder.
+   * Where one arbor session works: the directory its caller named.
    *
    * The shared folder itself (or nothing) is answered as-is — a session works in
    * the shared folder and opens a checkout of whichever project it needs, which
    * is what "an arbor session is not bound to one cwd" means. A path already
-   * inside the shared folder is a project and is answered as-is. A directory
-   * outside the shared folder is answered as the shared folder too: an arbor
-   * session always works in arbor's own directory, and the shared folder is the
-   * source of truth for what arbor checks out and applies, so an outside
-   * directory is never a second project.
+   * inside the shared folder is a project and is answered as-is, after a sync so
+   * a project a window just made is in DSH's list.
    *
-   * Recording that outside directory as an {@link ExternalPointer} is NOT done
+   * A directory outside the shared folder is answered as-is too. That reverses
+   * the b3c rule, which moved such a session into the shared folder, and the
+   * reason is DSH's own membership rule: a workspace's `sessionIds` are filtered
+   * by the session's stored cwd (`@deepseek-ai/dsh-workspace`,
+   * `WorkspaceEntity.sessionIds` → `candidateMatches` →
+   * `sessionPaths.get(id) === path`), and `Workspace.attachSession` refuses a
+   * session whose cwd is not the workspace's path. So a session whose cwd was
+   * moved into the shared folder belongs to no workspace the user can see, and
+   * the only way to give it one was to register the shared folder itself — a
+   * row that names arbor's internal folder rather than anything the user
+   * picked. Answering the requested directory as-is makes the DSH session, its
+   * cwd display, the project picker and the sidebar row name one directory:
+   * the project the user picked, or the directory the user added.
+   *
+   * What does not change is where the *window* works: arbor's own directory
+   * under `DSH_HOME/arbor`, reading the shared folder through ovnfs and opening
+   * checkouts in it. The session's cwd is a DSH-side fact — the cwd display, the
+   * project line, the workspace membership — and arbor's prompt says where the
+   * window works in its own words, so the two never contradict each other.
+   *
+   * Recording an outside directory as an {@link ExternalPointer} is NOT done
    * here. This runs for every arbor session, whatever directory its caller
    * happened to name, and a pointer is a deliberate record of a directory the
    * user means arbor to name — a session's requested cwd is not that. The
@@ -239,7 +256,7 @@ export class DshProjectBridge {
       await this.sync()
       return resolve(requested)
     }
-    return this.sharedFolder
+    return resolve(requested)
   }
 
   /**
@@ -314,31 +331,49 @@ export class DshProjectBridge {
 
   /**
    * Make one arbor session a member of the workspace that owns the directory it
-   * works in, registering that workspace when DSH's list has none.
+   * works in, so DSH's own hero composer has a workspace to name and the sidebar
+   * shows the session where the user picked it.
    *
    * DSH answers "which workspace is this session in" from the workspace whose
    * member list names it, and filters a workspace's members by the session's
    * stored cwd (`@deepseek-ai/dsh-workspace`, `WorkspaceEntity.sessionIds` ->
-   * `candidateMatches`), so an arbor session — whose cwd
-   * {@link resolveProject} answers with arbor's own directory — is only a member
-   * of a workspace whose path is that directory. Without this, a session the
-   * driver created or re-routed under arbor belongs to no workspace at all, and
-   * the hero composer answers `chipTitle === undefined` and renders inert
+   * `candidateMatches`), so an arbor session is only ever a member of a
+   * workspace whose path is the directory it works in. Without this, a session
+   * the driver created or re-routed under arbor belongs to no workspace at all,
+   * and the hero composer answers `chipTitle === undefined` and renders inert
    * (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`:
    * `inert = sessionId === void 0 || hero && chipTitle === void 0`) — the dead
    * composer the outside-directory add used to leave behind.
    *
-   * The shared folder itself is registered the same way a project subfolder is:
-   * `WorkspaceRegistry.create` reuses the record a canonical path already has,
-   * so this is idempotent and never retitles an existing workspace.
+   * **The shared folder is never registered.** It is arbor's own internal
+   * directory, not a project the user made, so a DSH workspace row for it would
+   * name something the user never picked. A session whose cwd is the shared
+   * folder itself therefore belongs to no workspace: nothing in the web profile
+   * creates one, because every session there is created in a workspace
+   * (`session/create` takes `workspaceId` or `cwd`, and the picker and the
+   * add-workspace flow both name a workspace).
+   *
+   * A project subfolder of the shared folder is registered the same way
+   * {@link sync} registers one, so a project a window made with `mkdir` is a
+   * workspace the session can belong to. A directory outside the shared folder
+   * is only attached to when DSH's list already has it — which is the case for
+   * every directory a user added through DSH's own add-workspace action, since
+   * that action registers it before it is picked. Registering one here would add
+   * a project-list row for a directory nobody added.
    */
   async attachWorkspace(sessionId: SessionId, cwd: string): Promise<void> {
     if (this.registry === undefined) return
+    const path = resolve(cwd)
+    if (path === this.sharedFolder) return
     try {
-      const workspace = await this.registry.create(resolve(cwd), basename(resolve(cwd)))
+      const listed = this.registry.list().find(workspace => workspace.path === path)
+      const workspace = listed ?? (this.insideSharedFolder(path)
+        ? await this.registry.create(path, basename(path))
+        : undefined)
+      if (workspace === undefined) return
       await workspace.attachSession(sessionId)
     } catch (error: unknown) {
-      this.warn(`arbor projects: attaching session ${sessionId} to ${cwd} failed: ${error instanceof Error ? error.message : String(error)}`)
+      this.warn(`arbor projects: attaching session ${sessionId} to ${path} failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

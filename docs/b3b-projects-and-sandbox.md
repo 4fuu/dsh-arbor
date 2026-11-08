@@ -617,54 +617,80 @@ member of nowhere. The hero composer answers
 `inert = sessionId === void 0 || hero && chipTitle === void 0`) — the dead
 composer, reproduced live on `b3g` before the fix.
 
-So on `b3g` a directory outside the shared folder is **never switched to**. The
-wrap does not run the shipped adopt at all; it mints a session created under
-arbor with the added directory as its `cwd` —
-`sessions.create({ cwd, agentPreset: 'arbor' })`, the `session/create` remote
-verb with no `sessionId`, which the host answers with
-`createMinted(request.cwd, await this.composeAgent(request.agentPreset))`
-(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`). That is the create
-that records the pointer: `ArborDriver.createArborAgent` reads the requested cwd,
-asks the host whether the user added it (`noteExternalProject` →
-`isAddedArborDirectory`), records it, and resolves the session's cwd into the
-shared folder. The registry `create` has already happened by then — the shipped
-add-workspace flow is `createWorkspace({ path })` then
-`onPick(workspace.workspaceId)` (`@deepseek-ai/dsh-client-ui-workspace`,
-`lib/client.js`, `adoptDirectory`) — so the directory is in the bridge's added
-set before the mint runs.
+**`b3h` answers it with DSH's own membership rule, and the session belongs where
+the user picked.** A workspace's `sessionIds` are filtered by the session's
+stored cwd (`@deepseek-ai/dsh-workspace`, `WorkspaceEntity.sessionIds` ->
+`candidateMatches` -> `sessionPaths.get(id) === path`), and
+`Workspace.attachSession` refuses a session whose cwd is not the workspace's
+path ("its cwd resolves to …"). So a session belongs to exactly one workspace:
+the one whose path is its cwd. That is the whole answer to "where does an arbor
+session with no project, or with only an external pointer, belong" — the
+directory the user picked — and it is reachable only if the session's cwd is
+that directory. `b3g` had moved every outside cwd into the shared folder and
+then registered the shared folder as a workspace to give the session a home,
+which put it under a row named "shared": arbor's internal folder, not a project
+the user made, with the added directory beside it as an empty workspace.
 
-**The session then has to belong to a workspace.** A session created with a
-`cwd` and no `workspaceId` is a member of nothing, and the hero composer is inert
-for it, so the host attaches every arbor session it creates, re-routes or resumes
-to the workspace that owns the directory it works in
-(`ArborHostService.attachArborWorkspace` → `DshProjectBridge.attachWorkspace` →
-`WorkspaceRegistry.create` + `Workspace.attachSession`). The shared folder itself
-is registered the same way a project subfolder is: `create` reuses the record a
-canonical path already has, so this is idempotent and never retitles an existing
-workspace. That is also what keeps the composer live for an arbor session whose
-composer was never in the shared folder — a fresh boot where the hero's workspace
-is DSH's own default.
+So on `b3h` `DshProjectBridge.resolveProject` answers the requested directory
+as-is. A project of the shared folder is a project; a directory the user added
+outside it is that directory; DSH's own default workspace is itself. The
+outside-directory add therefore runs the shipped adopt with the pick in it
+(`sessions.create({ workspaceId, agentPreset: 'arbor' })` through
+`createInWorkspace`), which is the create that records the pointer
+(`ArborDriver.createArborAgent` reads the requested cwd, asks the host whether
+the user added it, and records it) and attaches the session to that workspace,
+so the sidebar shows the session under the row the user picked. The registry
+`create` has already happened by then — the shipped add-workspace flow is
+`createWorkspace({ path })` then `onPick(workspace.workspaceId)`
+(`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`, `adoptDirectory`).
 
-**What that costs, and why it cannot be cheaper.** The mint changes the session
-id, and the project the replaced session had picked does not survive: the pointer
-is recorded from the session's creation cwd, so the session has to be created in
-the added directory, and an arbor session's cwd resolves into the shared folder.
-Attributing the pointer to the session the user is already in would need a
-client→host channel that names both, and dsh-v0.2.2-rc.1 has none:
-`session/create` takes `{ sessionId?, workspaceId?, cwd?, agentPreset? }` with a
-strict input schema, the `workspace` namespace's verbs (`create`, `rename`,
-`delete`, `insertBefore`, `insertSessionBefore`, `archiveSession`,
-`unarchiveSession`, `pinSession`, `unpinSession`, `follow`) name a workspace or a
-session but never both with a path, and the host keeps no per-peer session fact
-(`@deepseek-ai/dsh-api-remote-access` tracks principals, `WorkspaceFeed.follow`
-filters by remote peer, which is a connection). DSH's extension point is a typert
-remote namespace — `TypertRemoteService` with `@Remote`-marked methods on the
-host, `remote.$mount(contribution)` with generated descriptors on the client
-(`@deepseek-ai/dsh-api-gateway`, `lib/client.browser.js`) — and the host half
-cannot be written in these sources: they run through Node's type stripping, which
-rejects decorator syntax, and the marker the gateway reads (`remoteMethods`) is
-written by the decorator. That is the smallest pinned patch if the owner wants the
-same session id kept.
+**The shared folder is never a DSH workspace.** `attachWorkspace` refuses it, so
+no row names arbor's internal folder. A project subfolder is registered the way
+`sync` registers one, so a project a window made with `mkdir` is a workspace the
+session can belong to; a directory outside the shared folder is attached to only
+when DSH's list already has it, which is the case for every directory a user
+added through DSH's own add-workspace action. Proof 21 mounts a stand-in
+registry that enforces DSH's membership rule and proves all of it.
+
+**What the cwd rule used to buy, and what replaces it.** b3c moved an arbor
+session's cwd into the shared folder so that "the DSH session, its cwd display
+and the project picker all name a folder that is really there". With the cwd
+answered as-is they still do — the folder is the one the user picked — and the
+window still works in arbor's own directory under `DSH_HOME/arbor`, reading the
+shared folder through ovnfs and opening checkouts in it. The session's cwd is a
+DSH-side fact (the cwd display, the project line, the workspace membership);
+arbor's prompt says where the window works in its own words, so the two never
+contradict each other. What is lost is the case where a session inherited a cwd
+nobody picked: it now keeps that directory, and `<workspace>` names no project
+for it, which is the b3c gap rather than a lie.
+
+**The sidebar browser is marked, not filtered.** The same registration wrapper
+reaches `sidebar.workspaces`, which the shipped plugin registers through the same
+deferred `ctx.slots.inject`. The sidebar lists every workspace for every
+session, so there is no composer preset to key a filter on — filtering there
+would hide arbor's projects from a user working in one. So arbor's rows carry
+`（Arbor）` in the sidebar instead: an ordinary user can see which rows an
+ordinary session cannot use.
+
+**One live finding on `b3h`, pre-existing and not fixed here.** Reloading the
+page while an arbor blank is the main session re-selects the default preset on
+it and the driver follows the event, so the session comes back on the embedded
+loop with only DSH's own tools. The chain is DSH's own: on reconnect the
+workspace plugin restores the blank through `restoreBlank`
+(`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`), which names the
+recorded preset only when the client's projection cache already has it; a fresh
+page load has none, so the request names no preset, `composeAgent(undefined)`
+resolves the configured default, and `reuseLive`
+(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) applies it because
+`target !== current`. The projection itself is initialized from the session
+header's `agentPreset` (`@deepseek-ai/dsh-agent-preset-registry`,
+`lib/index.js`: `init: (header) => header.agentPreset ?? null`), so the fact is
+there — it is the client's cache that is cold. It is the same event `b3e`
+documented, now reachable by a plain reload rather than only by opening the
+session in another workspace. Fixing it needs either a client that keeps the
+recorded preset across a cold start, or a driver that can tell a
+controller-issued re-select from a user's pick, which the log cannot
+(`presets.select` is the single writer of `agent-preset/selected`).
 
 That replaces the `b3e` fix for the shared folder's projects, where the re-commit
 is what made DSH's own `reuseLive`
