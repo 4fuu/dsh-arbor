@@ -34,7 +34,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { Service } from '@deepseek-ai/cordis'
+import { getTraceable, Service, symbols } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {
@@ -64,7 +64,7 @@ import { dataBlock } from '@4fu/arbor-prompt'
 import type { TaskInput, WindowRef } from '@4fu/arbor-interfaces'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { InboxState, ModelSelectionProjectionState } from '@deepseek-ai/dsh-agent'
-import { ArborAgentRegistry } from './registry.ts'
+import { ARBOR_PRESET, ArborAgentRegistry } from './registry.ts'
 import { ArborSessionAgent, type ArborWindowBridge } from './session-agent.ts'
 import { inboxProjectionDefinition } from './inbox.ts'
 import { relayToolCalls, windowToolCalls } from './relay.ts'
@@ -78,6 +78,16 @@ export interface SessionArborLike {
   readonly windowRef: WindowRef | undefined
   /** The agent registered for this session's window, once one exists. */
   readonly windowAgentOf: Agent | undefined
+}
+
+/**
+ * One session the embedded AgentLoop is running, as far as this driver needs it:
+ * the handle that can end it, and the create options a re-route replays.
+ */
+interface EmbeddedHold {
+  readonly handle: AgentHandle
+  readonly agentOptions: AgentOptions | undefined
+  readonly setup: AgentSetup | undefined
 }
 
 /** One session's arbor world: its window, its bridge, its window agent. */
@@ -242,6 +252,14 @@ export class ArborDriver extends Service implements AgentFactory {
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
   private readonly sessions = new Map<SessionId, SessionArbor>()
+  /**
+   * Sessions the embedded AgentLoop is running, with the handle its creation
+   * returned. The driver created every one of them — the registry routes every
+   * session through this factory — so it holds the only thing that can end one:
+   * that is what lets a preset selection re-route a session that has not started
+   * a turn. An ordinary session is never touched unless its user picks arbor.
+   */
+  private readonly embedded = new Map<SessionId, EmbeddedHold>()
   private modelProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
   private inboxProjectionHandle!: ProjectionHandle<InboxState>
 
@@ -260,6 +278,59 @@ export class ArborDriver extends Service implements AgentFactory {
     this.modelProjectionHandle = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
     this.inboxProjectionHandle = await ctx.sessionProjections.register(inboxProjectionDefinition)
     ctx.effect(() => (ctx.agents as ArborAgentRegistry).useArborFactory(this), 'arborDriver.useArborFactory()')
+    // The seam that makes picking Arbor in a composer actually run arbor. DSH's
+    // own preset registry commits a blank session's pick by appending
+    // `agent-preset/selected` and re-mounting the session's composition, which is
+    // all a preset whose presets share one driver needs; a preset that changes the
+    // driver has to act on the same event. The log event is observed rather than
+    // the registry's own `agent-preset/selected` emit, because that one is
+    // dispatched on the registry's context and reaches nobody outside it, while
+    // `session/event` is the session-scoped observer channel every host row can
+    // listen on. A session that has started a turn never gets here — the registry
+    // refuses that selection before it is committed — so the only case is a
+    // session still waiting for its first turn, which is exactly the hero.
+    ctx.on('session/event', (session: Session, event: { type: string; data?: unknown }) => {
+      if (event.type !== 'agent-preset/selected') return
+      if ((event.data as { agentPreset?: unknown }).agentPreset !== ARBOR_PRESET) return
+      void this.rerouteToArbor(session.id).catch((error: unknown) => {
+        this.runtime.ctx.logger.warn(
+          `arbor driver: re-routing session ${session.id} to arbor failed: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      })
+    })
+  }
+
+  /**
+   * Re-route one session from the embedded AgentLoop to arbor.
+   *
+   * The loop's agent is ended with the handle its creation returned — which
+   * unregisters the agent and detaches the session from the store, leaving the
+   * durable log exactly as it stands — and the session is then opened again
+   * under arbor, the way a restart opens it. The session keeps its identity, its
+   * log and every event it already committed, so the composer that is bound to
+   * it keeps working; what changes is which driver its next turn runs.
+   */
+  private async rerouteToArbor(sessionId: SessionId): Promise<void> {
+    const hold = this.embedded.get(sessionId)
+    if (hold === undefined) return
+    this.embedded.delete(sessionId)
+    // A session that has started a turn keeps the driver it began with. DSH's
+    // preset registry refuses such a selection before it is committed, so this
+    // is a guard rather than a path; it is here because the alternative —
+    // silently keeping the old driver — is the one thing the owner ruled out.
+    const boundary = this.runtime.ctx.agents.turnBoundaryOf(hold.handle.agent.session)
+    if (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0) {
+      this.runtime.ctx.logger.warn(
+        `arbor driver: session ${sessionId} selected arbor after its first turn and keeps the embedded loop`,
+      )
+      return
+    }
+    await hold.handle.dispose()
+    await this.resumeArbor(this.runtime.ctx, {
+      resumeSessionId: sessionId,
+      agentOptions: hold.agentOptions,
+      setup: hold.setup,
+    })
   }
 
   /** The driver's own DSH context, for the per-session arbor worlds. */
@@ -292,14 +363,32 @@ export class ArborDriver extends Service implements AgentFactory {
     return window === undefined ? undefined : this.hostService.backend.systemPrompt(window)
   }
 
-  /** Whether a persisted session runs under arbor. */
+  /**
+   * Whether a persisted session runs under arbor.
+   *
+   * The creation header names the preset a session STARTED with and is frozen
+   * because it is a creation fact; a session may still select another while it
+   * is blank, and DSH's own reconstruction rule for exactly this reason reads
+   * the `agentPreset` projection, "never the header alone"
+   * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/types/session.js`). So the
+   * log's `agent-preset/selected` events are folded over the header's value:
+   * that is what makes a re-routed session come back as arbor after a restart
+   * instead of silently resuming on the embedded loop.
+   */
   async ownsSession(sessionId: SessionId): Promise<boolean> {
     const persistence = this.runtime.ctx.get('sessionPersistence')
     if (persistence === undefined) return false
     try {
       const handle = await persistence.open(sessionId, 'read')
       try {
-        return handle.header.agentPreset === 'arbor'
+        let preset: string | undefined = handle.header.agentPreset
+        const page = await handle.read(0)
+        for (const event of page.events) {
+          if (event.type !== 'agent-preset/selected') continue
+          const selected = (event.data as { agentPreset?: unknown }).agentPreset
+          if (typeof selected === 'string') preset = selected
+        }
+        return preset === ARBOR_PRESET
       } finally {
         await handle.close()
       }
@@ -309,6 +398,23 @@ export class ArborDriver extends Service implements AgentFactory {
   }
 
   async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
+    // A session created under the arbor preset runs arbor; every other session
+    // runs the embedded AgentLoop. The registry routes both here, because the
+    // driver has to hold the embedded handle to be able to re-route a session
+    // whose user picks arbor before its first turn.
+    if (options.meta?.agentPreset === ARBOR_PRESET) return this.createArborAgent(ownerCtx, options)
+    const hold = await this.createEmbedded(ownerCtx, options)
+    return {
+      agent: hold.handle.agent,
+      dispose: async () => {
+        this.embedded.delete(hold.handle.agent.id)
+        await hold.handle.dispose()
+      },
+    }
+  }
+
+  /** Create the agent of a session that runs arbor. */
+  private async createArborAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
     // An arbor session is not bound to the caller's directory: it works in the
     // arbor shared folder, and a requested directory outside it joins the shared
     // folder only through explicit adoption (see @4fu/dsh-arbor-workspace). The
@@ -352,6 +458,45 @@ export class ArborDriver extends Service implements AgentFactory {
   }
 
   /**
+   * Create an agent for a session the embedded AgentLoop will run.
+   *
+   * The embedded factory is delegated to exactly the way the base
+   * `AgentRegistry` delegates, so an ordinary session's agent, its ownership and
+   * its teardown are the official loop's own. The one difference is that this
+   * driver keeps the handle: a session whose user later picks arbor is re-routed
+   * by ending the loop's agent and opening the session's arbor window, and
+   * ending an agent needs the handle its creation returned.
+   */
+  private async createEmbedded(ownerCtx: Context, options: CreateAgentOptions): Promise<EmbeddedHold> {
+    const registry = this.runtime.ctx.agents as ArborAgentRegistry
+    const factory = registry.embedded
+    if (factory === undefined) {
+      throw new Error('no agent factory registered (load an agent-loop plugin)')
+    }
+    const handle = await delegateFactory(ownerCtx, factory, 'createAgent', options)
+    const hold: EmbeddedHold = {
+      handle,
+      agentOptions: options.agentOptions,
+      setup: options.setup,
+    }
+    this.embedded.set(handle.agent.id, hold)
+    return hold
+  }
+
+  /** Resume an agent for a session the embedded AgentLoop will run. */
+  private async resumeEmbedded(ownerCtx: Context, options: ResumeAgentOptions): Promise<EmbeddedHold> {
+    const registry = this.runtime.ctx.agents as ArborAgentRegistry
+    const factory = registry.embedded
+    if (factory === undefined) {
+      throw new Error('no agent factory registered (load an agent-loop plugin)')
+    }
+    const handle = await delegateFactory(ownerCtx, factory, 'resume', options)
+    const hold: EmbeddedHold = { handle, agentOptions: options.agentOptions, setup: options.setup }
+    this.embedded.set(handle.agent.id, hold)
+    return hold
+  }
+
+  /**
    * Resume a persisted arbor session.
    *
    * The session's log is loaded the way the official loop loads it, with two
@@ -362,6 +507,24 @@ export class ArborDriver extends Service implements AgentFactory {
    * boot, so its next turn drives that window instead of opening a new chain.
    */
   async resume(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle> {
+    // A persisted session runs arbor when its log says so — the creation header
+    // names the preset it started with and a blank session may still have
+    // selected another, which is why the log is folded rather than the header
+    // read. Everything else runs the embedded AgentLoop, with its handle kept
+    // for the same reason `createAgent` keeps one.
+    if (await this.ownsSession(options.resumeSessionId)) return this.resumeArbor(ownerCtx, options)
+    const hold = await this.resumeEmbedded(ownerCtx, options)
+    return {
+      agent: hold.handle.agent,
+      dispose: async () => {
+        this.embedded.delete(hold.handle.agent.id)
+        await hold.handle.dispose()
+      },
+    }
+  }
+
+  /** Resume a persisted session that runs arbor. */
+  private async resumeArbor(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle> {
     const ctx = this.runtime.ctx
     const persistence = ctx.get('sessionPersistence')
     if (persistence === undefined) {
@@ -508,6 +671,22 @@ export class ArborDriver extends Service implements AgentFactory {
       agent.ctx.effect(() => liftRestriction, 'arborDriver.restrictTools()')
     })
   }
+}
+
+/**
+ * Delegate to one factory exactly the way the base `AgentRegistry` does, so an
+ * embedded-loop session's agent, ownership and teardown stay the official loop's
+ * own even though this driver is the one calling it.
+ */
+function delegateFactory(
+  ownerCtx: Context,
+  factory: AgentFactory,
+  method: 'createAgent' | 'resume',
+  options: CreateAgentOptions | ResumeAgentOptions,
+): Promise<AgentHandle> {
+  const target = (factory as AgentFactory & { [symbols.original]?: AgentFactory })[symbols.original] ?? factory
+  const receiver = getTraceable(ownerCtx, target)
+  return Reflect.apply(target[method], receiver, [ownerCtx, options]) as Promise<AgentHandle>
 }
 
 /** Parse a model-produced arguments string; invalid JSON becomes an empty object. */

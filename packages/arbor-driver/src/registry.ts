@@ -90,27 +90,24 @@ export class ArborAgentRegistry extends AgentRegistry {
   }
 
   async create(options: CreateAgentOptions): Promise<AgentHandle> {
-    if (options.meta?.agentPreset === ARBOR_PRESET) {
-      const arbor = this.requireArbor()
-      return delegate(this.ctx, arbor, 'createAgent', options)
-    }
+    // Every session is created through the arbor driver while it is mounted: the
+    // driver runs arbor sessions itself and keeps the embedded loop's handle for
+    // the others, which is what lets a preset selection re-route a session that
+    // has not started a turn (see ArborDriver's `agent-preset/selected` seam).
+    // Without the driver every session keeps running on the embedded loop, which
+    // is what a deployment that loads neither row gets.
+    const arbor = this.arborFactory
+    if (arbor !== undefined) return delegate(this.ctx, arbor, 'createAgent', options)
     return delegate(this.ctx, this.requireEmbedded(), 'createAgent', options)
   }
 
   async resume(options: ResumeAgentOptions): Promise<AgentHandle> {
+    // The driver decides per session: it owns the persisted session when the log
+    // records arbor, and hands everything else to the embedded loop. Both paths
+    // keep their handle, for the same reason `create` does.
     const arbor = this.arborFactory
-    if (arbor !== undefined && arbor.ownsSession !== undefined
-      && await arbor.ownsSession(options.resumeSessionId)) {
-      return delegate(this.ctx, arbor, 'resume', options)
-    }
+    if (arbor !== undefined) return delegate(this.ctx, arbor, 'resume', options)
     return delegate(this.ctx, this.requireEmbedded(), 'resume', options)
-  }
-
-  private requireArbor(): ArborRoutingFactory {
-    if (this.arborFactory === undefined) {
-      throw new Error(`agent preset "${ARBOR_PRESET}" needs the arbor driver (load @4fu/dsh-arbor-agent/driver)`)
-    }
-    return this.arborFactory
   }
 
   private requireEmbedded(): AgentFactory {
