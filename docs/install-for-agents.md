@@ -439,7 +439,9 @@ Not finished, and not to be worked around here:
   `uiWorkspace.openSession`, which changes the hero's session id and so
   re-resolves its session scope; the composer's draft is carried across with
   DSH's own `conversation.input` shell API, and the blank it replaces is
-  archived. Both directions are minted. The driver's re-route stays as the
+  archived. Both directions are minted, and the mint happens only where DSH's
+  create can hold it — a project of the shared folder — so an ordinary composer's
+  switch is byte-for-byte the shipped call. The driver's re-route stays as the
   fallback for a path that is not the hero (an SDK or remote
   `agent-preset/select` on a blank) and never fires on the hero path. Why the
   owner's option (a) — one stable routing handle — cannot be built on
@@ -457,6 +459,18 @@ Not finished, and not to be worked around here:
   Arbor. The shipped path is otherwise untouched, and the host records no second
   `agent-preset/selected`. This replaces the `b3e` re-commit, which is what made
   DSH's `reuseLive` follow the pick back off arbor.
+- **A directory outside the shared folder is the one place the create cannot take
+  the pick** (`b3f`, a known limitation with the reason). An arbor session always
+  works in arbor's own directory, so a session created under arbor for such a
+  directory has its cwd resolved into the shared folder
+  (`DshProjectBridge.resolveProject`), which the workspace attach refuses
+  (`session/workspace-attach-failed`); a session created *without* the workspace
+  is not a member of it and its composer has no workspace to name. So for those
+  the shipped adopt runs and the pick is committed on the session it opened — the
+  `b3e` path, which is also what records the external pointer. The pick survives
+  and the pointer is recorded, but the re-route replaces the session binding, so
+  that session's composer stays disabled until its id changes (a workspace switch
+  or a reload). The hero path — pick Arbor, type, send — never goes through it.
 - **Two gate corrections in the same step**, both so that nothing untrue is left
   showing: the staged pick decides only while the session has not started a turn
   (a started session keeps the driver it began with, so only its committed

@@ -553,7 +553,9 @@ same `conversation.input` shell API DSH's own workspace-switch carry uses
 replaces with the same call the session row's own archive action makes.
 
 Both directions are minted, so Arbor back to Standard is a fresh embedded session
-too. The pick that does not cross the boundary, and a pick on a session that has
+too — and the mint happens only where DSH's own create can hold it, a project of
+the shared folder, so an ordinary composer's switch is byte-for-byte the shipped
+call. The pick that does not cross the boundary, and a pick on a session that has
 already started a turn, are handed straight to the shipped `select`: DSH's own
 registry refuses a selection on a started session with `agent-preset/locked`
 ("This session has already started", `@deepseek-ai/dsh-agent-preset-registry`,
@@ -593,11 +595,29 @@ else about the shipped path is untouched — the same blank-reuse rules, the sam
 draft carry in `beforeOpen`, the same `startSession` calls that already name a
 preset — and an ordinary composer's switch is byte-for-byte the shipped call.
 
-That replaces the `b3e` fix, which re-committed the pick through the hero seat
-after the switch: the re-commit is what made DSH's own `reuseLive`
-(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) follow it back off
-arbor and the driver re-route the session under a live binding. With the pick in
-the create there is nothing to follow back, and the host records no second
+**Where the create cannot take it: a directory outside the shared folder.** An
+arbor session always works in arbor's own directory, so
+`DshProjectBridge.resolveProject` answers a directory outside the shared folder
+with the shared folder itself (`packages/arbor-workspace/src/projects.ts`). A
+session created under arbor for such a directory therefore has a cwd the
+workspace attach refuses — `session/workspace-attach-failed`, "its cwd resolves
+to …" — and a session created *without* the workspace is not a member of it,
+which leaves the composer with no workspace to name (verified live: the hero
+composer stays disabled). So the wrap fills the option only for a workspace an
+arbor session may work in — a project of the shared folder, or the shared folder
+itself — and for anything else runs the shipped adopt and then asks the hero seat
+for the pick again, which commits it on the session the adopt opened. That is the
+`b3e` path, and it is the one that records the external pointer, because the
+driver's re-route asks the host whether the directory was added. Its known cost
+is the one `b3e` left open: the re-route replaces the session binding, so the
+hero's composer stays disabled until the session id changes (a workspace switch
+or a reload).
+
+That replaces the `b3e` fix for the shared folder's projects, where the re-commit
+is what made DSH's own `reuseLive`
+(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) follow the pick back
+off arbor and the driver re-route the session under a live binding. With the pick
+in the create there is nothing to follow back, and the host records no second
 `agent-preset/selected` at all.
 
 ## What arbor's core still lacks (back to the arbor repo)

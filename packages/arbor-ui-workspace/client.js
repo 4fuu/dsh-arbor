@@ -39,6 +39,7 @@ var PRESET_PROJECTION = "agentPreset";
 var POLL_MS = 40;
 var MAX_POLLS = 500;
 var NAVIGATION_SERVICE = "uiWorkspace";
+var CARRY_MS = 2e3;
 function useMainSessionId(props) {
   const useSessions = props["useSessions"];
   return useSessions?.((state) => {
@@ -159,6 +160,29 @@ function apply(ctx) {
     const picks = [bound, unbound].map((store) => store?.getSnapshot().current);
     return picks[0] !== void 0 && picks[0] !== "" ? picks[0] : picks.find((pick) => pick !== void 0 && pick !== "");
   };
+  const heroFaceNow = (sessionId) => {
+    const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject;
+    return typeof face === "function" ? face(sessionId) : void 0;
+  };
+  const workspaceRow = (workspaceId) => {
+    const items = ctx.get("workspaces");
+    return items?.list.getSnapshot().items.find((item) => item.workspaceId === workspaceId);
+  };
+  const reaskPick = (before) => {
+    const deadline = Date.now() + CARRY_MS;
+    const settle = () => {
+      const main = mainSession();
+      if (main === void 0 || main.blank !== true) return;
+      if (main.id === before && Date.now() < deadline) {
+        setTimeout(settle, POLL_MS);
+        return;
+      }
+      if (main.projectionValues?.agentPreset !== ARBOR_PRESET) {
+        heroFaceNow(main.id)?.select?.(ARBOR_PRESET);
+      }
+    };
+    setTimeout(settle, POLL_MS);
+  };
   const wrapAdopt = () => {
     const navigation = ctx.get(NAVIGATION_SERVICE);
     if (navigation === void 0 || typeof navigation.openWorkspace !== "function") return;
@@ -166,7 +190,12 @@ function apply(ctx) {
     const original2 = navigation.openWorkspace.bind(navigation);
     navigation.openWorkspace = (workspaceId, beforeOpen, options) => {
       const pick = currentPick();
-      original2(workspaceId, beforeOpen, pick === ARBOR_PRESET ? { agentPreset: pick } : options);
+      const row = workspaceRow(workspaceId);
+      const createTakesIt = pick === ARBOR_PRESET && row !== void 0 && isArborProject(row.path);
+      const before = mainSession()?.id;
+      const outcome = original2(workspaceId, beforeOpen, createTakesIt ? { agentPreset: pick } : options);
+      if (pick === ARBOR_PRESET && !createTakesIt) reaskPick(before);
+      return outcome;
     };
     Object.defineProperty(navigation, "__arborAdopt", { value: true, configurable: true });
     ctx.effect(() => () => {

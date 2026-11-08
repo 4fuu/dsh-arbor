@@ -78,15 +78,32 @@
  * creation-time routing, not a re-select, and no `agent-preset/selected` event
  * is written for it.
  *
+ * **Where the create cannot take it.** An arbor session always works in arbor's
+ * own directory: `DshProjectBridge.resolveProject` answers a directory outside
+ * the shared folder with the shared folder itself
+ * (`packages/arbor-workspace/src/projects.ts`), so a session created under arbor
+ * for such a directory has a cwd the workspace attach refuses
+ * (`session/workspace-attach-failed`, "its cwd resolves to …"), and a session
+ * created without the workspace is not a member of it, which leaves the composer
+ * with no workspace to name. So the wrap fills the option only for a workspace an
+ * arbor session may work in — a project of the shared folder, or the shared
+ * folder itself — and for anything else runs the shipped adopt and then asks the
+ * hero seat for the pick again, which commits it on the session the adopt opened.
+ * That is the sequence that records the external pointer, because the driver's
+ * re-route asks the host whether the directory was added; its cost is the one
+ * `b3e` left open, a re-routed session whose hero composer stays disabled until
+ * its id changes.
+ *
  * The earlier fix re-committed the pick through the hero seat after the switch,
  * which is what made DSH's own `reuseLive`
  * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) follow it back off
  * arbor and the driver re-route the session under a live binding. That path is
- * gone: create carries the pick, so there is nothing to follow back. The log
- * cannot tell a controller-issued selection from a user's pick anyway
- * (`presets.select` is the single writer of `agent-preset/selected`,
- * `@deepseek-ai/dsh-agent-preset-registry`, `lib/index.js`), which is why the
- * fix belongs here, in the surface that knows what the user clicked.
+ * gone for the shared folder's projects: create carries the pick, so there is
+ * nothing to follow back. The log cannot tell a controller-issued selection
+ * from a user's pick anyway (`presets.select` is the single writer of
+ * `agent-preset/selected`, `@deepseek-ai/dsh-agent-preset-registry`,
+ * `lib/index.js`), which is why the fix belongs here, in the surface that knows
+ * what the user clicked.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -112,6 +129,9 @@ const MAX_POLLS = 500
 
 /** The workspace service's own adopt call, the one the hero picker reaches. */
 const NAVIGATION_SERVICE = 'uiWorkspace'
+
+/** How long an adopt is given to open the session the pick is re-committed on. */
+const CARRY_MS = 2_000
 
 /**
  * The session the main view is showing, which is the session a composer belongs
@@ -260,6 +280,15 @@ interface AgentPresetSeatInjected {
   readonly hooks: {
     readonly agentPresetSeat: AgentPresetSeatStore
   }
+  /**
+   * The seat's own commit, which is the hero chip's: stage the pick and hand it
+   * to the session the main view shows
+   * (`@deepseek-ai/dsh-client-ui-agent-preset`, `lib/client.js`: the face's
+   * `select` → `AgentPresetSeatController.select` → `apply` →
+   * `ctx.remote.agentPresets.select`). It is how this package re-commits a pick
+   * the adopt path could not carry, with no verb of its own.
+   */
+  readonly select?: (id: string) => unknown
 }
 
 /** The hero seat's `inject`, called the way the slot runtime calls it. */
@@ -276,6 +305,13 @@ interface WorkspaceAdopt {
     beforeOpen?: (sessionId: string) => void,
     options?: { agentPreset?: string },
   ): void
+}
+
+/** The slice of the client workspaces service this package reads a row from. */
+interface WorkspacesService {
+  list: {
+    getSnapshot(): { items: readonly WorkspaceRow[] }
+  }
 }
 
 /**
@@ -439,13 +475,84 @@ export function apply(ctx: Context): void {
   }
 
   /**
+   * The hero seat's face as it stands now, which is the one to ask for a pick.
+   *
+   * It is read fresh rather than taken from the cached `heroInject`, because the
+   * occupant of that seat changes after boot: `@4fu/dsh-arbor-ui` shadows it one
+   * priority below the shipped occupant, and `entriesOfSlot` reports the
+   * lowest-priority one — the shadow, once it is registered. Asking the shadow
+   * for the pick is what makes the pick a *create* (it mints a session under the
+   * preset); asking the shipped face would commit it on the live session, which
+   * is the re-route this package exists to avoid. Where arbor-ui is not loaded
+   * the shipped face answers, and the pick is committed the way it always was.
+   */
+  const heroFaceNow = (sessionId: string | undefined): AgentPresetSeatInjected | undefined => {
+    const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject
+    return typeof face === 'function' ? (face as AgentPresetSeatInject)(sessionId) : undefined
+  }
+
+  /** The workspace row one id names, when the registry lists it. */
+  const workspaceRow = (workspaceId: string): WorkspaceRow | undefined => {
+    const items = (ctx as unknown as { get(name: string): unknown })
+      .get('workspaces') as WorkspacesService | undefined
+    return items?.list.getSnapshot().items.find(item => item.workspaceId === workspaceId)
+  }
+
+  /**
+   * Ask the hero seat for the composer's Arbor pick again, once the session an
+   * adopt opened is there to take it.
+   *
+   * This is the path for a workspace the create cannot carry the pick into. An
+   * arbor session always works in arbor's own directory, so a session created
+   * under arbor for a directory outside the shared folder has its cwd resolved
+   * into the shared folder (`DshProjectBridge.resolveProject`,
+   * `packages/arbor-workspace/src/projects.ts`) before the workspace attach
+   * reads it, and the attach then refuses it
+   * (`session/workspace-attach-failed`); a session created without the workspace
+   * is not a member of it and its composer has no workspace to name. The shipped
+   * adopt is therefore run as it stands — the directory is registered, the blank
+   * is created in it and the draft is carried — and the pick is then asked for
+   * again through the hero seat. Where `@4fu/dsh-arbor-ui` shadows that seat the
+   * ask is a create for a workspace the create can hold, and a commit on the
+   * adopted session for this one; either way the pick survives, and the commit is
+   * what records the external pointer, because the driver's re-route asks the
+   * host whether the directory was added.
+   *
+   * The log cannot tell the two selections apart — `presets.select` is the single
+   * writer of `agent-preset/selected` — which is why the ask lives here, in the
+   * surface that knows what the user clicked.
+   */
+  const reaskPick = (before: string | undefined): void => {
+    const deadline = Date.now() + CARRY_MS
+    const settle = (): void => {
+      const main = mainSession()
+      if (main === undefined || main.blank !== true) return
+      if (main.id === before && Date.now() < deadline) {
+        setTimeout(settle, POLL_MS)
+        return
+      }
+      if (main.projectionValues?.agentPreset !== ARBOR_PRESET) {
+        heroFaceNow(main.id)?.select?.(ARBOR_PRESET)
+      }
+    }
+    setTimeout(settle, POLL_MS)
+  }
+
+  /**
    * Supply the composer's Arbor pick to the adopt call that has none.
    *
    * The hero picker reaches `uiWorkspace.openWorkspace(workspaceId, beforeOpen)`
-   * with no options bag, and every other caller of that method names its own
-   * options — `startSession` always passes an object, preset or empty. So the
+   * with no options bag, while every other caller of that method names its own
+   * options — `startSession` always passes an object, preset or empty — so the
    * wrap fills the option only where it is missing, and only when the pick is
    * Arbor: an ordinary composer's switch is byte-for-byte the shipped call.
+   *
+   * It fills it only for a workspace an arbor session may work in — a project of
+   * the shared folder, or the shared folder itself, the two cases
+   * `DshProjectBridge.resolveProject` answers with the requested directory. A
+   * directory outside the shared folder keeps the shipped call and the pick is
+   * re-committed afterwards, because the create cannot hold it there.
+   *
    * The method is wrapped on the service instance rather than replaced, and the
    * original is restored with this plugin.
    */
@@ -461,7 +568,12 @@ export function apply(ctx: Context): void {
       options?: { agentPreset?: string },
     ): void => {
       const pick = currentPick()
-      original(workspaceId, beforeOpen, pick === ARBOR_PRESET ? { agentPreset: pick } : options)
+      const row = workspaceRow(workspaceId)
+      const createTakesIt = pick === ARBOR_PRESET && row !== undefined && isArborProject(row.path)
+      const before = mainSession()?.id
+      const outcome = original(workspaceId, beforeOpen, createTakesIt ? { agentPreset: pick } : options)
+      if (pick === ARBOR_PRESET && !createTakesIt) reaskPick(before)
+      return outcome
     }
     Object.defineProperty(navigation, '__arborAdopt', { value: true, configurable: true })
     ctx.effect(() => () => {

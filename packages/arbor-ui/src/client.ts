@@ -189,18 +189,18 @@ interface AgentPresetSeatInjected {
 /** The hero seat's `inject`, called the way the slot runtime calls it. */
 type AgentPresetSeatInject = (sessionId?: string) => AgentPresetSeatInjected
 
-/**
- * The slice of DSH's own sessions service this package uses. `create` is the
- * client half of the `session/create` remote verb
- * (`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`, the `ISessions`
- * declaration), and it reaches
- * `ApiSessionController.createSession(request)` with no `sessionId`, which is
- * `createMinted(request.cwd, await this.composeAgent(request.agentPreset))`
- * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) — so the
- * composition's `agentPreset` lands in the session's creation `meta`, which is
- * exactly what `ArborAgentRegistry.create` routes on. That is the whole point:
- * a session created under arbor needs no re-route at all.
- */
+  /**
+   * The slice of DSH's own sessions service this package uses. `create` is the
+   * client half of the `session/create` remote verb
+   * (`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`, the `ISessions`
+   * declaration), and it reaches
+   * `ApiSessionController.createSession(request)` with no `sessionId`, which is
+   * `createMinted(request.cwd, await this.composeAgent(request.agentPreset))`
+   * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) — so the
+   * composition's `agentPreset` lands in the session's creation `meta`, which is
+   * exactly what `ArborAgentRegistry.create` routes on. That is the whole point:
+   * a session created under arbor needs no re-route at all.
+   */
 interface SessionsService {
   create(options: {
     workspaceId?: string
@@ -227,6 +227,7 @@ interface SessionSummary {
 /** One workspace row, as far as this package reads it. */
 interface WorkspaceSummary {
   readonly workspaceId: string
+  readonly path: string
   readonly sessionIds: readonly string[]
 }
 
@@ -421,9 +422,29 @@ export function apply(ctx: Context): void {
   )
 
   /** The workspace a session belongs to, when it belongs to one. */
-  const workspaceOf = (sessionId: string): string | undefined => {
+  const workspaceOf = (sessionId: string): WorkspaceSummary | undefined => {
     const items = service<WorkspacesService>('workspaces')?.list.getSnapshot().items ?? []
-    return items.find(item => item.sessionIds.includes(sessionId))?.workspaceId
+    return items.find(item => item.sessionIds.includes(sessionId))
+  }
+
+  /**
+   * Whether a workspace path is one an arbor session may work in.
+   *
+   * An arbor project is a subfolder of the shared folder, `DSH_HOME/arbor/shared`,
+   * so its path carries those two segments in a row. The rule is the same path
+   * convention `@4fu/dsh-arbor-ui-workspace`'s picker filter uses, and it is what
+   * decides whether DSH's create can hold the picked preset: a session created
+   * under arbor for a directory outside the shared folder has its cwd resolved
+   * into the shared folder (`DshProjectBridge.resolveProject`,
+   * `packages/arbor-workspace/src/projects.ts`), which the workspace attach then
+   * refuses.
+   */
+  const isArborProject = (path: string): boolean => {
+    const segments = path.split(/[\\/]/).filter(segment => segment !== '')
+    for (let index = 0; index + 1 < segments.length; index++) {
+      if (segments[index] === 'arbor' && segments[index + 1] === 'shared') return true
+    }
+    return false
   }
 
   /**
@@ -504,6 +525,19 @@ export function apply(ctx: Context): void {
    * `ArborAgentRegistry.create` routes on — so the session runs the driver it
    * was created under and there is nothing to re-route.
    *
+   * The mint is placed in the workspace the composer already belongs to, and only
+   * where DSH's create can hold it: a project of the shared folder, whose path an
+   * arbor session's resolved cwd still matches, so the workspace attach succeeds.
+   * A session the composer belongs to that is *not* such a workspace is not minted
+   * at all — the caller runs DSH's own select instead — because a session created
+   * under arbor for a directory outside the shared folder has its cwd resolved
+   * into the shared folder (`DshProjectBridge.resolveProject`,
+   * `packages/arbor-workspace/src/projects.ts`), which the workspace attach then
+   * refuses (`session/workspace-attach-failed`), and a session created without the
+   * workspace is not a member of it, which leaves the composer without a workspace
+   * to name. The pick is committed on the session instead, and the driver re-routes
+   * it — the path that also records the external pointer.
+   *
    * Opening the minted session changes the hero's session id, which is what
    * re-resolves its session scope: the composer's props are materialized per
    * session binding, and a new id means a new binding. The blank it replaces is
@@ -517,11 +551,10 @@ export function apply(ctx: Context): void {
     const sessions = service<SessionsService>('sessions')
     const navigation = service<WorkspaceNavigation>('uiWorkspace')
     if (main === undefined || sessions === undefined || navigation === undefined) return false
-    const workspaceId = workspaceOf(main.id)
+    const workspace = workspaceOf(main.id)
+    if (workspace === undefined || !isArborProject(workspace.path)) return false
     try {
-      const minted = await sessions.create(workspaceId === undefined
-        ? { cwd: main.cwd, agentPreset: id }
-        : { workspaceId, agentPreset: id })
+      const minted = await sessions.create({ workspaceId: workspace.workspaceId, agentPreset: id })
       navigation.openSession(minted)
       await carryDraft(main.id, minted)
       // The same call the session row's own archive action makes. The replaced

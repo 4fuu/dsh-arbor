@@ -107,7 +107,14 @@ function apply(ctx) {
   const presetOf = (session) => typeof session?.projectionValues?.agentPreset === "string" ? session.projectionValues.agentPreset : void 0;
   const workspaceOf = (sessionId) => {
     const items = service("workspaces")?.list.getSnapshot().items ?? [];
-    return items.find((item) => item.sessionIds.includes(sessionId))?.workspaceId;
+    return items.find((item) => item.sessionIds.includes(sessionId));
+  };
+  const isArborProject = (path) => {
+    const segments = path.split(/[\\/]/).filter((segment) => segment !== "");
+    for (let index = 0; index + 1 < segments.length; index++) {
+      if (segments[index] === "arbor" && segments[index + 1] === "shared") return true;
+    }
+    return false;
   };
   const crossesArbor = (id) => {
     const main = mainSession();
@@ -149,9 +156,10 @@ function apply(ctx) {
     const sessions = service("sessions");
     const navigation = service("uiWorkspace");
     if (main === void 0 || sessions === void 0 || navigation === void 0) return false;
-    const workspaceId = workspaceOf(main.id);
+    const workspace = workspaceOf(main.id);
+    if (workspace === void 0 || !isArborProject(workspace.path)) return false;
     try {
-      const minted = await sessions.create(workspaceId === void 0 ? { cwd: main.cwd, agentPreset: id } : { workspaceId, agentPreset: id });
+      const minted = await sessions.create({ workspaceId: workspace.workspaceId, agentPreset: id });
       navigation.openSession(minted);
       await carryDraft(main.id, minted);
       await navigation.archiveSession(main.id).catch(() => void 0);
