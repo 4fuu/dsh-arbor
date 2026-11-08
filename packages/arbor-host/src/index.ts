@@ -264,11 +264,22 @@ export class ArborHostService extends Service {
     // `sandbox_escalate`; the external-project pointers are rendered inside that
     // same section, so "where you work" and "where the user's own directories
     // are" are answered in one place.
-    const registry = ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
+    // The DSH project bridge: the shared folder's project subfolders become the
+    // DSH project list. `workspaceRegistry` is a web-profile service, and it
+    // activates AFTER this host does — DSH's own activation order is
+    // service-availability driven and this host declares no dependency on it —
+    // so it is injected rather than read: on a deployment with no registry
+    // (headless, acp, sdk) the child never activates and the bridge stays inert,
+    // and on the web profile it attaches the registry and keeps the list live.
+    // Reading it once here instead left the bridge permanently inert on the web
+    // profile, which is why arbor's projects never reached the picker.
     const projects = new DshProjectBridge({
-      registry,
       sharedFolder: arborSharedFolder(root),
       warn: message => ctx.logger.warn(message),
+    })
+    this.ctx.inject(['workspaceRegistry'], (child) => {
+      child.effect(() => projects.attach(child.get('workspaceRegistry') as WorkspaceRegistry),
+        'arborHost.projects()')
     })
     const arborWorkspace = await openArborWorkspace({
       root,
@@ -333,10 +344,11 @@ export class ArborHostService extends Service {
     // is refcounted per key, so both see one fold of the same session log.
     this.planProjection = await ctx.sessionProjections.register(planProjectionDefinition)
     // Register the shared folder's projects in DSH's registry and keep the list
-    // live, so a project a window creates reaches the UI without a restart. The
-    // disposer runs on unload.
+    // live, so a project a window creates reaches the UI without a restart. With
+    // no registry attached yet — the web profile's activates after this host —
+    // both are no-ops here and the injected child above does them instead.
     await projects.sync()
-    const stopProjects = projects.start()
+    projects.start()
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
     await host.start()
@@ -344,7 +356,7 @@ export class ArborHostService extends Service {
     // arbor re-renders it and hands the changed lines to live windows.
     ctx.on('system-prompt/change', () => { this.promptChanges += 1 })
     ctx.effect(() => async () => {
-      stopProjects()
+      projects.stop()
       // Stopping the host records `host_restart` for every live window, so the
       // next start continues each of them; the stores close after it.
       await host.close().catch(() => {})

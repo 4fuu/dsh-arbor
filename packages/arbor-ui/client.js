@@ -50,6 +50,7 @@ function apply(ctx) {
   };
   const gate = (seat) => (props) => {
     const preset = props.useProjection?.("agentPreset");
+    globalThis.__arborGate = { preset, hasHook: typeof props.useProjection };
     if (preset === ARBOR_PRESET) return null;
     return (0, import_react.createElement)(seat.component, props);
   };

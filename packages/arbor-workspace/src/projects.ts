@@ -66,8 +66,14 @@ export interface ExternalPointer {
 
 /** What this bridge needs. */
 export interface DshProjectBridgeOptions {
-  /** DSH's durable workspace registry. Absent leaves the bridge inert. */
-  readonly registry: WorkspaceRegistry | undefined
+  /**
+   * DSH's durable workspace registry, for a deployment that has one when this
+   * bridge is built. A deployment whose registry activates later — the web
+   * profile's activates after the arbor host — attaches it with
+   * {@link DshProjectBridge.attach} instead; absent throughout leaves the bridge
+   * inert.
+   */
+  readonly registry?: WorkspaceRegistry | undefined
   /** The arbor shared folder: the projects' home and ovnfs's source. */
   readonly sharedFolder: string
   /** Called with a non-fatal note, such as an adopt or sync failure. */
@@ -75,7 +81,7 @@ export interface DshProjectBridgeOptions {
 }
 
 export class DshProjectBridge {
-  private readonly registry: WorkspaceRegistry | undefined
+  private registry: WorkspaceRegistry | undefined
   private readonly sharedFolder: string
   private readonly warn: (message: string) => void
   private watcher: FSWatcher | undefined
@@ -87,6 +93,23 @@ export class DshProjectBridge {
     this.registry = options.registry
     this.sharedFolder = resolve(options.sharedFolder)
     this.warn = options.warn ?? ((message: string) => console.warn(message))
+  }
+
+  /**
+   * Attach DSH's durable workspace registry, register the shared folder's
+   * projects in it, and keep the list live from then on. Returns a disposer.
+   *
+   * The registry is a web-profile service that activates after the arbor host
+   * does, so a deployment cannot read it while the host is being built; this is
+   * the seam that connects the two, the same one `@4fu/dsh-arbor-preset` uses
+   * for the preset roster.
+   */
+  attach(registry: WorkspaceRegistry): () => void {
+    this.registry = registry
+    void this.sync().catch((error: unknown) => {
+      this.warn(`arbor projects: the first sync failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    return this.start()
   }
 
   /** Whether a requested directory already names the shared folder itself. */

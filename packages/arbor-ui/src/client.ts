@@ -98,6 +98,7 @@ export function apply(ctx: Context): void {
     // `useProjection` is the same slot-runtime hook the captured seat uses; the
     // `agentPreset` projection is the id the composer's preset selector shows.
     const preset = (props as { useProjection?: (key: string) => unknown }).useProjection?.('agentPreset')
+    ;(globalThis as { __arborGate?: unknown }).__arborGate = { preset, hasHook: typeof (props as { useProjection?: unknown }).useProjection }
     if (preset === ARBOR_PRESET) return null
     return createElement(seat.component as unknown as ComponentType, props as Record<string, unknown>)
   }
