@@ -1,0 +1,22 @@
+# The hero-path overlay: what proof 19 needs that the web profile does not give
+# it as booted.
+#
+# The proof exercises the host half of the browser client's own
+# `sessions.create` (`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`,
+# `ISessions`), which is the `session/create` remote verb served by the
+# `sessionController` row the web-app bundle already mounts
+# (`@deepseek-ai/dsh-web-app`, `cordis.patch.yml`, `id: session-controller`). So
+# the row is not inserted here; what is missing on a proof boot is a model that
+# answers without the network, and the deployment default is where the
+# controller reads its agent options from (`agentOptions()` →
+# `ctx.agentDefaultModel.currentSelection()`,
+# `@deepseek-ai/dsh-api-session-controller`, `lib/index.js`).
+#
+# The scripted route is registered by the scripted overlay
+# (`@4fu/dsh-arbor-testkit/scripted-llm`); this patch makes it the default, the
+# way a deployment's own configuration would.
+
+- id: agent-default-model
+  config:
+    provider: mock-scripted
+    model: mock-model

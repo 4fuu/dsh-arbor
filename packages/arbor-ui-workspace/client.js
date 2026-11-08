@@ -38,7 +38,7 @@ var ARBOR_PRESET = "arbor";
 var PRESET_PROJECTION = "agentPreset";
 var POLL_MS = 40;
 var MAX_POLLS = 500;
-var CARRY_MS = 2e3;
+var NAVIGATION_SERVICE = "uiWorkspace";
 function useMainSessionId(props) {
   const useSessions = props["useSessions"];
   return useSessions?.((state) => {
@@ -99,6 +99,7 @@ function apply(ctx) {
   };
   let poll;
   let attempts = 0;
+  let adoptWrapped = false;
   const stop = () => {
     if (poll !== void 0) {
       clearInterval(poll);
@@ -106,19 +107,22 @@ function apply(ctx) {
     }
   };
   const look = () => {
-    if (heroInject !== void 0) {
-      stop();
-      return;
-    }
     if (++attempts > MAX_POLLS) {
       stop();
       return;
     }
-    const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject;
-    if (typeof face === "function") {
-      heroInject = face;
-      stop();
+    if (heroInject === void 0) {
+      const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject;
+      if (typeof face === "function") heroInject = face;
     }
+    if (!adoptWrapped) {
+      const navigation = ctx.get(NAVIGATION_SERVICE);
+      if (navigation !== void 0) {
+        wrapAdopt();
+        adoptWrapped = true;
+      }
+    }
+    if (heroInject !== void 0 && adoptWrapped) stop();
   };
   ctx.effect(() => () => {
     stop();
@@ -142,7 +146,6 @@ function apply(ctx) {
     );
   }
   const sessions = ctx.sessions;
-  const heroFace = (sessionId) => heroInject === void 0 ? void 0 : heroInject(sessionId);
   const mainSession = () => {
     const byId = sessions?.list.getSnapshot().byId ?? {};
     for (const id of Object.keys(byId)) {
@@ -150,35 +153,35 @@ function apply(ctx) {
     }
     return void 0;
   };
+  const currentPick = () => {
+    const bound = heroSeatFor(mainSession()?.id);
+    const unbound = heroSeatFor(void 0);
+    const picks = [bound, unbound].map((store) => store?.getSnapshot().current);
+    return picks[0] !== void 0 && picks[0] !== "" ? picks[0] : picks.find((pick) => pick !== void 0 && pick !== "");
+  };
+  const wrapAdopt = () => {
+    const navigation = ctx.get(NAVIGATION_SERVICE);
+    if (navigation === void 0 || typeof navigation.openWorkspace !== "function") return;
+    if (navigation.__arborAdopt === true) return;
+    const original2 = navigation.openWorkspace.bind(navigation);
+    navigation.openWorkspace = (workspaceId, beforeOpen, options) => {
+      const pick = currentPick();
+      original2(workspaceId, beforeOpen, pick === ARBOR_PRESET ? { agentPreset: pick } : options);
+    };
+    Object.defineProperty(navigation, "__arborAdopt", { value: true, configurable: true });
+    ctx.effect(() => () => {
+      navigation.openWorkspace = original2;
+      delete navigation.__arborAdopt;
+    }, "dsh-arbor-ui-workspace: restore uiWorkspace.openWorkspace");
+  };
   const gate = (shipped) => (props) => {
     const sessionId = useMainSessionId(props);
     const preset = usePresetPick(sessionId, useProjectionOf(props));
     const useWorkspaces = props["useWorkspaces"];
     const filtered = (selector) => useWorkspaces === void 0 ? void 0 : selector(filterState(useWorkspaces((state) => state), preset));
-    const onPick = props["onPick"];
-    const carryPick = onPick === void 0 ? void 0 : (workspaceId) => {
-      const outcome = onPick(workspaceId);
-      if (preset === ARBOR_PRESET) {
-        const before = sessionId;
-        const deadline = Date.now() + CARRY_MS;
-        const settle = () => {
-          const main = mainSession();
-          if (main === void 0 || main.blank !== true) return;
-          if (main.id === before && Date.now() < deadline) {
-            setTimeout(settle, POLL_MS);
-            return;
-          }
-          const committed = main.projectionValues?.agentPreset;
-          if (committed !== ARBOR_PRESET) heroFace(main.id)?.select?.(ARBOR_PRESET);
-        };
-        setTimeout(settle, POLL_MS);
-      }
-      return outcome;
-    };
     return (0, import_react.createElement)(shipped, {
       ...props,
-      useWorkspaces: filtered,
-      ...carryPick === void 0 ? {} : { onPick: carryPick }
+      useWorkspaces: filtered
     });
   };
   const original = slots.register.bind(slots);

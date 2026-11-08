@@ -30,7 +30,7 @@ session; "kept" means it still does.
 | **Project list / picker / creation** (client) | Reads arbor's projects because the client reads the registry the bridge fills. **Decision (item 2), landed on `b3d`:** an ordinary session lists nothing from arbor's shared folder, and an arbor session lists those projects plus the directories the user added outside them, marked `（外部）`. The filter is a `dsh.client` package (`@4fu/dsh-arbor-ui-workspace`) that wraps `ctx.slots.register` and replaces only the hero picker's component; the shipped row stays enabled. Neither side offers a per-session view of the workspace list, and the preset the filter keys on exists only in the browser — see "The picker filter, as built" below. | `@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`, `WorkspaceBrowser`, the `conversation.hero.workspace` and `sidebar.workspaces` seats); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`); the registry `ctx.workspaceRegistry` in `@deepseek-ai/dsh-workspace` |
 | **Add workspace…** (client) | Records a pointer for the arbor session that asked, with no new verb and no client change. The action reaches `WorkspaceRegistry.create`, the bridge hooks it, and the driver asks at the two moments a session becomes an arbor session whether the directory it names was added. | `@deepseek-ai/dsh-api-workspace-controller` (`create`, the `workspace/create` verb — the one caller of `WorkspaceRegistry.create` besides this bridge's own sync); `WorkspaceRegistry.initializeDefault` (the first-use default, a different method, so an inherited cwd is never an added directory) |
 | **External-project pointer** (prompt) | An existing directory with its own path is recorded as a pointer (name + absolute path), never copied, linked, adopted or registered as a project. It is named in arbor's prompt so the model reaches it on the host directly. Recorded **per session**, and rendered inside arbor's `<workspace>` through `PromptSection.content(window)` with `perWindow: true`. | `@4fu/dsh-arbor-workspace` (`DshProjectBridge.addPointer`/`listPointers`/`removePointer`/`isAddedDirectory`); arbor's `<workspace>` section from `@4fu/arbor-prompt` / arbor-core; the `windowStart` hook in `@4fu/arbor-interfaces` (`Hooks`) |
-| **Preset selection** (`agent-preset/selected`) | Committed by DSH's own registry and observed by the driver: a blank session that selects arbor is re-routed from the embedded loop to arbor, keeping its identity and its log. A selection after the first turn is refused by DSH with a visible reason. | `@deepseek-ai/dsh-agent-preset-registry` (`select`, `agent-preset/locked`); `@deepseek-ai/dsh-api-session-controller` (`createAgent` builds `meta.agentPreset` at creation); `@deepseek-ai/dsh-client-ui-agent-preset` (`AgentPresetSeatController.select`/`apply` → `ctx.remote.agentPresets.select`) |
+| **Preset selection** (`agent-preset/selected`) | Two paths, and the hero one is now a *create*. The hero composer's Arbor pick mints a new session under the picked preset (`meta.agentPreset` at create), so the session is created under the driver it runs and no selection event is written. A selection that does arrive on a blank session — an SDK or remote `agent-preset/select` — is still observed by the driver and re-routed. A selection after the first turn is refused by DSH with a visible reason. | `@deepseek-ai/dsh-agent-preset-registry` (`select`, `agent-preset/locked`); `@deepseek-ai/dsh-api-session-controller` (`createSession` → `createMinted(cwd, composeAgent(agentPreset))` → `createAgent` builds `meta.agentPreset`); `@deepseek-ai/dsh-cordis-client-runner` (`ISessions.create`); `@deepseek-ai/dsh-client-ui-agent-preset` (`AgentPresetSeatController.select`/`apply` → `ctx.remote.agentPresets.select`) |
 | **Session cwd** (`working-directory:current`) | Not bound to one cwd. The session's cwd is the shared folder (or the project subfolder it was opened on, resolved the same way either path); a window works in its ovnfs checkout of whichever project it needs, and `<workspace>` names the shared folder, the session's project and how the window reaches it. | `@deepseek-ai/dsh-working-directory` (`WorkingDirectoryService`, `working-directory/change`); the `workingDirectory` projection in `@deepseek-ai/dsh-session-projection`; prompt section `working-directory:current` |
 | **Sandbox modes** (`sandbox/mode`, policy) | Removed. Arbor's file tools run on the host; no mode is resolved for an arbor window and no `sandbox/mode` event is emitted for it. | `@deepseek-ai/dsh-sandbox-policy` (`SandboxPolicyService`, `ctx.sandboxPolicy`, `sandboxMode` projection); `@deepseek-ai/dsh-sandbox` (`SandboxMode`) |
 | **Sandbox enforcement** (`ctx.fs`, `ctx.shell`) | Not used by arbor's tools. They reach files through arbor's own workspace (`node:fs`, `spawn('/bin/sh')` on the host), exactly as in standalone arbor. The sandbox rows stay mounted for ordinary sessions. | `@deepseek-ai/dsh-fs-sandbox` (`SandboxedFileSystem`); `@deepseek-ai/dsh-bash-sandbox` (`SandboxBashExecutor`); `@deepseek-ai/dsh-sandbox-local` |
@@ -186,7 +186,8 @@ blank session — created with no preset, because the chip's pick is staged befo
 the session exists — started on the embedded loop and stayed there: the chip's
 later pick only advanced the projection.
 
-The fix uses DSH's own event rather than a new surface. The hero chip
+The first fix used DSH's own event rather than a new surface, and it is still
+what covers the paths that are not the hero. The hero chip
 (`@deepseek-ai/dsh-client-ui-agent-preset`, `AgentPresetSeatController.select`)
 stages the pick and then `apply()`s it, which reaches
 `ctx.remote.agentPresets.select(session.id, id)` — the same call the settings
@@ -202,6 +203,11 @@ outside it — ends the embedded agent with the handle its creation returned, an
 opens the same session id under arbor, the way a restart opens it. The session
 keeps its identity, its log and every event it already committed, so the composer
 bound to it keeps working; what changes is which driver its next turn runs.
+
+On `b3f` the hero path stopped using that seam at all: it creates the session
+under the picked preset instead, so no selection event is written and nothing is
+re-routed (see below). The re-route remains for an SDK or remote
+`agent-preset/select` on a blank, which is the one other writer of that event.
 
 **A switch after the first turn is refused, not silently kept.** DSH's own
 registry refuses a selection on a session that has started a turn with
@@ -395,22 +401,23 @@ nothing to pick, so DSH offers to add a directory. Once a directory is added it 
 an ordinary DSH workspace like any other, listed to ordinary composers and
 untouched by arbor.
 
-**The pick the workspace switch drops, put back.** Adopting a directory — or
-picking another project — re-uses the hero's blank session, and DSH's
+**The pick the workspace switch drops, carried at create.** Adopting a directory
+— or picking another project — re-uses the hero's blank session, and DSH's
 `reuseLive` re-selects the resolved deployment default on it, because the
 picker's adopt path (`createInWorkspace` → `createNamed`) names no preset. An
-Arbor pick made a moment earlier is therefore followed back off arbor by the
-driver's own reverse re-route, which is the one outcome the owner ruled out. The
-log cannot separate the two selections: `presets.select` is the single writer of
-`agent-preset/selected` (`@deepseek-ai/dsh-agent-preset-registry`,
-`lib/index.js`), so a controller-issued re-select and a user's pick append the
-same event. So the wrapped `onPick` in `@4fu/dsh-arbor-ui-workspace` re-commits
-the pick through the same hero seat the user clicked — the seat's `select` →
-`apply` → `ctx.remote.agentPresets.select` path — once the session the switch
-opened is there to take it. Verified live in the browser on both paths: picking
-another project and adding a directory through "Add workspace…" both leave the
-hero on Arbor, and the host records a second `agent-preset/selected` naming
-arbor on the new session.
+Arbor pick made a moment earlier is therefore followed back off arbor, which is
+the one outcome the owner ruled out. The log cannot separate the two selections:
+`presets.select` is the single writer of `agent-preset/selected`
+(`@deepseek-ai/dsh-agent-preset-registry`, `lib/index.js`), so a
+controller-issued re-select and a user's pick append the same event — which is
+why the fix belongs in the surface that knows what the user clicked rather than
+in the driver second-guessing an event it cannot attribute.
+
+`b3e` re-committed the pick through the hero seat after the switch, which worked
+and also proved where the fix belonged: DSH's own create can take the preset, so
+no re-commit is needed. `b3f` supplies it at create — see
+"The pick the workspace switch drops is carried at create" below — and the host
+records no second `agent-preset/selected` at all.
 
 **Where am I, where is my project: one line in `<workspace>`.** The live run on
 `b3c` left the gap the owner named: the user picked `web-app` in the composer, the
@@ -473,53 +480,125 @@ source. The live turn on that backend read the project line from `<workspace>`
 and its **first** tool call was `ls -la <shared>/web-app`, straight to the project
 the user picked, with arbor's own `bash`/`read`/`send`.
 
-**The hero composer goes disabled when Arbor is picked, and stays disabled.**
-This is the one finding still open on `b3e`, and the reason is in DSH, not in this
-repository's glue.
+**The hero composer now stays live, and the pick is a create, not a re-route.**
+This is the finding `b3e` left open, and it is closed on `b3f` by moving the
+decision to where DSH's own create can take it.
 
 The owner's option (a) — one routing handle per session that stays the agent DSH
-binds to, deciding embedded or arbor at the first followup — cannot be built on
-dsh-v0.2.2-rc.1, and the reason is three lines of source:
+binds to, deciding embedded or arbor at the first followup and delegating every
+Agent method until then — cannot be built on dsh-v0.2.2-rc.1. Three lines of
+source close it:
 
-- `AgentRegistry.enter` refuses a second entry for one id:
+- `AgentRegistry.enter` refuses a second entry for one id —
   `if (this.store.has(id)) throw new Error(`agent "${id}" is already registered`)`
-  (`@deepseek-ai/dsh-agent`, `lib/index.js`), and `register` refuses for the same
-  reason. So the registered agent for a session id can only be replaced, never
-  wrapped, and `prompt()` reaches the registered one
-  (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`: `liveAgent` is
-  `ctx.agents.get(sessionId)`, and `agent.followup(message)` is called on it).
+  (`@deepseek-ai/dsh-agent`, `lib/index.js`) — so the registered agent for a
+  session id can only be replaced, never wrapped, and `prompt()` reaches the
+  registered one (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`:
+  `liveAgent` is `ctx.agents.get(sessionId)`).
 - The only public way to remove that entry is `AgentHandle.dispose()`
   (`@deepseek-ai/dsh-agent`, `lib/types/index.d.ts`), which also removes the
-  Session from the store.
+  Session from the store — so a handle that disposed its inner agent would take
+  the session with it, and the hero's `uiSession` binding would name a session
+  that is gone.
 - Neither inner factory can adopt a session that already exists: AgentLoop's
-  `createAgent` and `resume` both call
-  `this.runtime.ctx.sessions.prepare(id, …)`
+  `createAgent` and `resume` both call `sessions.prepare(id, …)`
   (`@deepseek-ai/dsh-agent-loop`, `lib/index.js`), and `SessionStore.prepare`
   throws `session "<id>" already exists` (`@deepseek-ai/dsh-session`,
   `lib/index.js`).
 
-So the re-route must release the session, and the client sees it leave and come
-back. What breaks is the hero's session scope: `ScopeProvider` subscribes to the
-main binding (`@deepseek-ai/dsh-client-ui-renderer`, `lib/client.js`) and the
-scoped props are materialized per session *binding* through
-`ctx.uiSession.provide` (`@deepseek-ai/dsh-client-ui-session`, `lib/client.js`),
-keyed by the binding owner the sessions controller hands out for that id. The
-re-route replaces the owner, so the hero keeps the props resolved against the old
-one, and its `InputBar` computes
+The Agent contract a handle would have to answer before it is decided is the
+whole of it — `followup`, `whenIdle`, `cancel`, `status`, `session`, `ctx`,
+`inbox`, `scope`, `model` (`@deepseek-ai/dsh-agent`, `lib/types/index.d.ts`) —
+and the two facts above mean no object can hold both inner agents for one session
+id at once. So the re-route must release the session, and the client sees it
+leave and come back: the hero's session scope is materialized per session
+*binding* through `ctx.uiSession.provide`
+(`@deepseek-ai/dsh-client-ui-session`, `lib/client.js`), the re-route replaces
+the binding owner, and the hero's `InputBar` computes
 `live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
 (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`) — false, for good.
+Three public re-resolve paths were measured and none moves the main binding while
+the session id is unchanged: `uiWorkspace.openSession(id)`, `clearMain()` +
+`openSession(id)`, and `uiWorkspace.startSession(undefined, { agentPreset })`
+(which reuses the same blank, because `createInWorkspace` matches it by cwd and
+preset). A change of session id is the one thing that works.
 
-Three public re-resolve paths were tried and measured, and none of them moves the
-main binding while the session id is unchanged: `uiWorkspace.openSession(id)`,
-`clearMain()` followed by `openSession(id)`, and
-`uiWorkspace.startSession(undefined, { agentPreset: 'arbor' })` (which reuses the
-same blank, because `createInWorkspace` matches it by cwd and preset). What does
-work is a change of session id — a workspace switch, or a page reload — and a
-reload is the proof that the session itself is fine: after one, the hero comes
-back on the same arbor session with a working composer
-(`contenteditable=true`, verified). So the missing piece is a public way to
-re-publish the main binding for an unchanged session id, which is a DSH seam, not
-something this repository can reach from a `dsh.client` package.
+So the pick became a create instead. `ArborAgentRegistry.create` routes on
+`options.meta.agentPreset === 'arbor'`, and DSH's session controller builds that
+meta from the composition it resolves **when the session is created**:
+`createSession(request)` with no `sessionId` goes to
+`createMinted(request.cwd, await this.composeAgent(request.agentPreset))`, and
+`createAgent` passes `meta: { cwd, agentPreset }` to `ctx.agents.create`
+(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`). The client's own
+`ISessions.create(opts?: { workspaceId?, cwd?, sessionId?, agentPreset? })`
+(`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`) is that same verb.
+
+So `@4fu/dsh-arbor-ui` shadows the hero seat — `conversation.hero.agentPreset` is
+a `single` slot with no children table
+(`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`, the `children`
+table: `kind: "single"`, `scope: "session-maybe"`), so a registration one
+priority below the shipped occupant shadows it exactly the way the permission
+seat is shadowed. The shadow carries the shipped component, locale and inject
+face and wraps only the face's `select` — the hero chip's own commit
+(`AgentPresetSeatInjected.select` → `AgentPresetSeatController.select` → `apply`
+→ `ctx.remote.agentPresets.select`). When the main session is a blank with no
+turn and the pick crosses the arbor boundary, the wrapper does **not** commit on
+that blank: it creates a new session under the picked preset through the client's
+own `sessions.create`, opens it through `uiWorkspace.openSession` — which changes
+the hero's session id and therefore re-resolves its session scope, the one public
+path that moves the main binding — carries the composer's draft across with the
+same `conversation.input` shell API DSH's own workspace-switch carry uses
+(`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`: `inputHub.shell`,
+`draftSnapshot`, `setDraft`, `addAttachments`), and archives the blank it
+replaces with the same call the session row's own archive action makes.
+
+Both directions are minted, so Arbor back to Standard is a fresh embedded session
+too. The pick that does not cross the boundary, and a pick on a session that has
+already started a turn, are handed straight to the shipped `select`: DSH's own
+registry refuses a selection on a started session with `agent-preset/locked`
+("This session has already started", `@deepseek-ai/dsh-agent-preset-registry`,
+`lib/index.js`), so nothing is committed and nothing is silently kept. The
+driver's own re-route stays as the fallback for the paths that never reach this
+seat — an SDK or remote `agent-preset/select` on a blank — and it never fires on
+the hero path, because that path writes no selection event at all. Proof 19
+drives the host half of the create and asserts the header, the routing, the
+absence of a selection event and the absence of a resume.
+
+Two details of the gate were corrected in the same step, both in the direction of
+"nothing untrue":
+
+- **The staged pick decides only while the session has not started a turn.** A
+  session that has started keeps the driver it began with, so on one the chip's
+  staged pick is inert and only the committed `agentPreset` projection is true.
+  Reading the staged pick there would take the sandbox switch away from an
+  ordinary session — the same lie in the other direction.
+- **The bound seat decides before the unbound one.** The seat bound to the
+  composer's session answers first; the unbound seat — the chip before any
+  session exists — is consulted only while the bound one has not loaded. An
+  unbound store still naming a preset the bound session does not run would
+  otherwise hide an ordinary session's switch.
+
+**The pick the workspace switch drops is carried at create.** DSH's picker adopt
+path names no preset — the hero's `onPick` is
+`selectWorkspace(workspaceId)` → `workspaceNavigation.openWorkspace(workspaceId,
+beforeOpen)` with no options bag (`@deepseek-ai/dsh-client-ui-conversation`,
+`lib/client.js`) — and `openWorkspace` → `connectBlank` → `createInWorkspace`
+forwards `options.agentPreset` to `sessions.create` when it is given
+(`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`: `createInWorkspace`
+spreads `...options.agentPreset === void 0 ? {} : { agentPreset }`). So the only
+missing piece was the option, and `@4fu/dsh-arbor-ui-workspace` supplies it by
+wrapping `uiWorkspace.openWorkspace` on the service instance: one method, filled
+in only when the caller gave none and the composer's pick is Arbor. Everything
+else about the shipped path is untouched — the same blank-reuse rules, the same
+draft carry in `beforeOpen`, the same `startSession` calls that already name a
+preset — and an ordinary composer's switch is byte-for-byte the shipped call.
+
+That replaces the `b3e` fix, which re-committed the pick through the hero seat
+after the switch: the re-commit is what made DSH's own `reuseLive`
+(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) follow it back off
+arbor and the driver re-route the session under a live binding. With the pick in
+the create there is nothing to follow back, and the host records no second
+`agent-preset/selected` at all.
 
 ## What arbor's core still lacks (back to the arbor repo)
 

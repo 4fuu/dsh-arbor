@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3e
+git checkout b3f
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty-two, in order, against the scripted model
+pnpm proofs         # all twenty-three, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -339,7 +339,8 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- **B3b, B3c, B3d and b3e have landed** (see `docs/b3b-projects-and-sandbox.md`):
+- **B3b, B3c, B3d, b3e and b3f have landed** (see
+  `docs/b3b-projects-and-sandbox.md`):
   arbor owns project management for arbor sessions and DSH's sandbox is gone for
   them. The workspace is arbor's own over the shared folder (ovnfs, with the
   plain directory as the fallback) and per-window checkouts;
@@ -347,7 +348,9 @@ Not finished, and not to be worked around here:
   the shared folder's projects are the DSH project list. Ordinary sessions keep
   their sandbox and cwd. Branch `b3d` adds the project line inside
   `<workspace>` and the per-preset picker filter; branch `b3e` carries the Arbor
-  pick across a workspace switch.
+  pick across a workspace switch; branch `b3f` mints the session under the picked
+  preset instead of re-routing a live blank, and carries the pick into a
+  workspace switch at create.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
 - ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
   `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through
@@ -385,7 +388,9 @@ Not finished, and not to be worked around here:
   silently keeps the driver it began with. The other direction is followed too —
   a blank arbor session that selects another preset goes back to the embedded
   loop — because DSH re-selects the default preset whenever the picker reuses a
-  blank session. Proof 15 covers all of it.
+  blank session. Proof 15 covers all of it. On the hero path the pick is a create
+  instead of a selection (see the `b3f` bullet below), so this event is what the
+  paths that are not the hero — an SDK or remote `agent-preset/select` — write.
 - **The project picker is filtered per preset, in the browser.**
   `@4fu/dsh-arbor-ui-workspace` is a `dsh.client` package that wraps
   `ctx.slots.register` for the one registration that matters: the shipped
@@ -415,21 +420,48 @@ Not finished, and not to be worked around here:
   and one created under arbor resolve it the same way, a restart brings it back,
   and a project that moves before the first turn reaches a running window as a
   delta of only the changed lines. Proof 17 covers all of it.
-- **Two web-hero behaviours, one fixed on `b3e` and one still open.** (1) Picking
-  Arbor in the hero runs arbor — proof 15 and a live run confirm the driver
-  follows — but the hero's own composer goes disabled at that moment and stays
-  disabled: DSH's `InputBar` computes
-  `live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
-  (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`), and the re-route
-  replaces the session binding those three are resolved against. The full source
-  analysis, the three public re-resolve paths that were tried and measured, and
-  the reload evidence that the session itself is fine are in
-  `docs/b3b-projects-and-sandbox.md`. A workspace switch or a page reload brings
-  the composer back on the same arbor session. (2) Adding a workspace used to
-  drop the Arbor pick, because DSH's `reuseLive` re-selects the deployment
-  default on the blank session the switch reuses; `b3e` re-commits the pick
-  through the hero seat after the switch, so the label and the driver stay in
-  agreement.
+- **Picking Arbor in the web hero mints a session created as arbor** (`b3f`).
+  `@4fu/dsh-arbor-ui` shadows the hero's `conversation.hero.agentPreset` `single`
+  seat one priority below the shipped occupant, carrying the shipped component,
+  locale and inject face and wrapping only the face's `select`. When the main
+  session is a blank with no turn and the pick crosses the arbor boundary, the
+  wrapper does not commit on that blank: it creates a new session under the
+  picked preset through the client's own `sessions.create`
+  (`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`, `ISessions`), which
+  is the `session/create` verb, and with no `sessionId` the host mints one —
+  `createSession` → `createMinted(request.cwd,
+  await this.composeAgent(request.agentPreset))`
+  (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) — so the
+  composition's `agentPreset` lands in the session's creation `meta`, which is
+  what `ArborAgentRegistry.create` routes on. The session is created under the
+  driver it runs: no swap, no `agent-preset/selected` event, no window in which
+  the label and the driver disagree. It is opened through
+  `uiWorkspace.openSession`, which changes the hero's session id and so
+  re-resolves its session scope; the composer's draft is carried across with
+  DSH's own `conversation.input` shell API, and the blank it replaces is
+  archived. Both directions are minted. The driver's re-route stays as the
+  fallback for a path that is not the hero (an SDK or remote
+  `agent-preset/select` on a blank) and never fires on the hero path. Why the
+  owner's option (a) — one stable routing handle — cannot be built on
+  dsh-v0.2.2-rc.1, with the three lines of source that close it, is in
+  `docs/b3b-projects-and-sandbox.md`. Proof 19 drives the host half of the
+  create and asserts the header, the routing, the absence of a selection event
+  and the absence of a resume.
+- **Adding a workspace carries the pick at create** (`b3f`). DSH's picker adopt
+  path names no preset — the hero's `onPick` reaches
+  `uiWorkspace.openWorkspace(workspaceId, beforeOpen)` with no options bag — and
+  `openWorkspace` → `connectBlank` → `createInWorkspace` forwards
+  `options.agentPreset` to `sessions.create` when it is given, so
+  `@4fu/dsh-arbor-ui-workspace` wraps that one method on the service instance and
+  fills the option in only when the caller gave none and the composer's pick is
+  Arbor. The shipped path is otherwise untouched, and the host records no second
+  `agent-preset/selected`. This replaces the `b3e` re-commit, which is what made
+  DSH's `reuseLive` follow the pick back off arbor.
+- **Two gate corrections in the same step**, both so that nothing untrue is left
+  showing: the staged pick decides only while the session has not started a turn
+  (a started session keeps the driver it began with, so only its committed
+  projection is true), and the hero seat bound to the composer's session answers
+  before the unbound one.
 - The rest of the UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.

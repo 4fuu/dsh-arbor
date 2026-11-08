@@ -38,12 +38,16 @@ var ARBOR_PRESET = "arbor";
 var PRESET_PROJECTION = "agentPreset";
 var POLL_MS = 40;
 var MAX_POLLS = 500;
+var CARRY_MS = 2e3;
 var inject = ["slots"];
 function apply(ctx) {
   const slots = ctx.slots;
+  const service = (name) => ctx.get(name);
   let dispose;
   let poll;
   let attempts = 0;
+  let heroDispose;
+  let heroAttempts = 0;
   const stop = () => {
     if (poll !== void 0) {
       clearInterval(poll);
@@ -62,9 +66,12 @@ function apply(ctx) {
   };
   const gate = (seat) => (props) => {
     const runtime = props;
+    const main = useMainSession();
     const staged = usePresetPick(runtime.sessionId);
     const projected = runtime.useProjection?.(PRESET_PROJECTION);
-    if (staged === ARBOR_PRESET || projected === ARBOR_PRESET) return null;
+    const stagedCounts = main === void 0 || main.blank === true;
+    if (projected === ARBOR_PRESET) return null;
+    if (stagedCounts && staged === ARBOR_PRESET) return null;
     return (0, import_react.createElement)(seat.component, props);
   };
   function usePresetPick(sessionId) {
@@ -72,17 +79,120 @@ function apply(ctx) {
     const unbound = heroSeatFor(void 0);
     return (0, import_react.useSyncExternalStore)(
       (onChange) => {
-        const stops = [bound, unbound].map((store) => store?.subscribe(onChange));
+        const stops = [bound, unbound].map((one) => one?.subscribe(onChange));
         return () => {
           for (const halt of stops) halt?.();
         };
       },
       () => {
-        const picks = [bound, unbound].map((store) => store?.getSnapshot().current);
-        return picks.find((pick) => pick === ARBOR_PRESET) ?? picks.find((pick) => pick !== void 0 && pick !== "");
+        const picks = [bound, unbound].map((one) => one?.getSnapshot().current);
+        return picks[0] !== void 0 && picks[0] !== "" ? picks[0] : picks.find((pick) => pick !== void 0 && pick !== "");
       }
     );
   }
+  const mainSession = () => {
+    const byId = service("sessions")?.list.getSnapshot().byId ?? {};
+    for (const id of Object.keys(byId)) {
+      if ((byId[id]?.retainedBy?.mainView ?? 0) > 0) return byId[id];
+    }
+    return void 0;
+  };
+  function useMainSession() {
+    const sessions = service("sessions");
+    return (0, import_react.useSyncExternalStore)(
+      (onChange) => sessions?.list.subscribe(onChange) ?? (() => void 0),
+      () => mainSession()
+    );
+  }
+  const presetOf = (session) => typeof session?.projectionValues?.agentPreset === "string" ? session.projectionValues.agentPreset : void 0;
+  const workspaceOf = (sessionId) => {
+    const items = service("workspaces")?.list.getSnapshot().items ?? [];
+    return items.find((item) => item.sessionIds.includes(sessionId))?.workspaceId;
+  };
+  const crossesArbor = (id) => {
+    const main = mainSession();
+    if (main === void 0 || main.blank !== true) return false;
+    return presetOf(main) === ARBOR_PRESET !== (id === ARBOR_PRESET);
+  };
+  const carryDraft = async (from, to) => {
+    const input = service("conversation")?.input;
+    if (input === void 0) return;
+    let draft;
+    let attachmentIds = [];
+    try {
+      const shell = input.shell(from);
+      draft = shell.draftSnapshot;
+      attachmentIds = shell.snapshot?.attachmentIds ?? [];
+    } catch {
+      return;
+    }
+    if ((draft?.text ?? "") === "" && attachmentIds.length === 0) return;
+    const sessions = service("sessions");
+    const deadline = Date.now() + CARRY_MS;
+    for (; ; ) {
+      if (sessions?.binding(to) !== void 0) {
+        try {
+          const next = input.shell(to);
+          if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
+            next.setDraft(draft ?? { text: "" });
+          }
+        } catch {
+        }
+        return;
+      }
+      if (Date.now() >= deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+  };
+  const mintUnderPreset = async (id) => {
+    const main = mainSession();
+    const sessions = service("sessions");
+    const navigation = service("uiWorkspace");
+    if (main === void 0 || sessions === void 0 || navigation === void 0) return false;
+    const workspaceId = workspaceOf(main.id);
+    try {
+      const minted = await sessions.create(workspaceId === void 0 ? { cwd: main.cwd, agentPreset: id } : { workspaceId, agentPreset: id });
+      navigation.openSession(minted);
+      await carryDraft(main.id, minted);
+      await navigation.archiveSession(main.id).catch(() => void 0);
+      return true;
+    } catch (error) {
+      ctx.logger.warn(
+        `arbor-ui: minting a session under preset ${id} failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return false;
+    }
+  };
+  const tryShadowHeroSeat = () => {
+    if (heroDispose !== void 0) return;
+    if (++heroAttempts > MAX_POLLS) return;
+    const entry = slots.entriesOfSlot(HERO_SEAT_SLOT)[0];
+    if (entry === void 0) return;
+    const shipped = entry.inject;
+    if (typeof shipped !== "function") return;
+    const wrapped = (sessionId) => {
+      const face = shipped(sessionId);
+      const select = face.select;
+      if (typeof select !== "function") return face;
+      return {
+        ...face,
+        select: (id) => {
+          if (!crossesArbor(id)) return select(id);
+          void mintUnderPreset(id).then((taken) => {
+            if (!taken) void select(id);
+          });
+          return void 0;
+        }
+      };
+    };
+    heroDispose = slots.register({
+      name: HERO_SEAT_SLOT,
+      // Lower than the shipped occupant's default 0, so this gate renders.
+      priority: -1,
+      locale: entry.locale,
+      inject: wrapped
+    }, entry.component);
+  };
   const tryRegister = () => {
     if (dispose !== void 0) {
       stop();
@@ -106,6 +216,7 @@ function apply(ctx) {
       locale: seat.locale,
       inject: seat.inject
     }, gate(seat));
+    tryShadowHeroSeat();
     stop();
   };
   ctx.effect(() => () => {
