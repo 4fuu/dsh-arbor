@@ -38,6 +38,9 @@ importers:
       '@4fu/dsh-arbor-ui':
         specifier: workspace:*
         version: link:../arbor-ui
+      '@4fu/dsh-arbor-ui-workspace':
+        specifier: workspace:*
+        version: link:../arbor-ui-workspace
 
   packages/arbor-driver:
     dependencies:
@@ -330,6 +333,25 @@ importers:
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
     devDependencies:
+      '@types/react':
+        specifier: ^18.3.0
+        version: 18.3.31
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+
+  packages/arbor-ui-workspace:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+    devDependencies:
+      '@deepseek-ai/dsh-client-ui-workspace':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
       '@types/react':
         specifier: ^18.3.0
         version: 18.3.31

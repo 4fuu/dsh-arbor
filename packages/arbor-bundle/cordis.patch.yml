@@ -29,6 +29,22 @@
 #      only the composer chip is gated. On a profile with no browser (headless,
 #      acp, sdk) the inserted package declares no host behavior and does not
 #      activate.
+#   6. Inserts `@4fu/dsh-arbor-ui-workspace`, a `dsh.client` package that filters
+#      DSH's hero project picker: an ordinary session lists nothing from arbor's
+#      shared folder, an arbor session lists those projects plus the directories
+#      the user added outside them, marked external. The seat
+#      (`conversation.hero.workspace`) declares a child slot and cannot be
+#      shadowed, and neither the client nor the server offers a per-session view
+#      of the workspace list, so the package wraps `ctx.slots.register` — one
+#      service instance shared by every plugin — for as long as it is live: the
+#      shipped plugin's deferred registration of that seat arrives through the
+#      wrapper, keeps its options, children table, inject face and locale, and
+#      only its component is replaced by the filtered one. The shipped row stays
+#      enabled; disabling it was tried and does not work, because the host serves
+#      the client module graph from the composed plugin tree, so a disabled row's
+#      package is not in the graph and a `dsh.client.inject` dependency of it
+#      cannot arrive. The registration shape is pinned by proof 18, since this
+#      row is what makes the wrapper responsible for it.
 #
 # Row order carries no load semantics: activation is service-availability
 # driven, so the insert position does not matter.
@@ -51,3 +67,6 @@
 
     - id: arbor-ui
       name: '@4fu/dsh-arbor-ui'
+
+    - id: arbor-ui-workspace
+      name: '@4fu/dsh-arbor-ui-workspace'

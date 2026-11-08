@@ -27,11 +27,11 @@ session; "kept" means it still does.
 | DSH mechanism | Arbor sessions | DSH source location |
 | --- | --- | --- |
 | **Projects** (`Workspace` registry) | Arbor's shared folder is the source of truth. A DSH project is a project subfolder of the shared folder, registered in the registry so the UI lists it. | `@deepseek-ai/dsh-workspace` (`WorkspaceRegistry`, `Workspace`, `ctx.workspaceRegistry`); served by `@deepseek-ai/dsh-api-workspace-controller` |
-| **Project list / picker / creation** (client) | Reads arbor's projects because the client reads the registry the bridge fills. **Decision (item 2): ordinary sessions do not see arbor's shared-folder projects** — an ordinary session's cwd inside the shared folder would put the embedded AgentLoop's sandboxed tools writing into ovnfs's source (read-only by convention, written only by `apply`), which would either fail or corrupt arbor's model, and ordinary sessions must not change. **Not achievable in dsh-v0.2.2-rc.1**: neither the client nor the server has a per-session view of the workspace list, and the preset the filter would key on exists only in the browser. See "The picker filter, precisely" below. | `@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`, `WorkspaceBrowser`); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`); the registry `ctx.workspaceRegistry` in `@deepseek-ai/dsh-workspace` |
+| **Project list / picker / creation** (client) | Reads arbor's projects because the client reads the registry the bridge fills. **Decision (item 2), landed on `b3d`:** an ordinary session lists nothing from arbor's shared folder, and an arbor session lists those projects plus the directories the user added outside them, marked `（外部）`. The filter is a `dsh.client` package (`@4fu/dsh-arbor-ui-workspace`) that wraps `ctx.slots.register` and replaces only the hero picker's component; the shipped row stays enabled. Neither side offers a per-session view of the workspace list, and the preset the filter keys on exists only in the browser — see "The picker filter, as built" below. | `@deepseek-ai/dsh-client-ui-workspace` (`WorkspacePicker`, `WorkspaceBrowser`, the `conversation.hero.workspace` and `sidebar.workspaces` seats); `@deepseek-ai/dsh-api-workspace-controller` (`WorkspaceView`); the registry `ctx.workspaceRegistry` in `@deepseek-ai/dsh-workspace` |
 | **Add workspace…** (client) | Records a pointer for the arbor session that asked, with no new verb and no client change. The action reaches `WorkspaceRegistry.create`, the bridge hooks it, and the driver asks at the two moments a session becomes an arbor session whether the directory it names was added. | `@deepseek-ai/dsh-api-workspace-controller` (`create`, the `workspace/create` verb — the one caller of `WorkspaceRegistry.create` besides this bridge's own sync); `WorkspaceRegistry.initializeDefault` (the first-use default, a different method, so an inherited cwd is never an added directory) |
 | **External-project pointer** (prompt) | An existing directory with its own path is recorded as a pointer (name + absolute path), never copied, linked, adopted or registered as a project. It is named in arbor's prompt so the model reaches it on the host directly. Recorded **per session**, and rendered inside arbor's `<workspace>` through `PromptSection.content(window)` with `perWindow: true`. | `@4fu/dsh-arbor-workspace` (`DshProjectBridge.addPointer`/`listPointers`/`removePointer`/`isAddedDirectory`); arbor's `<workspace>` section from `@4fu/arbor-prompt` / arbor-core; the `windowStart` hook in `@4fu/arbor-interfaces` (`Hooks`) |
 | **Preset selection** (`agent-preset/selected`) | Committed by DSH's own registry and observed by the driver: a blank session that selects arbor is re-routed from the embedded loop to arbor, keeping its identity and its log. A selection after the first turn is refused by DSH with a visible reason. | `@deepseek-ai/dsh-agent-preset-registry` (`select`, `agent-preset/locked`); `@deepseek-ai/dsh-api-session-controller` (`createAgent` builds `meta.agentPreset` at creation); `@deepseek-ai/dsh-client-ui-agent-preset` (`AgentPresetSeatController.select`/`apply` → `ctx.remote.agentPresets.select`) |
-| **Session cwd** (`working-directory:current`) | Not bound to one cwd. The session's cwd is the shared folder; a window works in its ovnfs checkout of whichever project it needs, and `<workspace>` names the shared folder. | `@deepseek-ai/dsh-working-directory` (`WorkingDirectoryService`, `working-directory/change`); prompt section `working-directory:current` |
+| **Session cwd** (`working-directory:current`) | Not bound to one cwd. The session's cwd is the shared folder (or the project subfolder it was opened on, resolved the same way either path); a window works in its ovnfs checkout of whichever project it needs, and `<workspace>` names the shared folder, the session's project and how the window reaches it. | `@deepseek-ai/dsh-working-directory` (`WorkingDirectoryService`, `working-directory/change`); the `workingDirectory` projection in `@deepseek-ai/dsh-session-projection`; prompt section `working-directory:current` |
 | **Sandbox modes** (`sandbox/mode`, policy) | Removed. Arbor's file tools run on the host; no mode is resolved for an arbor window and no `sandbox/mode` event is emitted for it. | `@deepseek-ai/dsh-sandbox-policy` (`SandboxPolicyService`, `ctx.sandboxPolicy`, `sandboxMode` projection); `@deepseek-ai/dsh-sandbox` (`SandboxMode`) |
 | **Sandbox enforcement** (`ctx.fs`, `ctx.shell`) | Not used by arbor's tools. They reach files through arbor's own workspace (`node:fs`, `spawn('/bin/sh')` on the host), exactly as in standalone arbor. The sandbox rows stay mounted for ordinary sessions. | `@deepseek-ai/dsh-fs-sandbox` (`SandboxedFileSystem`); `@deepseek-ai/dsh-bash-sandbox` (`SandboxBashExecutor`); `@deepseek-ai/dsh-sandbox-local` |
 | **Escalation** (`sandbox_escalate`, `approveEscalation`, `sandbox_permissions`) | Removed. There is no escalation tool and no per-call permission argument to widen; nothing a window does is confined, so there is nothing to widen. | `@deepseek-ai/dsh-sandbox` (`escalation.d.ts`, `approveEscalation`, `ESCALATION_TARGETS`); `@deepseek-ai/dsh-tool-fs` / `dsh-tool-bash` |
@@ -66,9 +66,11 @@ backend's own — arbor's wording, arbor's method, no sandbox line and no
    the journal and the note store, so a restart keeps every project. A DSH
    project is a subfolder of it; the project bridge registers each as a DSH
    `Workspace` at host start and keeps the list live as the folder changes.
-2. **An arbor session is not bound to one cwd.** The driver sets the session's
-   cwd to the shared folder; a window opens a checkout of the project subfolder
-   it needs. `<workspace>` names the shared folder and the checkout method.
+2. **An arbor session is not bound to one cwd.** The driver resolves the session's
+   cwd to the directory the user picked — the shared folder, or a project
+   subfolder of it — the same way on both paths, and a window opens a checkout of
+   the project subfolder it needs. `<workspace>` names the shared folder, the
+   session's project and the checkout method.
 3. **An existing DSH project with its own path is named as a pointer, not
    copied.** `DshProjectBridge.adopt(path)`'s copy is gone: no copy, no mount, no
    adoption. Arbor's tools run on the host, so the model reaches the user's own
@@ -168,6 +170,12 @@ carries no access-mode control, the arbor session answers with arbor's own tools
 process keeps "Workspace Write" and answers through DSH's `working_directory`, and
 an arbor session created for a directory added through "Add workspace…" quotes the
 pointer line out of its own `<workspace>` section verbatim.
+
+Re-verified on `b3d` in the browser, on the ovnfs backend with the real binary:
+a Standard hero keeps "Workspace Write" and its picker lists nothing from arbor's
+tree; an Arbor hero has no access-mode control and its picker lists the shared
+folder's projects plus the added directory marked `（外部）`; and the arbor
+session's first tool call goes straight to the project the user picked.
 
 **Picking Arbor in the hero now runs arbor** (this is the finding the previous
 revision of this page left open, and it is fixed). `ArborAgentRegistry.create`
@@ -276,9 +284,12 @@ one moment that is early enough. A window nothing attributes (one dispatched fro
 outside a DSH session) names no session, and an unnamed session has no pointers
 rather than another session's.
 
-**The picker filter: neither the client nor the server can do it.** The decision
-stands — ordinary sessions should not list arbor's shared-folder projects — but
-dsh-v0.2.2-rc.1 offers no seam for it on either side, and the reason is precise:
+**The picker filter, as built.** The decision stands — an ordinary session lists
+nothing from arbor's shared folder, and an arbor session lists those projects
+plus the directories the user added outside them, marked `（外部）` — and
+`b3d` delivers it with `@4fu/dsh-arbor-ui-workspace`, a `dsh.client` package the
+bundle inserts beside the shipped row. The seam is the registration itself, not
+the seat, and the reasons the seat cannot be shadowed are unchanged:
 
 - **Client.** `conversation.hero.workspace` is a `single` slot declared by
   `@deepseek-ai/dsh-client-ui-conversation` (`lib/client.js`, the `children`
@@ -299,7 +310,7 @@ dsh-v0.2.2-rc.1 offers no seam for it on either side, and the reason is precise:
   trap as the permission seat, except that here carrying the declaration over is
   what throws. Nor can the store behind the list be replaced:
   `slots.provideRoot` refuses a duplicate hook name, so `useWorkspaces` cannot be
-  wrapped.
+  wrapped at the root.
 - **Server.** `WorkspaceRegistry.list()` / `get()` / `resolveByPath()` are
   process-global and take no session or caller
   (`@deepseek-ai/dsh-workspace`, `lib/types/index.d.ts`).
@@ -314,28 +325,164 @@ dsh-v0.2.2-rc.1 offers no seam for it on either side, and the reason is precise:
   `packages/api/workspace-controller/src/index.ts`), and so do
   `directoryPicker/pick`, `list` and `createDirectory`.
 
-The smallest pinned patch that would deliver it, for the owner to decide on
-because it disables a DSH row and re-mounts it through this repository:
+So the filter wraps the registration. `ctx.slots` is one service instance shared
+by every plugin in the page, so the package installs its own `register` on it as
+an own property for as long as it is live and sees every registration that passes
+through afterwards. The shipped plugin registers its seats through
+`ctx.slots.inject(name, factory)` — a deferred registration whose callbacks run
+after the whole boot has applied — so the hero-picker registration arrives
+through the wrapper whatever order the rows activate in. The wrapper hands the
+shipped component back with one thing changed: the same options, the same
+children table, the same inject face and locale, and a `useWorkspaces` that
+answers this composer's filtered view. Every other registration the shipped
+plugin makes — `sidebar.workspaces`, the session row actions, the shell overlays,
+the toasts — passes through untouched.
 
-1. `- id: ui-workspace` / `disabled: true` in the bundle patch, plus
-   `- insert: [{ id: arbor-ui-workspace, name: '@4fu/dsh-arbor-ui/workspace' }]`.
-2. The new client plugin imports the shipped one's `apply`/`inject` from
-   `@deepseek-ai/dsh-client-ui-workspace` (its `dsh.client.inject` lists it, so
-   the module graph resolves it), and calls it with `ctx.slots.register` wrapped
-   for the duration of that one call: the `conversation.hero.workspace`
-   registration is replaced by this package's own — same options, children table
-   included, so the directory flow still renders — whose component reads the
-   shipped occupant from `entriesOfSlot`, wraps its `useWorkspaces` in a hook
-   that drops shared-folder workspaces while the composer's staged preset is not
-   arbor (the staged pick is read exactly as `@4fu/dsh-arbor-ui`'s gate reads
-   it), and renders the shipped component with the filtered hook. Every other
-   registration the shipped plugin makes passes through untouched.
+**Disabling the shipped row does not work, so the row stays enabled.** This is a
+deviation from the patch as it was written up. The host serves the client module
+graph from the composed plugin tree, so a row with `disabled: true` takes its
+package out of the graph, and a `dsh.client.inject` dependency of the shipped
+plugin then cannot arrive: the package fails to import ("require missed the
+module table"). Re-running the shipped `apply` with the row enabled throws
+`service "uiWorkspace" has been registered`. The wrapper alone, with the row
+enabled, is the least invasive seam that works, and it is what ships.
 
-That is roughly forty lines plus one row pair, and it is a decision rather than
-a fix: it makes this repository responsible for DSH's whole workspace client
-surface, and the wrapper is invisible when it silently stops matching. The
-alternative — wait for a shadowable seat with a children-table override in
-arbor's core, or a per-session workspace view in DSH — is listed below.
+**Which preset decides.** The hero seats are rendered without a session id — the
+conversation's own hero row passes only `open`, `anchorRef`, `selectedId`,
+`onPick` and `onClose` — so the session is read from the sessions store the way
+DSH's own agent-preset plugin reads it (`@deepseek-ai/dsh-client-ui-agent-preset`,
+`mainBlank`: the row the main view retains), and the preset comes from the
+**bound** seat for that session (`heroInject(sessionId)`), with the unbound seat
+and the `agentPreset` projection as fallbacks. Reading only the unbound seat
+silently keeps `standard`; reading only the projection misses the staged pick.
+The staged pick itself is resolved by polling
+`slots.entriesOfSlot('conversation.hero.agentPreset')[0]?.inject`, bounded and
+stopped on success, exactly as `@4fu/dsh-arbor-ui`'s sandbox gate reads it.
+
+**The one thing the filter cannot know.** Which workspaces are arbor's is decided
+by path: an arbor project's path carries the `arbor`/`shared` segments
+(`DSH_HOME/arbor/shared/<project>`), and a workspace outside them is external. A
+`dsh.client` package is offered no channel to the host's own answer —
+`harness.handle`/`invoke` is the dynamic-plugin sandbox API and
+`settings/describe` is credentials only — so the rule is a path convention rather
+than a host answer. It is pinned by proof 18 together with the registration
+shape.
+
+**What is still unfiltered: the sidebar.** The same plugin also registers
+`sidebar.workspaces` (`WorkspaceBrowser`), and its rows still list arbor's
+projects for everyone. It is not a per-session surface — it is the app's
+workspace/session tree — so there is no preset to key a filter on, and filtering
+it by the main view's session would make the tree change as the user navigates.
+The hero picker is the surface that chooses a session's project, and that is what
+is filtered. A DSH deployment with no arbor at all is unaffected.
+
+**The pin.** `proofs/18-picker-pin.ts` reads the shipped
+`@deepseek-ai/dsh-client-ui-workspace` bundle and asserts the registration shape
+(seat name, children table, inject face, locale, component), the pick flow's
+`useWorkspaces((state) => state)` and its row fields (`workspaceId`, `title`,
+`path`), the shipped service list against this package's own, the pinned DSH
+version, and that the bundle patch does not disable the shipped row and does
+insert this package. The wrapper is invisible when it silently stops matching, so
+this is the test that fails instead.
+
+**An ordinary composer with nothing left to list opens DSH's directory dialog.**
+With every shared-folder project filtered out and no other workspace registered,
+the picker's only entry is "Add workspace…", and DSH's own pick flow opens the
+directory dialog directly in that case (`WorkspacePickFlow`: `addIsTheOnlyEntry`
+→ `openDirectoryFlow()`). That is DSH's fresh-install behaviour, not something
+this repository added, and it is the honest answer to an empty list: there is
+nothing to pick, so DSH offers to add a directory. Once a directory is added it is
+an ordinary DSH workspace like any other, listed to ordinary composers and
+untouched by arbor.
+
+**Where am I, where is my project: one line in `<workspace>`.** The live run on
+`b3c` left the gap the owner named: the user picked `web-app` in the composer, the
+window worked in its own directory, and the model answered "tell me the path" —
+trial and error the prompt should have prevented. So the session's project is
+stated once, inside arbor's own `<workspace>`, as
+`当前项目 <name>：<path>` followed by the reach line the workspace
+implementation's own:
+
+```
+当前项目 web-app：/home/…/arbor/shared/web-app
+它在共享目录里，路径就是 /home/…/arbor/shared/web-app；本窗口另有自己的工作目录，按这个绝对路径直接读写该项目。
+```
+
+Under ovnfs the reach line is the checkout one instead — open the project's
+checkout with `workspace.checkout("<ref>-<name>")`, work in it, merge back with
+`workspace.apply` — because the two implementations get there differently. The
+renderer resolves a line key that names a field, so the block carries a `reach`
+field and the words stay in the text table; arbor's backend id `dir` is mapped to
+arbor's own key `directory` (`REACH_OF` in
+`packages/arbor-workspace/src/section.ts`).
+
+Four details make the line true rather than merely present:
+
+- **It names the session's project, not the header's.** The project is read from
+  the session's *current* directory through DSH's `workingDirectory` projection
+  (`ctx.sessionProjections.snapshot(session, ['workingDirectory'])`), because the
+  header never moves and a session whose project was changed before its first
+  turn would otherwise be named wrongly.
+- **A re-routed session and one created under arbor agree.** Both resolve the
+  picked directory the same way, so the cwd display, the project line and the
+  model all read one answer. This is the asymmetry the re-route left behind: a
+  created session was resolved into the shared folder, a re-routed one kept the
+  directory it was created in.
+- **A restart-recovered window is attributed to its session.** Arbor's recovery
+  continues windows with no targets of their own, so the host rebuilds the
+  window→session map from the journal *before* `host.start()`
+  (`rebuildWindowSessions`), a `windowContinue` hook inherits the predecessor's
+  session, and a recovered window whose agent is not back yet reads the stored
+  session header cwd.
+- **A project that moves reaches a running window as a delta of only the changed
+  lines.** `workspaceRevision()` digests every live and recovered session's
+  project, the section is `perWindow: true`, and the prefix is never rewritten.
+  Proof 17 asserts the delta is exactly four lines — the two old ones removed, the
+  two new ones added — with the implementation's own method lines untouched.
+
+Proof 17 (`pnpm proof:project-section`) drives all of it, including the first
+call going straight to the project's file with no exploratory call before it.
+
+**ovnfs runs in the web profile when its binary is present.** The orb can mount
+FUSE: `/dev/fuse` exists, `fuse3` 3.14.0 is installed, and the daemon starts.
+With the real v0.1.1 binary on `PATH` — the same release arbor's own CI `ovnfs`
+job installs, from `stencil-hq/ovnfs`, checksum-verified — the web profile reports
+`workspaceBackend = ovnfs` and `mount` shows `fuse.ovnfs` on
+`<DSH_HOME>/arbor/ovnfs/checkouts`. The mount is the checkouts directory, not the
+shared folder, so projects can still be seeded into `<DSH_HOME>/arbor/shared`
+after boot. Outside the profile, a checkout created with `ctl new` is readable and
+writable through the mount and `ctl diff` / `ctl apply` merge it back into the
+source. The live turn on that backend read the project line from `<workspace>`
+and its **first** tool call was `ls -la <shared>/web-app`, straight to the project
+the user picked, with arbor's own `bash`/`read`/`send`.
+
+**Two web-hero behaviours that are not finished.** Both were found driving the
+browser on `b3d`, and neither is silent:
+
+- **The hero composer goes disabled when Arbor is picked, and stays disabled.**
+  The re-route ends the embedded agent and opens the same session id under arbor,
+  and DSH's `InputBar` computes
+  `live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
+  (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`), where those three
+  arrive through `ctx.uiSession.provide({ hooks: ['conversation', 'input'], props:
+  ['inputActions'] })` resolved per session binding. The hero's binding was
+  resolved while the embedded agent was live and is not resolved again, so the
+  composer disables itself. A session view opened afterwards is fine
+  (`contenteditable=true`, verified), and choosing a project in the picker
+  re-mounts the hero and brings it back; a fresh "New Session" also works but
+  starts on the default preset. What does not work is typing the first message
+  into the hero right after the pick.
+- **Adding a workspace from the hero re-selects the default preset.** Adopting a
+  directory re-uses the blank session, and DSH's `reuseLive` calls
+  `presets.select(composition.agentPreset)` with the deployment default
+  (`@deepseek-ai/dsh-api-session-controller`), so an Arbor pick made a moment
+  earlier is followed back to the embedded loop by the driver's own reverse
+  re-route. The label and the driver stay in agreement — which is the rule — but
+  the user has to pick Arbor again after adding the workspace.
+
+Both are honest rather than untrue: nothing claims a driver that is not running.
+They are the remaining work for the closed loop, and both live in DSH's own
+composer binding, which this repository does not own.
 
 ## What arbor's core still lacks (back to the arbor repo)
 
@@ -344,8 +491,11 @@ arbor's core, or a per-session workspace view in DSH — is listed below.
    occupant declares children (the hero workspace picker, the sidebar browser)
    cannot be shadowed at all. A registration without the children table leaves the
    occupant without `renderSlot`, which abdicates it. Shadowing such a seat needs
-   either a children-table override or a documented way to inherit one — the
-   project-picker filter is waiting on exactly this.
+   either a children-table override or a documented way to inherit one. This
+   deployment no longer waits on it for the hero picker — `@4fu/dsh-arbor-ui-workspace`
+   wraps the registration instead — but the sidebar browser
+   (`sidebar.workspaces`) is still unshadowed and unfiltered, and a children-table
+   override is what would let a package filter it.
 
 6. **`Workspace.reclaimable?()`** — the interface assumes an implementation owns
    a directory it can remove. A workspace whose source is the user's shared

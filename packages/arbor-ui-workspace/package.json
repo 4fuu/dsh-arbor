@@ -1,0 +1,32 @@
+{
+  "name": "@4fu/dsh-arbor-ui-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The dsh-arbor browser package for the project picker: arbor's shared-folder projects are listed for an arbor session only, and a directory outside them is marked external",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "client.js"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.1.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-workspace": "0.2.2-rc.1",
+    "@types/react": "^18.3.0",
+    "esbuild": "0.28.2",
+    "react": "^18.2.0"
+  }
+}

@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3c
+git checkout b3d
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty, in order, against the scripted model
+pnpm proofs         # all twenty-two, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -87,6 +87,8 @@ pnpm proof:send-links  # 13 what <harness> promises about send and @path
 pnpm proof:windows     # 14 two windows on one project do not collide
 pnpm proof:preset-selection   # 15 picking Arbor in a composer runs arbor
 pnpm proof:external-project   # 16 add-workspace becomes a pointer for that session
+pnpm proof:project-section    # 17 the session's project is named once in <workspace>
+pnpm proof:picker-pin         # 18 the picker filter is pinned to the shipped plugin
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -169,6 +171,61 @@ real model it also shows what the live run proves end to end: the model reads a
 DSH skill's `SKILL.md` through arbor's own `read` tool and answers from it, runs
 a command in the arbor shared folder, and calls a DSH MCP tool as a DSH tool.
 
+### 3a. The web profile, and ovnfs for real
+
+The proofs boot the `headless` profile. The browser surface is the `web`
+profile, and a scratch file inside the repository starts it the same way:
+
+```ts
+const ctx = await bootArborProfile({
+  binName: 'arbor-web-shot',
+  profile: 'web',
+  overlayPaths: [arborPatch, '/path/to/patches/arbor.patch.yml'],
+  prepare: (root) => {
+    root.provide('webStartup', { openBrowser: false, host: '127.0.0.1', port: 3080, trustedHosts: ['127.0.0.1'] })
+  },
+})
+```
+
+It prints `dsh web: http://127.0.0.1:3080/?token=…`. Open that in a browser and
+the hero composer is there: the workspace chip, the preset chip, and (for a
+Standard composer) the sandbox access-mode switch. A session created through the
+controller's own calls — `ctx.agents.create` with no preset, then
+`agentPresets.select(agent, 'arbor')` — is the path the hero chip takes, and it
+is what proof 15 drives.
+
+**ovnfs is chosen only when its binary is on `PATH`.** `openWorkspace` runs
+`execFile('ovnfs', …)` and falls back to the plain-directory workspace when the
+binary is missing or its daemon will not start, so a checkout and apply cannot
+be exercised without it. The proofs therefore stage a stand-in
+(`useOvnfsStub`). To run the real one, mirror arbor's own CI `ovnfs` job:
+
+```bash
+sudo apt-get install -y fuse3
+base=https://github.com/stencil-hq/ovnfs/releases/download/v0.1.1
+curl -fsSL -O "$base/ovnfs_0.1.1_linux_amd64.tar.gz" -O "$base/ovnfs_0.1.1_checksums.txt"
+grep ' ovnfs_0.1.1_linux_amd64.tar.gz$' ovnfs_0.1.1_checksums.txt | sha256sum -c -
+mkdir -p ovnfs-bin && tar -xzf ovnfs_0.1.1_linux_amd64.tar.gz -C ovnfs-bin ovnfs
+export PATH="$PWD/ovnfs-bin:$PATH"
+ovnfs version          # ovnfs v0.1.1
+```
+
+Verified on branch `b3d` in an orb: `/dev/fuse` exists, `fuse3` 3.14.0 is
+installed, the daemon starts and mounts, and a checkout created with
+`ctl new` is readable and writable through the mount with `ctl diff` and
+`ctl apply` merging back into the source. In the web profile with that binary on
+`PATH` the host reports `workspaceBackend = ovnfs` and
+`mount` shows `fuse.ovnfs` on `<DSH_HOME>/arbor/ovnfs/checkouts` — the mount is
+the checkouts directory, not the shared folder, so projects can still be seeded
+into `<DSH_HOME>/arbor/shared` after boot. Ubuntu's `fusermount3` AppArmor
+profile only allows mounts below `$HOME`, `/mnt`, `/media` and `/tmp`, so keep
+`TMPDIR` (and therefore `DSH_HOME`) under one of those on a stock Ubuntu runner;
+the orb has no such restriction.
+
+One live turn against the real model on that setup: the model's first tool call
+listed the picked project's files by absolute path, read its two files and
+answered from them, using arbor's own `bash`/`read`/`send`.
+
 ## 4. Inspect what ran
 
 - `DSH_HOME/arbor/journal.sqlite` is the arbor journal: every window start and
@@ -195,7 +252,8 @@ a command in the arbor shared folder, and calls a DSH MCP tool as a DSH tool.
   arbor sessions there is no DSH sandbox — arbor's file tools run on the host the
   way they do in standalone arbor, and arbor's own secret scrub is the only
   protection on what reaches the model. The proofs stage an ovnfs stand-in on
-  PATH (`useOvnfsStub`), because the real binary is not installed here. An
+  PATH (`useOvnfsStub`); section 3a installs the real binary, which is what
+  makes the host report the `ovnfs` backend. An
   ordinary session on the embedded AgentLoop is untouched: its file tools still
   run through DSH's `ctx.fs` and `ctx.shell` under its own sandbox policy.
 - The session log is DSH's own: `assistant/message` events carry the streamed
@@ -227,7 +285,13 @@ packages/
   arbor-env/        /env: arbor's own environment under DSH_HOME/arbor/env, with
                     DSH's skills and MCP servers mounted read-only beside it
   arbor-bundle/     the installable bundle: the patch layer that replaces DSH's
-                    agent row and mounts the host, driver and preset
+                    agent row and mounts the host, driver, preset and the two
+                    client packages
+  arbor-ui/         the browser package that hides the sandbox access-mode
+                    switch for an arbor composer
+  arbor-ui-workspace/
+                    the browser package that filters DSH's hero project picker
+                    per preset
   arbor-preset/     the agent-preset row that puts arbor in DSH's roster
   arbor-testkit/    the boot harness, the memory journal, the scripted model,
                     and the B3 fixtures (a DSH skill row, a stdio MCP server)
@@ -239,13 +303,9 @@ docs/               b0-findings.md, b3-findings.md, b3b-projects-and-sandbox.md,
 
 `packages/arbor-bundle` is the installable piece: its `cordis.patch.yml`
 disables DSH's base `agent` row, inserts the routing registry, the arbor host
-and the arbor driver, and carries the preset row. The proofs load that same
-file as their first overlay.
-
-`packages/arbor-bundle` is the installable piece: its `cordis.patch.yml`
-disables DSH's base `agent` row, inserts the routing registry, the arbor host
-and the arbor driver, and carries the preset row. The proofs load that same
-file as their first overlay.
+and the arbor driver, and carries the preset row and the two `dsh.client`
+packages (`@4fu/dsh-arbor-ui`, `@4fu/dsh-arbor-ui-workspace`). The proofs load
+that same file as their first overlay.
 
 ## 6. What works, and what does not
 
@@ -265,7 +325,8 @@ Works, and is covered by a proof:
   arbor's own secret scrub is the only protection. Tool approval is kept: a call
   that needs approval still routes through DSH's approval on the user session's
   agent. The `<workspace>` prompt section is arbor's own (ovnfs or directory
-  method), with no sandbox line.
+  method), with no sandbox line, and it names the session's project once —
+  `当前项目 <name>：<path>` plus how the window reaches it.
 - `/env` carries DSH's skills (readable by path) and MCP servers (listed, with
   their tools staying DSH tools) beside arbor's own settings, built-in skills
   and the model's own installs.
@@ -278,19 +339,23 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- **B3b has landed on branch `b3b`** (see `docs/b3b-projects-and-sandbox.md`): arbor
-  owns project management for arbor sessions and DSH's sandbox is gone for them.
-  The workspace is arbor's own over the shared folder (ovnfs, with the plain
-  directory as the fallback) and per-window checkouts; `DshSandboxSeam` /
-  `DshSandboxWorkspace` / `sandbox_escalate` are removed, and the shared folder's
-  projects are the DSH project list. Ordinary sessions keep their sandbox and cwd.
+- **B3b, B3c and B3d have landed** (see `docs/b3b-projects-and-sandbox.md`):
+  arbor owns project management for arbor sessions and DSH's sandbox is gone for
+  them. The workspace is arbor's own over the shared folder (ovnfs, with the
+  plain directory as the fallback) and per-window checkouts;
+  `DshSandboxSeam` / `DshSandboxWorkspace` / `sandbox_escalate` are removed, and
+  the shared folder's projects are the DSH project list. Ordinary sessions keep
+  their sandbox and cwd. Branch `b3d` adds the project line inside
+  `<workspace>` and the per-preset picker filter.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
 - ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
   `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through
   DSH's sandbox; with the sandbox gone for arbor sessions that reasoning no
   longer holds, so the workspace is arbor's own, chosen by arbor-core's
   `openWorkspace` (ovnfs when the binary is found, the plain directory
-  otherwise).
+  otherwise). Verified with the real v0.1.1 binary in the web profile on branch
+  `b3d`: the host reports the `ovnfs` backend and mounts
+  `<DSH_HOME>/arbor/ovnfs/checkouts` as `fuse.ovnfs`. See section 3a.
 - The composer's sandbox access-mode switch is gone for arbor sessions, in the
   browser, through `@4fu/dsh-arbor-ui`'s own `dsh.client` package: it shadows the
   `conversation.input.permission` `single` slot one priority below the shipped
@@ -320,16 +385,49 @@ Not finished, and not to be worked around here:
   a blank arbor session that selects another preset goes back to the embedded
   loop — because DSH re-selects the default preset whenever the picker reuses a
   blank session. Proof 15 covers all of it.
-- **The project picker's per-preset filter is not wired, and cannot be in
-  dsh-v0.2.2-rc.1.** Ordinary sessions should not list arbor's shared-folder
-  projects, but neither side offers a seam: the picker seat declares a child slot
-  DSH refuses to re-declare, an occupant without the children table loses its
-  `renderSlot` and abdicates, `useWorkspaces` cannot be wrapped, and the server's
-  workspace list is process-global with no session or caller — its only filter is
-  the remote *peer*'s access policy, and the web client holds one peer for every
-  session. The full source analysis and the smallest pinned patch that would
-  deliver it are in `docs/b3b-projects-and-sandbox.md`; it is a decision for the
-  owner because it disables a DSH row and re-mounts it through this repository.
+- **The project picker is filtered per preset, in the browser.**
+  `@4fu/dsh-arbor-ui-workspace` is a `dsh.client` package that wraps
+  `ctx.slots.register` for the one registration that matters: the shipped
+  `@deepseek-ai/dsh-client-ui-workspace`'s `conversation.hero.workspace` seat
+  arrives through the wrapper, keeps its options, children table, inject face
+  and locale, and only its component is replaced by one that filters
+  `useWorkspaces`. An arbor composer lists every workspace and marks the
+  directories outside the shared folder `（外部）`; any other composer lists
+  nothing from arbor's tree. The shipped row stays **enabled**: the host serves
+  the client module graph from the composed plugin tree, so a disabled row's
+  package is not in the graph and a `dsh.client.inject` dependency of the
+  shipped plugin cannot arrive, and re-running the shipped `apply` with the row
+  enabled throws `service "uiWorkspace" has been registered`. The registration
+  shape is pinned by proof 18, which fails when the shipped bundle, the pick
+  flow's state selection, the shipped service list or the pinned DSH version
+  moves. Two limits are known and documented in
+  `docs/b3b-projects-and-sandbox.md`: the arbor/non-arbor rule is a path
+  convention (`arbor/shared` segments), because a client package has no channel
+  to the host's answer, and the sidebar's own workspace browser
+  (`sidebar.workspaces`) is not filtered — it is not per-session, so there is no
+  preset to key a filter on.
+- **The session's project is named once in `<workspace>`.** The section carries
+  `当前项目 <name>：<path>` plus the reach line the workspace implementation's
+  own: ovnfs opens a checkout of the project subfolder, the plain-directory
+  workspace reaches it by absolute path. The project is read from the session's
+  *current* directory (DSH's `workingDirectory` projection), a re-routed session
+  and one created under arbor resolve it the same way, a restart brings it back,
+  and a project that moves before the first turn reaches a running window as a
+  delta of only the changed lines. Proof 17 covers all of it.
+- **Two web-hero behaviours that are not finished.** (1) Picking Arbor in the
+  hero runs arbor — proof 15 and a live run confirm the driver follows — but the
+  hero's own composer goes disabled at that moment and stays disabled: DSH's
+  `InputBar` computes `live = input !== undefined && keyboard !== undefined &&
+  inputActions !== undefined` (`@deepseek-ai/dsh-client-ui-conversation`,
+  `lib/client.js`), and the re-route ends the embedded agent whose session scope
+  held those services. Choosing a project in the picker, or opening the session
+  from the sidebar tree, re-mounts the composer and it works; a fresh "New
+  Session" also works but starts on the default preset. (2) Adding a workspace
+  from the hero re-uses the blank session, and DSH's `reuseLive` re-selects the
+  deployment default preset, so an Arbor pick made a moment earlier is followed
+  back to the embedded loop. Both are honest — the label always names the driver
+  actually running — and both are recorded in
+  `docs/b3b-projects-and-sandbox.md`.
 - The rest of the UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.
