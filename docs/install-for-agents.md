@@ -287,12 +287,26 @@ Not finished, and not to be worked around here:
   longer holds, so the workspace is arbor's own, chosen by arbor-core's
   `openWorkspace` (ovnfs when the binary is found, the plain directory
   otherwise).
-- The UI's sandbox mode switch and the per-preset filtering of the project picker
-  are client-side and belong to the later UI stage: the DSH web client ships as
-  compiled bundles, so this step delivers the server-side truth (the project list
-  reflects the shared folder; an arbor session has no sandbox mode) rather than a
-  client patch. See the UI section of `docs/b3b-projects-and-sandbox.md`.
-- The UI is B4.
+- The composer's sandbox access-mode switch is gone for arbor sessions, in the
+  browser, through `@4fu/dsh-arbor-ui`'s own `dsh.client` package: it shadows the
+  `conversation.input.permission` `single` slot one priority below the shipped
+  `PermissionSelect`, reusing that component, inject face and locale, and renders
+  nothing when the preset the composer is about to run is `arbor`. The switch
+  disappears the moment Arbor is picked in the hero and returns when Standard is
+  picked again; an ordinary composer keeps the control byte-for-byte. See the UI
+  section of `docs/b3b-projects-and-sandbox.md`.
+- The project picker's per-preset filter and the "Add workspace…" pointer action
+  are not wired. The picker seat cannot be shadowed (it declares a child slot, and
+  DSH refuses a second declaration of the same child key), and dsh-arbor has no
+  browser-to-host verb for `pointerArborProject`. Both reasons, with the DSH
+  source locations, are in `docs/b3b-projects-and-sandbox.md`.
+- **Selecting Arbor in the web hero does not yet make the session run arbor.**
+  The routing registry decides at agent creation from `meta.agentPreset`, and no
+  DSH surface passes the staged preset into session creation, so a session picked
+  as Arbor keeps running on the embedded AgentLoop. The composer's switch is
+  hidden by the pick, not by the running composition. See the routing finding in
+  `docs/b3b-projects-and-sandbox.md`.
+- The rest of the UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.
 

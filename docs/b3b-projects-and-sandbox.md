@@ -114,29 +114,58 @@ step uses — a `dsh-arbor` client package — with no patch to any compiled bun
 `dsh.client` package). `conversation.input.permission` is a `single` composer
 slot (`@deepseek-ai/dsh-client-ui-conversation`); a `single` slot renders its
 lowest-priority occupant, and `ctx.slots.entriesOfSlot` reads an occupant with
-its registration options (its inject face and locale). arbor-ui registers its
+its own fields — `component`, `inject`, `locale` sit at the entry's top level,
+while the entry's `options` bag carries only `key`/`order`/`priority`
+(`@deepseek-ai/dsh-client-ui-slots`, `SlotCore.register`). arbor-ui registers its
 own occupant one priority below `@deepseek-ai/dsh-client-ui-permission-presets`'
-`PermissionSelect`, reusing that component, inject face and locale verbatim, and
-gates it on `useProjection("agentPreset")` — the same per-session projection the
-composer's own preset selector reads: `"arbor"` renders nothing, any other preset
-renders the real control. permission-presets stays enabled, so its `/permission`
-popup and General-settings row are untouched for both. The shipped occupant
-registers through permission-presets' own deferred `inject`, on a timeline a
-plugin cannot subscribe to, so arbor-ui reads it by polling `entriesOfSlot`
-(bounded, stopped on success and on dispose) until it appears.
+`PermissionSelect`, reusing that component, inject face and locale, and gates it
+on the preset the composer is about to run: `"arbor"` renders nothing, any other
+preset renders the real control. permission-presets stays enabled, so its
+`/permission` popup and General-settings row are untouched for both. The shipped
+occupant registers through permission-presets' own deferred `inject`, on a
+timeline a plugin cannot subscribe to, so arbor-ui reads it by polling
+`entriesOfSlot` (bounded, stopped on success and on dispose) until it appears.
 
-Verified by booting the `web` profile headless with the arbor bundle and driving
-it in Chromium: the gate registers, and a **Standard** composer still shows
-"Access mode, current: Workspace Write" — the ordinary path is unchanged. The
-arbor path hides the switch by construction: the `agentPreset` projection is
-`init: (header) => header.agentPreset` (`@deepseek-ai/dsh-agent-preset-registry`),
-so a real arbor session (created with `meta.agentPreset: "arbor"`, as the proofs
-and the routing registry do) reads `"arbor"` and the gate renders null. In the
-scripted web boot the hero's preset selection did not reach a created arbor
-session (the staged preset lives in the agent-preset seat's store, not the
-projection, until a session commits it), so the arbor case is verified by the
-projection's definition and by the ordinary case rendering the control, not by a
-live arbor session in that boot.
+Two details of that reuse are load-bearing, and both were found the hard way:
+
+- **The inject face and the locale must be carried over.** An occupant registered
+  without them has no `t` and no `usePermissionCatalog`, so `PermissionSelect`
+  throws on its first render; the slot's supervision reports the crash, abdicates
+  the entry, and the outlet re-renders onto the next survivor — the shipped
+  occupant. The gate then looks like it works (the ordinary control is on screen)
+  while rendering nothing at all. Reading `entry.options.locale` /
+  `entry.options.inject` returns `undefined`, which is exactly that trap.
+- **The staged pick, not the projection, decides in the hero.** A new session's
+  preset is staged before the session exists: the hero chip
+  (`conversation.hero.agentPreset`) calls `AgentPresetSeatController.select()`,
+  which writes the pick into that controller's own `SnapshotStore` and only then
+  hands it to the current session. Until the Host commits it, the session's
+  `agentPreset` projection still reads the previous value, so a gate on the
+  projection alone left "Workspace Write" showing on a composer the user had just
+  switched to Arbor. The gate therefore reads the staged pick through the hero
+  seat's own `inject` face (`AgentPresetSeatInjected.hooks.agentPresetSeat`,
+  called the way the slot runtime calls it) and falls back to the projection,
+  which is what a session that already runs arbor answers with.
+
+Verified live in the `web` profile, driven in Chromium: a Standard composer shows
+"Access mode, current: Workspace Write" byte-for-byte; picking Arbor in the hero
+removes it immediately, and picking Standard brings it back; an arbor session
+after its first turn shows no access-mode control.
+
+**A routing finding the owner must decide on.** Selecting Arbor in the hero does
+not make the session run arbor. `ArborAgentRegistry.create` routes on
+`options.meta.agentPreset === 'arbor'`, and DSH's session controller builds that
+meta from the composition it resolves **when the session is created**
+(`@deepseek-ai/dsh-api-session-controller`, `createAgent`); the hero chip's later
+`agent-preset/selected` only advances the projection (`reuseLive` calls
+`presets.select` and returns the same live agent). Verified live: a session whose
+hero pick is Arbor ran the embedded AgentLoop's own `working_directory` tool and
+left the arbor journal empty. So the composer now stops offering a sandbox mode
+as soon as Arbor is picked, while the session underneath still runs the embedded
+loop — the UI follows the pick, not the running composition. Making the pick
+actually route needs a surface that passes the staged preset into session
+creation (`sessions.create({ agentPreset })`), which no DSH surface does today;
+see "what arbor's core still lacks".
 
 **The external-project pointer is recorded, not copied** (`@4fu/dsh-arbor-workspace`).
 `DshProjectBridge.adopt`'s copy is gone; `addPointer` / `listPointers` /
@@ -158,13 +187,50 @@ is gated on arbor's coming `PromptSection.content(window)` with `perWindow: true
 exact. Until it lands, the pointer is recorded and proven server-side, and its
 rendering is the one remaining step of this feature.
 
-The remaining client work, both smaller than the switch: the **project-picker
-filter** (hide shared-folder projects for a non-arbor preset — item 2's decision)
-and wiring **"Add workspace…"** in an arbor session to `pointerArborProject`
-(item 3's UI action). Both belong in the same `@4fu/dsh-arbor-ui` package B4
-grows; the host APIs they call are already in place.
+**The remaining client work is blocked, both pieces, on seams DSH does not
+offer.** They belong in the same `@4fu/dsh-arbor-ui` package B4 grows; the host
+APIs they call are already in place and proven.
+
+- **The project-picker filter** (hide shared-folder projects for a non-arbor
+  preset — item 2's decision) needs the picker seat shadowed, and it cannot be.
+  `conversation.hero.workspace` declares a child slot
+  (`conversation.hero.workspace.directoryFlow`), and `SlotCore.register` refuses
+  a second declaration of a child key that is already declared
+  (`@deepseek-ai/dsh-client-ui-slots`, `lib/index.js`: `slot "<child>" is already
+  declared`). Registering without the children table leaves the occupant with no
+  `renderSlot`, so the shipped `WorkspacePicker` throws on its own directory flow
+  and abdicates — the same trap as above, and it cannot be repaired by carrying
+  the declaration over, because carrying it over is what throws.
+- **Wiring "Add workspace…" to `pointerArborProject`** needs a browser-to-host
+  call, and dsh-arbor has none. DSH's browser-to-host verbs are the typert remote
+  namespaces (`ctx.remote.*`), each generated by DSH's own compiler from a
+  `TypertRemoteService`; adding one here is not possible without that toolchain.
+  The remaining channels were checked and ruled out: the forwarded-event
+  allowlist is a fixed list in `@deepseek-ai/dsh-api-remotes`
+  (`API_REMOTE_FORWARDED_EVENTS`), the arbor host's Config is not exposed through
+  `ctx.remote.settings.describe()`, and recording the pointer inside
+  `DshProjectBridge.resolveProject` was tried and reverted — that runs for every
+  arbor session whatever cwd its caller named, so it recorded pointers for
+  sessions that never asked for one and broke proof 8.
 
 ## What arbor's core still lacks (back to the arbor repo)
+
+4. **A surface that starts an arbor session.** DSH routes a session to arbor from
+   `meta.agentPreset` at agent creation, and the hero chip's pick arrives after
+   the agent exists, so the web client cannot start one. The fix is a surface that
+   passes the staged preset into `sessions.create({ agentPreset })` — the TUI, or
+   a `dsh.client` package that wraps the hero's workspace connection. Until then
+   the arbor preset is reachable only through the SDK path the proofs use.
+5. **A shadowable seat with a children table.** `SlotCore.register` refuses a
+   second declaration of an already-declared child key, so any `single` slot whose
+   occupant declares children (the hero workspace picker, the sidebar browser)
+   cannot be shadowed at all. A registration without the children table leaves the
+   occupant without `renderSlot`, which abdicates it. Shadowing such a seat needs
+   either a children-table override or a documented way to inherit one.
+6. **A browser-to-host verb dsh-arbor can add.** The typert remote namespaces are
+   compiler-generated inside DSH's monorepo; the forwarded-event allowlist is a
+   fixed list. A dsh-arbor action (record an external pointer) therefore has no
+   way to reach the host from the browser today.
 
 1. **`Workspace.reclaimable?()`** — the interface assumes an implementation owns
    a directory it can remove. A workspace whose source is the user's shared

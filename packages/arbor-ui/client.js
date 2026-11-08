@@ -33,7 +33,9 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 var import_react = require("react");
 var SEAT_SLOT = "conversation.input.permission";
+var HERO_SEAT_SLOT = "conversation.hero.agentPreset";
 var ARBOR_PRESET = "arbor";
+var PRESET_PROJECTION = "agentPreset";
 var POLL_MS = 40;
 var MAX_POLLS = 500;
 var inject = ["slots"];
@@ -48,12 +50,39 @@ function apply(ctx) {
       poll = void 0;
     }
   };
+  let heroInject;
+  let unboundSeat;
+  const heroSeatFor = (sessionId) => {
+    if (heroInject === void 0) return void 0;
+    if (sessionId === void 0) {
+      unboundSeat ??= heroInject()?.hooks?.agentPresetSeat;
+      return unboundSeat;
+    }
+    return heroInject(sessionId)?.hooks?.agentPresetSeat;
+  };
   const gate = (seat) => (props) => {
-    const preset = props.useProjection?.("agentPreset");
-    globalThis.__arborGate = { preset, hasHook: typeof props.useProjection };
-    if (preset === ARBOR_PRESET) return null;
+    const runtime = props;
+    const staged = usePresetPick(runtime.sessionId);
+    const projected = runtime.useProjection?.(PRESET_PROJECTION);
+    if (staged === ARBOR_PRESET || projected === ARBOR_PRESET) return null;
     return (0, import_react.createElement)(seat.component, props);
   };
+  function usePresetPick(sessionId) {
+    const bound = heroSeatFor(sessionId);
+    const unbound = heroSeatFor(void 0);
+    return (0, import_react.useSyncExternalStore)(
+      (onChange) => {
+        const stops = [bound, unbound].map((store) => store?.subscribe(onChange));
+        return () => {
+          for (const halt of stops) halt?.();
+        };
+      },
+      () => {
+        const picks = [bound, unbound].map((store) => store?.getSnapshot().current);
+        return picks.find((pick) => pick === ARBOR_PRESET) ?? picks.find((pick) => pick !== void 0 && pick !== "");
+      }
+    );
+  }
   const tryRegister = () => {
     if (dispose !== void 0) {
       stop();
@@ -63,14 +92,19 @@ function apply(ctx) {
       stop();
       return;
     }
+    if (heroInject === void 0) {
+      const face = slots.entriesOfSlot(HERO_SEAT_SLOT)[0]?.inject;
+      if (typeof face === "function") heroInject = face;
+      if (heroInject === void 0) return;
+    }
     const seat = slots.entriesOfSlot(SEAT_SLOT)[0];
     if (seat === void 0) return;
     dispose = slots.register({
       name: SEAT_SLOT,
       // Lower than the shipped occupant's default 0, so this gate renders.
       priority: -1,
-      locale: seat.options.locale,
-      inject: seat.options.inject
+      locale: seat.locale,
+      inject: seat.inject
     }, gate(seat));
     stop();
   };

@@ -131,10 +131,16 @@ export class DshProjectBridge {
    * is what "an arbor session is not bound to one cwd" means. A path already
    * inside the shared folder is a project and is answered as-is. A directory
    * outside the shared folder is answered as the shared folder too: an arbor
-   * session always works in arbor's own directory, and the outside directory is
-   * recorded as a pointer (see {@link addPointer}) rather than copied — the
-   * shared folder is the source of truth for what arbor checks out and applies,
-   * and a pointer is a fact in the prompt, never a second project.
+   * session always works in arbor's own directory, and the shared folder is the
+   * source of truth for what arbor checks out and applies, so an outside
+   * directory is never a second project.
+   *
+   * Recording that outside directory as an {@link ExternalPointer} is NOT done
+   * here. This runs for every arbor session, whatever directory its caller
+   * happened to name, and a pointer is a deliberate record of a directory the
+   * user means arbor to name — a session's requested cwd is not that. The
+   * deliberate callers are {@link addPointer}'s: the UI's add-workspace action
+   * and the model.
    */
   async resolveProject(requested: string | undefined): Promise<string> {
     if (requested === undefined || this.isSharedFolder(requested)) return this.sharedFolder
