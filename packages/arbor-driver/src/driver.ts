@@ -95,14 +95,46 @@ class SessionArbor {
   private window: WindowRef | undefined
   private windowAgent: Agent | undefined
   private bridgeCache: ArborWindowBridge | undefined
+  /** The session's write handle onto its durable log, once persistence is mounted. */
+  private stored: { handle: SessionHandle; storedCount: number } | undefined
 
-  readonly agent: Agent
+  readonly agent: ArborSessionAgent
+  /** The create/resume options a re-route replays, so a session keeps its own. */
+  readonly agentOptions: AgentOptions | undefined
+  readonly agentSetup: AgentSetup | undefined
 
   private readonly driver: ArborDriver
 
-  constructor(driver: ArborDriver, agent: Agent) {
+  constructor(
+    driver: ArborDriver,
+    agent: ArborSessionAgent,
+    agentOptions: AgentOptions | undefined,
+    agentSetup: AgentSetup | undefined,
+  ) {
     this.driver = driver
     this.agent = agent
+    this.agentOptions = agentOptions
+    this.agentSetup = agentSetup
+  }
+
+  /** Hand this world the session's write handle, once it has one. */
+  keepStored(stored: { handle: SessionHandle; storedCount: number } | undefined): void {
+    this.stored = stored
+  }
+
+  /**
+   * End this session's arbor world: unbind its window, unwind the agent's own
+   * scope — which detaches the agent and its session and closes the bridge — and
+   * release the session's write handle so another driver can open the log.
+   *
+   * This is the teardown a re-route needs in either direction, and it is the
+   * mirror of the embedded loop's own `AgentHandle.dispose`: the window itself is
+   * the host's and lives out arbor's own idle policy, so only the binding goes.
+   */
+  async dispose(): Promise<void> {
+    await this.agent.scope.dispose()
+    await this.stored?.handle.close().catch(() => {})
+    this.stored = undefined
   }
 
   /** The one Arbor host of this process, and the backend every window runs through. */
@@ -289,12 +321,26 @@ export class ArborDriver extends Service implements AgentFactory {
     // listen on. A session that has started a turn never gets here — the registry
     // refuses that selection before it is committed — so the only case is a
     // session still waiting for its first turn, which is exactly the hero.
+    // The event carries the OTHER direction too, and it has to be honoured: DSH's
+    // session controller re-selects the default preset whenever a blank session is
+    // reused (`reuseLive` calls `presets.select` with the resolved default), so an
+    // arbor session the user then opens in another workspace is relabelled
+    // `standard` while it still runs arbor. Following the event back is what keeps
+    // the label and the driver saying the same thing.
     ctx.on('session/event', (session: Session, event: { type: string; data?: unknown }) => {
       if (event.type !== 'agent-preset/selected') return
-      if ((event.data as { agentPreset?: unknown }).agentPreset !== ARBOR_PRESET) return
-      void this.rerouteToArbor(session.id).catch((error: unknown) => {
+      const selected = (event.data as { agentPreset?: unknown }).agentPreset
+      if (selected === ARBOR_PRESET) {
+        void this.rerouteToArbor(session.id).catch((error: unknown) => {
+          this.runtime.ctx.logger.warn(
+            `arbor driver: re-routing session ${session.id} to arbor failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        })
+        return
+      }
+      void this.rerouteToEmbedded(session.id).catch((error: unknown) => {
         this.runtime.ctx.logger.warn(
-          `arbor driver: re-routing session ${session.id} to arbor failed: ${error instanceof Error ? error.message : String(error)}`,
+          `arbor driver: re-routing session ${session.id} off arbor failed: ${error instanceof Error ? error.message : String(error)}`,
         )
       })
     })
@@ -362,6 +408,44 @@ export class ArborDriver extends Service implements AgentFactory {
         `arbor driver: recording an external pointer for session ${sessionId} failed: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
+  }
+
+  /**
+   * Re-route one session from arbor back to the embedded AgentLoop.
+   *
+   * The mirror of {@link rerouteToArbor}, and it exists for the same reason: a
+   * session's label and the driver under it must say the same thing. DSH re-selects
+   * the default preset when a blank session is reused, and a user may pick another
+   * preset on a blank session at any time, so a session that selected arbor can
+   * select something else again while it is still waiting for its first turn. The
+   * arbor agent is ended with the handle this driver holds, the window keeps
+   * running out arbor's own idle policy, and the session is opened again on the
+   * embedded loop with the same id, the same log and the same cwd it was created
+   * with.
+   *
+   * A session that has started a turn keeps the driver it began with: DSH refuses
+   * that selection before it is committed, so this is the same defensive guard the
+   * arbor direction carries, and the alternative — silently keeping the old driver
+   * — is the one outcome the owner ruled out.
+   */
+  private async rerouteToEmbedded(sessionId: SessionId): Promise<void> {
+    const arbor = this.sessions.get(sessionId)
+    if (arbor === undefined) return
+    this.sessions.delete(sessionId)
+    const boundary = this.runtime.ctx.agents.turnBoundaryOf(arbor.agent.session)
+    if (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0) {
+      this.runtime.ctx.logger.warn(
+        `arbor driver: session ${sessionId} selected another preset after its first turn and keeps arbor`,
+      )
+      return
+    }
+    const options: ResumeAgentOptions = {
+      resumeSessionId: sessionId,
+      agentOptions: arbor.agentOptions,
+      setup: arbor.agentSetup,
+    }
+    await arbor.dispose()
+    await this.resumeEmbedded(this.runtime.ctx, options)
   }
 
   /** The driver's own DSH context, for the per-session arbor worlds. */
@@ -470,13 +554,14 @@ export class ArborDriver extends Service implements AgentFactory {
     // than assumed here.
     this.noteExternalProject(requested, id)
     const agent = this.agentFor(preparation.session, options.agentOptions)
-    const arbor = new SessionArbor(this, agent)
+    const arbor = new SessionArbor(this, agent, options.agentOptions, options.setup)
     agent.attachBridge(arbor.bridge())
     this.sessions.set(id, arbor)
     let stored: { handle: SessionHandle; storedCount: number } | undefined
     try {
       ownerCtx.fiber.assertActive()
       stored = await this.createStoredSession(preparation.session, options.signal)
+      arbor.keepStored(stored)
       await this.publish(ownerCtx, arbor, agent, preparation.session, stored, options.setup, 'startup', options.parentAgent, options.signal)
     } catch (error: unknown) {
       this.sessions.delete(id)
@@ -490,8 +575,7 @@ export class ArborDriver extends Service implements AgentFactory {
       agent,
       dispose: async () => {
         this.sessions.delete(id)
-        await arbor.bridge().close()
-        await stored?.handle.close().catch(() => {})
+        await arbor.dispose()
       },
     }
   }
@@ -597,9 +681,10 @@ export class ArborDriver extends Service implements AgentFactory {
       open = undefined
       await this.appendUnstoredSuffix(stored, preparation.session)
       agent = this.agentFor(preparation.session, options.agentOptions)
-      arbor = new SessionArbor(this, agent)
+      arbor = new SessionArbor(this, agent, options.agentOptions, options.setup)
       agent.attachBridge(arbor.bridge())
       this.sessions.set(id, arbor)
+      arbor.keepStored(stored)
       await this.publish(ownerCtx, arbor, agent, preparation.session, stored, options.setup, 'resume', options.parentAgent, options.signal)
     } catch (error: unknown) {
       if (agent !== undefined) this.sessions.delete(id)
@@ -610,13 +695,12 @@ export class ArborDriver extends Service implements AgentFactory {
       preparation?.[Symbol.dispose]()
       await open?.close().catch(() => {})
     }
-    const live = { agent, arbor, stored }
+    const live = { agent, arbor }
     return {
       agent: live.agent,
       dispose: async () => {
         this.sessions.delete(id)
-        await live.arbor?.bridge().close()
-        await live.stored?.handle.close().catch(() => {})
+        await live.arbor?.dispose()
       },
     }
   }

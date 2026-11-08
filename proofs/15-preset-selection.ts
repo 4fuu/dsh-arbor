@@ -55,13 +55,13 @@ const check = (label: string, ok: boolean, detail: string): void => {
   if (!ok) failures.push(label)
 }
 
-/** One session created the way the session controller creates one: no preset. */
-async function createSession(cwd: string): Promise<Agent> {
+/** One session created the way the session controller creates one. */
+async function createSession(cwd: string, preset?: string): Promise<Agent> {
   const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
   const agentOptions: AgentOptions = { ...SCRIPTED_SELECTION }
   const { agent } = await ctx!.agents.create({
     sessionId,
-    meta: { cwd },
+    meta: { cwd, ...preset === undefined ? {} : { agentPreset: preset } },
     agentOptions,
     setup: (agentCtx) => { installModelSelection(agentCtx) },
   })
@@ -177,6 +177,31 @@ try {
   check('an ordinary session in the same process stays on the embedded loop',
     driverSessions.sessionArbor(ordinary.id) === undefined && ordinaryTargets.length === 0,
     `the ordinary session holds no arbor window and the journal names it ${ordinaryTargets.length} times`)
+
+  // ---- E. a blank arbor session that selects another preset goes back to the
+  // embedded loop, because DSH re-selects the default preset whenever a blank
+  // session is reused (`reuseLive`), and a label that says one thing while the
+  // driver does another is the outcome the owner ruled out.
+  const flip = await createSession(shared, 'arbor')
+  check('a session created under arbor runs arbor',
+    driverSessions.sessionArbor(flip.id) !== undefined,
+    `the session holds an arbor world: ${driverSessions.sessionArbor(flip.id) !== undefined}`)
+  await presets!.select(flip, 'standard')
+  let flipped: Agent | undefined
+  for (let attempt = 0; attempt < 100 && (flipped === undefined || flipped === flip); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 50))
+    flipped = ctx.agents.get(flip.id)
+  }
+  check('a blank arbor session that selects another preset goes back to the embedded loop',
+    flipped !== undefined && driverSessions.sessionArbor(flip.id) === undefined,
+    `the session still holds an arbor world: ${driverSessions.sessionArbor(flip.id) !== undefined}`)
+  scriptedLlm.responses = [{ text: 'pong' }]
+  flipped!.followup(createUserMessage({ content: [{ type: 'text', text: 'say pong' }], source: { kind: 'user' } }))
+  await flipped!.whenIdle()
+  const flipCalls = toolCallsOf(flipped!)
+  check('the session that went back runs the embedded loop, not arbor',
+    !flipCalls.includes('read') && (await journalKinds()).filter(kind => kind === 'window_start').length === 1,
+    `tool calls: ${flipCalls.join(', ') || '(none)'}; window_start events: ${(await journalKinds()).filter(kind => kind === 'window_start').length}`)
 } catch (error: unknown) {
   console.error(error)
   failures.push(String(error))

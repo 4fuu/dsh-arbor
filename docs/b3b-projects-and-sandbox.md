@@ -162,6 +162,13 @@ Verified live in the `web` profile, driven in Chromium: a Standard composer show
 removes it immediately, and picking Standard brings it back; an arbor session
 after its first turn shows no access-mode control.
 
+Re-verified on `b3c` with the routing fix in place: the hero with Arbor picked
+carries no access-mode control, the arbor session answers with arbor's own tools
+(its `bash` call lists arbor's window workspace), an ordinary session in the same
+process keeps "Workspace Write" and answers through DSH's `working_directory`, and
+an arbor session created for a directory added through "Add workspace…" quotes the
+pointer line out of its own `<workspace>` section verbatim.
+
 **Picking Arbor in the hero now runs arbor** (this is the finding the previous
 revision of this page left open, and it is fixed). `ArborAgentRegistry.create`
 routes on `options.meta.agentPreset === 'arbor'`, and DSH's session controller
@@ -196,6 +203,22 @@ with, visibly. The driver guards on the turn boundary as well, because the one
 outcome that is untrue to the user is a session that answers as arbor while
 running the embedded loop (or the reverse) with nothing said. Proof 15 drives
 the controller's own path and asserts both halves.
+
+**A switch before the first turn is followed, in both directions.** The event
+carries the other direction too, and honouring it is what the web profile needs:
+DSH's session controller re-selects the resolved default preset whenever a blank
+session is reused (`@deepseek-ai/dsh-api-session-controller`, `reuseLive` calls
+`presets.select` with `composition.agentPreset`, and `composeAgent(undefined)`
+resolves the deployment default), so an arbor session the user reopens in another
+workspace is relabelled `standard`. The driver therefore re-routes a blank arbor
+session that selects any other preset back onto the embedded loop — ending the
+arbor agent with the teardown this driver holds, leaving the window to arbor's own
+idle policy, and opening the same session id on the embedded loop with the same
+log and the same cwd. Verified live: a session whose hero pick is Arbor runs
+arbor (its `bash`/`read` calls land in arbor's journal and its `<workspace>` is
+arbor's own), an ordinary session in the same process keeps DSH's
+`working_directory` tool and its sandbox switch, and a session the picker reuses
+comes back on the loop its log names.
 
 `ownsSession` now folds the log's `agent-preset/selected` events over the
 creation header, following DSH's own reconstruction rule for exactly this reason

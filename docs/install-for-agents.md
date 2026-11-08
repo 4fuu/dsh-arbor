@@ -316,7 +316,10 @@ Not finished, and not to be worked around here:
   keeps its identity and its log and its next turn runs arbor. A selection after
   the first turn is refused by DSH with a visible reason ("This session has
   already started"), and the driver guards on the turn boundary as well: nothing
-  silently keeps the driver it began with. Proof 15 covers both halves.
+  silently keeps the driver it began with. The other direction is followed too —
+  a blank arbor session that selects another preset goes back to the embedded
+  loop — because DSH re-selects the default preset whenever the picker reuses a
+  blank session. Proof 15 covers all of it.
 - **The project picker's per-preset filter is not wired, and cannot be in
   dsh-v0.2.2-rc.1.** Ordinary sessions should not list arbor's shared-folder
   projects, but neither side offers a seam: the picker seat declares a child slot
