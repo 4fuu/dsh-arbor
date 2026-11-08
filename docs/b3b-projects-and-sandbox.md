@@ -432,13 +432,15 @@ implementation's own:
 它在共享目录里，路径就是 /home/…/arbor/shared/web-app；本窗口另有自己的工作目录，按这个绝对路径直接读写该项目。
 ```
 
-Under ovnfs the reach line is the checkout one instead — open the project's
-checkout with `workspace.checkout("<ref>-<name>")`, work in it, merge back with
-`workspace.apply` — because the two implementations get there differently. The
-renderer resolves a line key that names a field, so the block carries a `reach`
-field and the words stay in the text table; arbor's backend id `dir` is mapped to
-arbor's own key `directory` (`REACH_OF` in
-`packages/arbor-workspace/src/section.ts`).
+Under ovnfs the reach line is the checkout one instead — read the project in
+place at its path or as `<name>/`, and open a checkout only for a change, whose
+subdirectory is the project — because the two implementations get there
+differently. The renderer resolves a line key that names a field, so the block
+carries a `reach` field and the words stay in the text table; arbor's backend id
+`dir` is mapped to arbor's own key `directory` (`REACH_OF` in
+`packages/arbor-workspace/src/section.ts`). The ovnfs wording was corrected on
+`b3g`: it used to promise `workspace.checkout("<project>")`, which arbor refuses,
+and it said nothing about where relative paths start — see below.
 
 Four details make the line true rather than merely present:
 
@@ -601,17 +603,68 @@ arbor session always works in arbor's own directory, so
 with the shared folder itself (`packages/arbor-workspace/src/projects.ts`). A
 session created under arbor for such a directory therefore has a cwd the
 workspace attach refuses — `session/workspace-attach-failed`, "its cwd resolves
-to …" — and a session created *without* the workspace is not a member of it,
-which leaves the composer with no workspace to name (verified live: the hero
-composer stays disabled). So the wrap fills the option only for a workspace an
-arbor session may work in — a project of the shared folder, or the shared folder
-itself — and for anything else runs the shipped adopt and then asks the hero seat
-for the pick again, which commits it on the session the adopt opened. That is the
-`b3e` path, and it is the one that records the external pointer, because the
-driver's re-route asks the host whether the directory was added. Its known cost
-is the one `b3e` left open: the re-route replaces the session binding, so the
-hero's composer stays disabled until the session id changes (a workspace switch
-or a reload).
+to …".
+
+`b3f` left that case on the `b3e` path — the shipped adopt, then a re-commit
+through the hero seat — and the live run showed what it costs: the adopt switches
+the main session to a blank in the added workspace, the re-route then moves that
+session's cwd to the shared folder, and DSH filters a workspace's member list by
+the session's stored cwd (`@deepseek-ai/dsh-workspace`,
+`WorkspaceEntity.sessionIds` → `candidateMatches`), so the session reads as a
+member of nowhere. The hero composer answers
+`chipTitle === undefined` and renders inert
+(`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`:
+`inert = sessionId === void 0 || hero && chipTitle === void 0`) — the dead
+composer, reproduced live on `b3g` before the fix.
+
+So on `b3g` a directory outside the shared folder is **never switched to**. The
+wrap does not run the shipped adopt at all; it mints a session created under
+arbor with the added directory as its `cwd` —
+`sessions.create({ cwd, agentPreset: 'arbor' })`, the `session/create` remote
+verb with no `sessionId`, which the host answers with
+`createMinted(request.cwd, await this.composeAgent(request.agentPreset))`
+(`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`). That is the create
+that records the pointer: `ArborDriver.createArborAgent` reads the requested cwd,
+asks the host whether the user added it (`noteExternalProject` →
+`isAddedArborDirectory`), records it, and resolves the session's cwd into the
+shared folder. The registry `create` has already happened by then — the shipped
+add-workspace flow is `createWorkspace({ path })` then
+`onPick(workspace.workspaceId)` (`@deepseek-ai/dsh-client-ui-workspace`,
+`lib/client.js`, `adoptDirectory`) — so the directory is in the bridge's added
+set before the mint runs.
+
+**The session then has to belong to a workspace.** A session created with a
+`cwd` and no `workspaceId` is a member of nothing, and the hero composer is inert
+for it, so the host attaches every arbor session it creates, re-routes or resumes
+to the workspace that owns the directory it works in
+(`ArborHostService.attachArborWorkspace` → `DshProjectBridge.attachWorkspace` →
+`WorkspaceRegistry.create` + `Workspace.attachSession`). The shared folder itself
+is registered the same way a project subfolder is: `create` reuses the record a
+canonical path already has, so this is idempotent and never retitles an existing
+workspace. That is also what keeps the composer live for an arbor session whose
+composer was never in the shared folder — a fresh boot where the hero's workspace
+is DSH's own default.
+
+**What that costs, and why it cannot be cheaper.** The mint changes the session
+id, and the project the replaced session had picked does not survive: the pointer
+is recorded from the session's creation cwd, so the session has to be created in
+the added directory, and an arbor session's cwd resolves into the shared folder.
+Attributing the pointer to the session the user is already in would need a
+client→host channel that names both, and dsh-v0.2.2-rc.1 has none:
+`session/create` takes `{ sessionId?, workspaceId?, cwd?, agentPreset? }` with a
+strict input schema, the `workspace` namespace's verbs (`create`, `rename`,
+`delete`, `insertBefore`, `insertSessionBefore`, `archiveSession`,
+`unarchiveSession`, `pinSession`, `unpinSession`, `follow`) name a workspace or a
+session but never both with a path, and the host keeps no per-peer session fact
+(`@deepseek-ai/dsh-api-remote-access` tracks principals, `WorkspaceFeed.follow`
+filters by remote peer, which is a connection). DSH's extension point is a typert
+remote namespace — `TypertRemoteService` with `@Remote`-marked methods on the
+host, `remote.$mount(contribution)` with generated descriptors on the client
+(`@deepseek-ai/dsh-api-gateway`, `lib/client.browser.js`) — and the host half
+cannot be written in these sources: they run through Node's type stripping, which
+rejects decorator syntax, and the marker the gateway reads (`remoteMethods`) is
+written by the decorator. That is the smallest pinned patch if the owner wants the
+same session id kept.
 
 That replaces the `b3e` fix for the shared folder's projects, where the re-commit
 is what made DSH's own `reuseLive`
@@ -619,6 +672,29 @@ is what made DSH's own `reuseLive`
 off arbor and the driver re-route the session under a live binding. With the pick
 in the create there is nothing to follow back, and the host records no second
 `agent-preset/selected` at all.
+
+**The ovnfs reach line says where relative paths start, and that reading in place
+is fine.** The `b3f` Trajectory showed the gap: the first bash ran
+`cd web-app && ls -la`, relying on the shell starting in the shared folder, and
+the model then listed the sibling project as noise. Arbor's own ovnfs lines
+already say the shared folder is where every window reads from and where bash runs
+(`workspace.method.shared`) and that a change goes through a checkout
+(`workspace.method.open`, `workspace.method.readonly`), so the reach line adds
+only the project's own half — that it is a subdirectory of that same place,
+reachable at the absolute path the line names or as `<name>/`, with no `cd` and
+no checkout for reading:
+
+```
+它在共享目录里，子目录是 web-app：读它就读 /home/…/arbor/shared/web-app，或按 web-app/ 读，不用开检出、不用 cd；要改它就用 workspace.checkout 给它开检出（子目录填 web-app），改完用 workspace.apply 合回共享目录。
+```
+
+The `b3d` wording promised `workspace.checkout("web-app")`, which arbor refuses:
+a checkout name must start with the window's own reference and the project
+subdirectory is the second argument (`@4fu/arbor-workspace-ovnfs`, `groups.js`,
+`checkout` → `refused.workspace.name`). The line now names the subdirectory as
+the argument instead. Proof 20 runs on the ovnfs backend and proves the line, the
+refusal-free call shape and a first call that reads the project at the path the
+line names with no `cd` and no call reaching a sibling project.
 
 ## What arbor's core still lacks (back to the arbor repo)
 

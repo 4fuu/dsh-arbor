@@ -88,6 +88,37 @@ function filterState(state, preset) {
 }
 function apply(ctx) {
   const slots = ctx.slots;
+  const service = (name) => ctx.get(name);
+  const carryDraft = async (from, to) => {
+    const input = service("conversation")?.input;
+    if (input === void 0) return;
+    let draft;
+    let attachmentIds = [];
+    try {
+      const shell = input.shell(from);
+      draft = shell.draftSnapshot;
+      attachmentIds = shell.snapshot?.attachmentIds ?? [];
+    } catch {
+      return;
+    }
+    if ((draft?.text ?? "") === "" && attachmentIds.length === 0) return;
+    const sessions2 = service("sessions");
+    const deadline = Date.now() + CARRY_MS;
+    for (; ; ) {
+      if (sessions2?.binding(to) !== void 0) {
+        try {
+          const shell = input.shell(to);
+          if (attachmentIds.length === 0 || shell.addAttachments(attachmentIds)) {
+            shell.setDraft(draft ?? { text: "" });
+          }
+        } catch {
+        }
+        return;
+      }
+      if (Date.now() >= deadline) return;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
+  };
   let heroInject;
   let unboundSeat;
   const heroSeatFor = (sessionId) => {
@@ -183,6 +214,22 @@ function apply(ctx) {
     };
     setTimeout(settle, POLL_MS);
   };
+  const adoptAsPointer = async (path) => {
+    const main = mainSession();
+    const sessions2 = service("sessions");
+    const navigation = service("uiWorkspace");
+    if (main === void 0 || sessions2 === void 0 || navigation === void 0) return;
+    try {
+      const minted = await sessions2.create({ cwd: path, agentPreset: ARBOR_PRESET });
+      navigation.openSession(minted);
+      await carryDraft(main.id, minted);
+      await navigation.archiveSession(main.id).catch(() => void 0);
+    } catch (error) {
+      ctx.logger.warn(
+        `arbor-ui-workspace: adding ${path} as an external pointer failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
   const wrapAdopt = () => {
     const navigation = ctx.get(NAVIGATION_SERVICE);
     if (navigation === void 0 || typeof navigation.openWorkspace !== "function") return;
@@ -191,6 +238,10 @@ function apply(ctx) {
     navigation.openWorkspace = (workspaceId, beforeOpen, options) => {
       const pick = currentPick();
       const row = workspaceRow(workspaceId);
+      if (pick === ARBOR_PRESET && row !== void 0 && !isArborProject(row.path)) {
+        void adoptAsPointer(row.path);
+        return;
+      }
       const createTakesIt = pick === ARBOR_PRESET && row !== void 0 && isArborProject(row.path);
       const before = mainSession()?.id;
       const outcome = original2(workspaceId, beforeOpen, createTakesIt ? { agentPreset: pick } : options);
@@ -224,4 +275,3 @@ function apply(ctx) {
 		return module.exports;
 	}
 });
-

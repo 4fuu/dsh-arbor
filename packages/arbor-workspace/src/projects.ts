@@ -312,6 +312,36 @@ export class DshProjectBridge {
     return parts.join(';')
   }
 
+  /**
+   * Make one arbor session a member of the workspace that owns the directory it
+   * works in, registering that workspace when DSH's list has none.
+   *
+   * DSH answers "which workspace is this session in" from the workspace whose
+   * member list names it, and filters a workspace's members by the session's
+   * stored cwd (`@deepseek-ai/dsh-workspace`, `WorkspaceEntity.sessionIds` ->
+   * `candidateMatches`), so an arbor session — whose cwd
+   * {@link resolveProject} answers with arbor's own directory — is only a member
+   * of a workspace whose path is that directory. Without this, a session the
+   * driver created or re-routed under arbor belongs to no workspace at all, and
+   * the hero composer answers `chipTitle === undefined` and renders inert
+   * (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`:
+   * `inert = sessionId === void 0 || hero && chipTitle === void 0`) — the dead
+   * composer the outside-directory add used to leave behind.
+   *
+   * The shared folder itself is registered the same way a project subfolder is:
+   * `WorkspaceRegistry.create` reuses the record a canonical path already has,
+   * so this is idempotent and never retitles an existing workspace.
+   */
+  async attachWorkspace(sessionId: SessionId, cwd: string): Promise<void> {
+    if (this.registry === undefined) return
+    try {
+      const workspace = await this.registry.create(resolve(cwd), basename(resolve(cwd)))
+      await workspace.attachSession(sessionId)
+    } catch (error: unknown) {
+      this.warn(`arbor projects: attaching session ${sessionId} to ${cwd} failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   /** Every project subfolder of the shared folder, registered in DSH's registry. */
   async sync(): Promise<readonly DshProject[]> {
     if (this.registry === undefined) return []

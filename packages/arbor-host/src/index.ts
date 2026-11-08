@@ -716,6 +716,21 @@ export class ArborHostService extends Service {
     return this.requireState().projects.addPointer(sessionId, path)
   }
 
+  /**
+   * Make one arbor session a member of the workspace that owns the directory it
+   * works in, so DSH's own hero composer has a workspace to name and stays live.
+   *
+   * The driver calls this for every arbor session it creates or re-routes, with
+   * the cwd it resolved for it: an arbor session works in arbor's own directory,
+   * and DSH filters a workspace's member list by the session's stored cwd, so
+   * the session has to be a member of the workspace whose path is that
+   * directory. See {@link DshProjectBridge.attachWorkspace} for why the composer
+   * is inert without it.
+   */
+  attachArborWorkspace(sessionId: SessionId, cwd: string): Promise<void> {
+    return this.requireState().projects.attachWorkspace(sessionId, cwd)
+  }
+
   /** Drop a recorded external pointer by name for one session. */
   removeArborPointer(name: string, sessionId: SessionId): void {
     this.requireState().projects.removePointer(sessionId, name)

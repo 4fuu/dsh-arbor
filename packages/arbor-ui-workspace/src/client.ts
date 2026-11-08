@@ -83,16 +83,40 @@
  * the shared folder with the shared folder itself
  * (`packages/arbor-workspace/src/projects.ts`), so a session created under arbor
  * for such a directory has a cwd the workspace attach refuses
- * (`session/workspace-attach-failed`, "its cwd resolves to …"), and a session
- * created without the workspace is not a member of it, which leaves the composer
- * with no workspace to name. So the wrap fills the option only for a workspace an
- * arbor session may work in — a project of the shared folder, or the shared
- * folder itself — and for anything else runs the shipped adopt and then asks the
- * hero seat for the pick again, which commits it on the session the adopt opened.
- * That is the sequence that records the external pointer, because the driver's
- * re-route asks the host whether the directory was added; its cost is the one
- * `b3e` left open, a re-routed session whose hero composer stays disabled until
- * its id changes.
+ * (`session/workspace-attach-failed`, "its cwd resolves to …"). So the wrap
+ * fills the option only for a workspace an arbor session may work in — a project
+ * of the shared folder, or the shared folder itself.
+ *
+ * **A directory outside the shared folder is never switched to.** The owner's
+ * decision is that an arbor session stays in arbor's own directory and an added
+ * outside directory is only a pointer, so for that one case the wrap does not
+ * run the shipped adopt at all: it mints a session created under arbor with the
+ * added directory as its `cwd` ({@link adoptAsPointer}), which is the create
+ * that records the pointer, and opens it. What that costs is stated where it is
+ * paid: the session id changes and the project the replaced session had picked
+ * does not survive, because the pointer is recorded from the session's creation
+ * cwd and an arbor session's cwd resolves into the shared folder.
+ *
+ * **Why the pointer cannot be recorded for the session the user is already in.**
+ * A `dsh.client` package reaches the host only through a remote verb, and no
+ * verb in `dsh-v0.2.2-rc.1` carries a session id together with a directory:
+ * `session/create` takes `{ sessionId?, workspaceId?, cwd?, agentPreset? }`
+ * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) and its input
+ * schema is strict, so it cannot be given a fifth field; the `workspace`
+ * namespace's verbs (`create`, `rename`, `delete`, `insertBefore`,
+ * `insertSessionBefore`, `archiveSession`, `unarchiveSession`, `pinSession`,
+ * `unpinSession`, `follow`) name a workspace or a session, never both with a
+ * path; and the host keeps no per-peer session fact that would say which
+ * session a browser is composing in (`@deepseek-ai/dsh-api-remote-access` tracks
+ * principals, `WorkspaceFeed.follow` filters by remote peer, which is a
+ * connection). DSH's extension point for a new verb is a typert remote
+ * namespace — a `TypertRemoteService` with `@Remote`-marked methods on the host
+ * and a `remote.$mount(contribution)` with generated descriptors on the client
+ * (`@deepseek-ai/dsh-api-gateway`, `lib/client.browser.js`) — and the host half
+ * cannot be written here: these sources run through Node's type stripping,
+ * which rejects decorator syntax, and the marker the gateway reads
+ * (`remoteMethods`) is written by the decorator. That is the smallest pinned
+ * patch if the owner wants the same session id kept.
  *
  * The earlier fix re-committed the pick through the hero seat after the switch,
  * which is what made DSH's own `reuseLive`
@@ -315,6 +339,49 @@ interface WorkspacesService {
 }
 
 /**
+ * The client sessions service's create, the `session/create` remote verb
+ * (`@deepseek-ai/dsh-cordis-client-runner`, `lib/client.js`, `ISessions.create`):
+ * `workspaceId` or `cwd`, never both, an optional `sessionId` to claim and an
+ * optional `agentPreset` the host composes the agent under.
+ */
+interface SessionsService {
+  create(options: {
+    workspaceId?: string
+    cwd?: string
+    agentPreset?: string
+  }): Promise<string>
+  /** The session's binding, which is what a composer shell needs to exist. */
+  binding(sessionId: string): unknown
+}
+
+/** The workspace service's session calls, the ones a mint is opened with. */
+interface WorkspaceNavigation {
+  openSession(sessionId: string): void
+  archiveSession(sessionId: string): Promise<unknown>
+}
+
+/**
+ * The slice of DSH's conversation service a draft is read and written through:
+ * `conversation.input.shell(id)` is the same per-session input shell the
+ * conversation plugin's own workspace-switch carry uses
+ * (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`: `inputHub.shell`,
+ * `draftSnapshot`, `setDraft`, `addAttachments`).
+ */
+interface ConversationShell {
+  readonly draftSnapshot?: { readonly text?: string }
+  readonly snapshot?: { readonly attachmentIds?: readonly string[] }
+  setDraft(draft: unknown): void
+  addAttachments(ids: readonly string[]): boolean
+}
+
+/** The slice of the conversation service that owns the composer's input shells. */
+interface ConversationService {
+  readonly input: {
+    shell(sessionId: string): ConversationShell
+  }
+}
+
+/**
  * Whether a workspace path is one of arbor's shared-folder projects.
  *
  * An arbor project is a subfolder of the shared folder, `DSH_HOME/arbor/shared`,
@@ -370,6 +437,56 @@ function filterState(state: WorkspaceState, preset: string | undefined): Workspa
  */
 export function apply(ctx: Context): void {
   const slots = (ctx as unknown as { slots: SlotsService }).slots
+  // Read lazily rather than injected: `conversation` comes from a client package
+  // this one does not declare, and a deployment without it must still get the
+  // picker filter and the pointer add. `Context.get` answers undefined for a
+  // service that is not registered, which is exactly the fallback wanted here.
+  const service = <T>(name: string): T | undefined => (
+    ctx as unknown as { get(name: string): unknown }
+  ).get(name) as T | undefined
+
+  /**
+   * Carry the replaced session's draft onto the session that replaces it, the
+   * same way DSH's own workspace-switch carry does and the way
+   * `@4fu/dsh-arbor-ui`'s hero mint does: the composer's input shell is per
+   * session, so a session that is no longer the main one keeps its draft and the
+   * new one starts empty unless it is moved across.
+   */
+  const carryDraft = async (from: string, to: string): Promise<void> => {
+    const input = service<ConversationService>('conversation')?.input
+    if (input === undefined) return
+    let draft: { text?: string } | undefined
+    let attachmentIds: readonly string[] = []
+    try {
+      const shell = input.shell(from)
+      draft = shell.draftSnapshot
+      attachmentIds = shell.snapshot?.attachmentIds ?? []
+    } catch {
+      // The replaced session has no binding left to read a draft from.
+      return
+    }
+    if ((draft?.text ?? '') === '' && attachmentIds.length === 0) return
+    const sessions = service<SessionsService>('sessions')
+    const deadline = Date.now() + CARRY_MS
+    for (;;) {
+      // The shell exists once the session has a binding, which is what the
+      // composer it is rendered for needs.
+      if (sessions?.binding(to) !== undefined) {
+        try {
+          const shell = input.shell(to)
+          if (attachmentIds.length === 0 || shell.addAttachments(attachmentIds)) {
+            shell.setDraft(draft ?? { text: '' })
+          }
+        } catch {
+          // The minted session lost its binding before the draft landed.
+        }
+        return
+      }
+      if (Date.now() >= deadline) return
+      await new Promise(resolve => setTimeout(resolve, POLL_MS))
+    }
+  }
+
   // The staged pick, read exactly as `@4fu/dsh-arbor-ui`'s sandbox gate reads
   // it: the hero chip writes its pick into the seat's own store before the Host
   // commits it, so the seat store decides for a composer whose session has not
@@ -502,25 +619,13 @@ export function apply(ctx: Context): void {
    * Ask the hero seat for the composer's Arbor pick again, once the session an
    * adopt opened is there to take it.
    *
-   * This is the path for a workspace the create cannot carry the pick into. An
-   * arbor session always works in arbor's own directory, so a session created
-   * under arbor for a directory outside the shared folder has its cwd resolved
-   * into the shared folder (`DshProjectBridge.resolveProject`,
-   * `packages/arbor-workspace/src/projects.ts`) before the workspace attach
-   * reads it, and the attach then refuses it
-   * (`session/workspace-attach-failed`); a session created without the workspace
-   * is not a member of it and its composer has no workspace to name. The shipped
-   * adopt is therefore run as it stands — the directory is registered, the blank
-   * is created in it and the draft is carried — and the pick is then asked for
-   * again through the hero seat. Where `@4fu/dsh-arbor-ui` shadows that seat the
-   * ask is a create for a workspace the create can hold, and a commit on the
-   * adopted session for this one; either way the pick survives, and the commit is
-   * what records the external pointer, because the driver's re-route asks the
-   * host whether the directory was added.
-   *
-   * The log cannot tell the two selections apart — `presets.select` is the single
-   * writer of `agent-preset/selected` — which is why the ask lives here, in the
-   * surface that knows what the user clicked.
+   * This is the path for a workspace whose row this package cannot read — the
+   * adopt runs as it stands and the pick is committed on the session it opened.
+   * A workspace whose row IS readable is handled at create instead: a project of
+   * the shared folder carries the pick into the create
+   * ({@link wrapAdopt}), and a directory outside it becomes a pointer
+   * ({@link adoptAsPointer}), so this path is the fallback for an unknown row
+   * and not the main one.
    */
   const reaskPick = (before: string | undefined): void => {
     const deadline = Date.now() + CARRY_MS
@@ -539,6 +644,69 @@ export function apply(ctx: Context): void {
   }
 
   /**
+   * Add a directory outside the shared folder to an Arbor composer as a
+   * pointer, without switching the session's workspace.
+   *
+   * The owner's decision is that an arbor session stays in arbor's own
+   * directory and an added outside directory is only a pointer, so the shipped
+   * adopt — which switches the main session to a blank in the added workspace
+   * — is not run at all. What IS run is the create that carries the pick and the
+   * pointer together: `sessions.create({ cwd, agentPreset: 'arbor' })` goes to
+   * the `session/create` remote verb (`@deepseek-ai/dsh-cordis-client-runner`,
+   * `lib/client.js`, `ISessions.create`, whose request is
+   * `{ workspaceId?, cwd?, sessionId?, agentPreset? }`), and with no `sessionId`
+   * the host mints one: `createMinted(request.cwd,
+   * await this.composeAgent(request.agentPreset))`
+   * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`). The requested
+   * cwd is therefore the added directory and the preset is Arbor, which is
+   * exactly the pair `ArborDriver.createArborAgent` acts on: it records the
+   * directory as an external pointer for that session
+   * (`noteExternalProject`, which asks the host whether the user added it) and
+   * resolves the session's cwd into the shared folder
+   * (`DshProjectBridge.resolveProject`).
+   *
+   * The registry `create` has already happened by the time the picker calls
+   * `onPick` — the shipped add-workspace flow is `createWorkspace({ path })`
+   * then `onPick(workspace.workspaceId)`
+   * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`, `adoptDirectory`)
+   * — so the hook on `WorkspaceRegistry.create` has the directory in its added
+   * set before this runs, which is what makes the pointer a fact about a
+   * directory the user chose rather than about every resolve.
+   *
+   * The host then makes the minted session a member of the workspace that owns
+   * the directory it works in (`ArborHostService.attachArborWorkspace`), because
+   * DSH answers "which workspace is this session in" from the member list and
+   * filters it by the session's stored cwd; a session created with a `cwd` and
+   * no `workspaceId` would otherwise belong to no workspace and its hero
+   * composer would render inert.
+   *
+   * The mint is opened as the main session and the replaced blank is archived,
+   * the same way `@4fu/dsh-arbor-ui`'s hero mint does it, and the draft is
+   * carried across. What does not survive is the session's id and the project
+   * the replaced session had picked: the pointer is recorded from the session's
+   * creation cwd, so the session has to be created in the added directory, and
+   * an arbor session's cwd resolves into the shared folder. A `dsh.client`
+   * package has no channel that would name the existing session instead — see
+   * the module comment.
+   */
+  const adoptAsPointer = async (path: string): Promise<void> => {
+    const main = mainSession()
+    const sessions = service<SessionsService>('sessions')
+    const navigation = service<WorkspaceNavigation>('uiWorkspace')
+    if (main === undefined || sessions === undefined || navigation === undefined) return
+    try {
+      const minted = await sessions.create({ cwd: path, agentPreset: ARBOR_PRESET })
+      navigation.openSession(minted)
+      await carryDraft(main.id, minted)
+      await navigation.archiveSession(main.id).catch(() => undefined)
+    } catch (error: unknown) {
+      ctx.logger.warn(
+        `arbor-ui-workspace: adding ${path} as an external pointer failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  /**
    * Supply the composer's Arbor pick to the adopt call that has none.
    *
    * The hero picker reaches `uiWorkspace.openWorkspace(workspaceId, beforeOpen)`
@@ -550,8 +718,11 @@ export function apply(ctx: Context): void {
    * It fills it only for a workspace an arbor session may work in — a project of
    * the shared folder, or the shared folder itself, the two cases
    * `DshProjectBridge.resolveProject` answers with the requested directory. A
-   * directory outside the shared folder keeps the shipped call and the pick is
-   * re-committed afterwards, because the create cannot hold it there.
+   * directory outside the shared folder is never switched to: it is added as a
+   * pointer for a session created in it ({@link adoptAsPointer}), because an
+   * arbor session's cwd resolves into the shared folder and a session whose cwd
+   * is not its workspace's path is filtered out of that workspace's members,
+   * which leaves the composer with no workspace to name.
    *
    * The method is wrapped on the service instance rather than replaced, and the
    * original is restored with this plugin.
@@ -569,6 +740,13 @@ export function apply(ctx: Context): void {
     ): void => {
       const pick = currentPick()
       const row = workspaceRow(workspaceId)
+      // A directory outside the shared folder, added from an Arbor composer:
+      // no switch at all. The registry create has already happened, so the
+      // pointer is recorded for the session this mints.
+      if (pick === ARBOR_PRESET && row !== undefined && !isArborProject(row.path)) {
+        void adoptAsPointer(row.path)
+        return
+      }
       const createTakesIt = pick === ARBOR_PRESET && row !== undefined && isArborProject(row.path)
       const before = mainSession()?.id
       const outcome = original(workspaceId, beforeOpen, createTakesIt ? { agentPreset: pick } : options)

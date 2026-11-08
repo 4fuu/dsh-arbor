@@ -85,7 +85,15 @@ export const POINTER_TEXT: TextTable = {
   // directory workspace works in a directory of its own and reaches the project
   // by its absolute path.
   'workspace.project.item': '当前项目 {name}：{path}',
-  'workspace.project.ovnfs': '它在共享目录里：用 workspace.checkout("{name}") 打开它的检出，在检出里改，用 workspace.apply 合回共享目录。',
+  // Arbor's own ovnfs lines already say where the shared folder is, that every
+  // window reads from it, that bash runs there by default and that a change
+  // goes through a checkout (`workspace.method.shared`, `workspace.method.open`,
+  // `workspace.method.readonly`), so this line adds only what they cannot say
+  // about one project: that it is a subdirectory of that same place, so the
+  // path the line names and the relative path `{name}/` both reach it with no
+  // `cd` and no exploration — and that reading it in place is fine, because
+  // only a change needs a checkout.
+  'workspace.project.ovnfs': '它在共享目录里，子目录是 {name}：读它就读 {path}，或按 {name}/ 读，不用开检出、不用 cd；要改它就用 workspace.checkout 给它开检出（子目录填 {name}），改完用 workspace.apply 合回共享目录。',
   'workspace.project.directory': '它在共享目录里，路径就是 {path}；本窗口另有自己的工作目录，按这个绝对路径直接读写该项目。',
 }
 

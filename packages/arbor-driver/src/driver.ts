@@ -388,14 +388,21 @@ export class ArborDriver extends Service implements AgentFactory {
     // the session becomes an arbor session: that is the ask, and it is not
     // repeated on a later resume.
     const requested = hold.handle.agent.session.header.cwd
+    const cwd = await this.hostService.resolveArborCwd(requested)
     await hold.handle.dispose()
     await this.resumeArbor(this.runtime.ctx, {
       resumeSessionId: sessionId,
       agentOptions: hold.agentOptions,
       setup: hold.setup,
-      cwd: await this.hostService.resolveArborCwd(requested),
+      cwd,
     })
     this.noteExternalProject(requested, sessionId)
+    // The session kept its identity and its log, but its cwd is now arbor's own
+    // directory, so it moves to the workspace that owns that directory: DSH
+    // filters a workspace's members by the session's stored cwd, and a session
+    // left in the workspace it was created in reads as a member of nowhere —
+    // which is what leaves the hero composer with no workspace to name.
+    await this.hostService.attachArborWorkspace(sessionId, cwd)
   }
 
   /**
@@ -548,9 +555,10 @@ export class ArborDriver extends Service implements AgentFactory {
     // session is prepared, so the DSH session, its cwd display and the project
     // picker all name a folder that is really there.
     const requested = options.meta?.cwd as string | undefined
+    const cwd = await this.hostService.resolveArborCwd(requested)
     const meta = options.meta === undefined
-      ? { cwd: await this.hostService.resolveArborCwd(undefined) }
-      : { ...options.meta, cwd: await this.hostService.resolveArborCwd(requested) }
+      ? { cwd }
+      : { ...options.meta, cwd }
     const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, {
       ...options.seed === undefined ? {} : { seed: options.seed },
       meta,
@@ -582,6 +590,10 @@ export class ArborDriver extends Service implements AgentFactory {
     } finally {
       preparation[Symbol.dispose]()
     }
+    // The session is stored and published, so its header is readable: it now
+    // belongs to the workspace that owns the directory it works in, which is
+    // what keeps DSH's hero composer live for it.
+    await this.hostService.attachArborWorkspace(id, cwd)
     return {
       agent,
       dispose: async () => {
@@ -694,15 +706,20 @@ export class ArborDriver extends Service implements AgentFactory {
       throw new Error('cannot resume: session persistence is not configured (load a dsh-session-persistence backend)')
     }
     const id = options.resumeSessionId
+    // The directory this session works in, read from its stored header before
+    // the log is opened for writing: the resume resolves it the same way a
+    // creation does, and the workspace attach below names it.
     let open: SessionHandle | undefined
     let preparation: SessionPreparation | undefined
     let stored: { handle: SessionHandle; storedCount: number } | undefined
     let agent: ArborSessionAgent | undefined
     let arbor: SessionArbor | undefined
+    let cwd = options.cwd
     try {
       open = await persistence.open(id, 'write', {
         ...options.signal === undefined ? {} : { signal: options.signal },
       })
+      cwd ??= open.header.cwd
       const coldRead = await open.read(0)
       const windows = await this.hostService.windowChainOf(id)
       const recorded = await windowToolCalls(this.hostService.journal, windows)
@@ -742,6 +759,10 @@ export class ArborDriver extends Service implements AgentFactory {
       preparation?.[Symbol.dispose]()
       await open?.close().catch(() => {})
     }
+    // The session is back and its log is open for writing, so its header is
+    // readable: it belongs to the workspace that owns the directory it works in,
+    // the same one it belonged to before the restart.
+    if (cwd !== undefined) await this.hostService.attachArborWorkspace(id, cwd)
     const live = { agent, arbor }
     return {
       agent: live.agent,
