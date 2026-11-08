@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url'
 import { installFailLoud } from '@deepseek-ai/dsh-app-boot'
 import { installAnchor } from '../packages/arbor-testkit/src/index.ts'
 import { DSH_PINNED_VERSION } from '../packages/arbor-prompt/src/index.ts'
+import { inject as arborInject } from '../packages/arbor-ui-workspace/src/client.ts'
 
 const NAME = 'arbor-spike-proof-18'
 
@@ -127,6 +128,13 @@ try {
     services.length === DECLARED_INJECT.length
       && DECLARED_INJECT.every((one, index) => services[index] === one),
     `shipped: ${services.join(', ')}`)
+  // This package runs the shipped `apply` on its own fiber, so every service the
+  // shipped plugin declares has to be reachable from this one. It may declare
+  // more — it does, for the two follow-ups it runs that the shipped plugin does
+  // not — but never fewer, and never in a different order at the front.
+  check("this package declares every service the shipped plugin needs",
+    services.every(one => arborInject.includes(one)),
+    `this package: ${arborInject.join(', ')}`)
 
   // ---- E. the graph and the row that mounts this package.
   check('the shipped package declares the client dependency graph',

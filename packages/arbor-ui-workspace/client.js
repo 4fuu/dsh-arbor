@@ -38,6 +38,7 @@ var ARBOR_PRESET = "arbor";
 var PRESET_PROJECTION = "agentPreset";
 var POLL_MS = 40;
 var MAX_POLLS = 500;
+var CARRY_MS = 2e3;
 function useMainSessionId(props) {
   const useSessions = props["useSessions"];
   return useSessions?.((state) => {
@@ -140,13 +141,44 @@ function apply(ctx) {
       }
     );
   }
+  const sessions = ctx.sessions;
+  const heroFace = (sessionId) => heroInject === void 0 ? void 0 : heroInject(sessionId);
+  const mainSession = () => {
+    const byId = sessions?.list.getSnapshot().byId ?? {};
+    for (const id of Object.keys(byId)) {
+      if ((byId[id]?.retainedBy?.mainView ?? 0) > 0) return byId[id];
+    }
+    return void 0;
+  };
   const gate = (shipped) => (props) => {
-    const preset = usePresetPick(useMainSessionId(props), useProjectionOf(props));
+    const sessionId = useMainSessionId(props);
+    const preset = usePresetPick(sessionId, useProjectionOf(props));
     const useWorkspaces = props["useWorkspaces"];
     const filtered = (selector) => useWorkspaces === void 0 ? void 0 : selector(filterState(useWorkspaces((state) => state), preset));
+    const onPick = props["onPick"];
+    const carryPick = onPick === void 0 ? void 0 : (workspaceId) => {
+      const outcome = onPick(workspaceId);
+      if (preset === ARBOR_PRESET) {
+        const before = sessionId;
+        const deadline = Date.now() + CARRY_MS;
+        const settle = () => {
+          const main = mainSession();
+          if (main === void 0 || main.blank !== true) return;
+          if (main.id === before && Date.now() < deadline) {
+            setTimeout(settle, POLL_MS);
+            return;
+          }
+          const committed = main.projectionValues?.agentPreset;
+          if (committed !== ARBOR_PRESET) heroFace(main.id)?.select?.(ARBOR_PRESET);
+        };
+        setTimeout(settle, POLL_MS);
+      }
+      return outcome;
+    };
     return (0, import_react.createElement)(shipped, {
       ...props,
-      useWorkspaces: filtered
+      useWorkspaces: filtered,
+      ...carryPick === void 0 ? {} : { onPick: carryPick }
     });
   };
   const original = slots.register.bind(slots);

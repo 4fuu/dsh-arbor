@@ -395,6 +395,23 @@ nothing to pick, so DSH offers to add a directory. Once a directory is added it 
 an ordinary DSH workspace like any other, listed to ordinary composers and
 untouched by arbor.
 
+**The pick the workspace switch drops, put back.** Adopting a directory — or
+picking another project — re-uses the hero's blank session, and DSH's
+`reuseLive` re-selects the resolved deployment default on it, because the
+picker's adopt path (`createInWorkspace` → `createNamed`) names no preset. An
+Arbor pick made a moment earlier is therefore followed back off arbor by the
+driver's own reverse re-route, which is the one outcome the owner ruled out. The
+log cannot separate the two selections: `presets.select` is the single writer of
+`agent-preset/selected` (`@deepseek-ai/dsh-agent-preset-registry`,
+`lib/index.js`), so a controller-issued re-select and a user's pick append the
+same event. So the wrapped `onPick` in `@4fu/dsh-arbor-ui-workspace` re-commits
+the pick through the same hero seat the user clicked — the seat's `select` →
+`apply` → `ctx.remote.agentPresets.select` path — once the session the switch
+opened is there to take it. Verified live in the browser on both paths: picking
+another project and adding a directory through "Add workspace…" both leave the
+hero on Arbor, and the host records a second `agent-preset/selected` naming
+arbor on the new session.
+
 **Where am I, where is my project: one line in `<workspace>`.** The live run on
 `b3c` left the gap the owner named: the user picked `web-app` in the composer, the
 window worked in its own directory, and the model answered "tell me the path" —
@@ -456,33 +473,53 @@ source. The live turn on that backend read the project line from `<workspace>`
 and its **first** tool call was `ls -la <shared>/web-app`, straight to the project
 the user picked, with arbor's own `bash`/`read`/`send`.
 
-**Two web-hero behaviours that are not finished.** Both were found driving the
-browser on `b3d`, and neither is silent:
+**The hero composer goes disabled when Arbor is picked, and stays disabled.**
+This is the one finding still open on `b3e`, and the reason is in DSH, not in this
+repository's glue.
 
-- **The hero composer goes disabled when Arbor is picked, and stays disabled.**
-  The re-route ends the embedded agent and opens the same session id under arbor,
-  and DSH's `InputBar` computes
-  `live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
-  (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`), where those three
-  arrive through `ctx.uiSession.provide({ hooks: ['conversation', 'input'], props:
-  ['inputActions'] })` resolved per session binding. The hero's binding was
-  resolved while the embedded agent was live and is not resolved again, so the
-  composer disables itself. A session view opened afterwards is fine
-  (`contenteditable=true`, verified), and choosing a project in the picker
-  re-mounts the hero and brings it back; a fresh "New Session" also works but
-  starts on the default preset. What does not work is typing the first message
-  into the hero right after the pick.
-- **Adding a workspace from the hero re-selects the default preset.** Adopting a
-  directory re-uses the blank session, and DSH's `reuseLive` calls
-  `presets.select(composition.agentPreset)` with the deployment default
-  (`@deepseek-ai/dsh-api-session-controller`), so an Arbor pick made a moment
-  earlier is followed back to the embedded loop by the driver's own reverse
-  re-route. The label and the driver stay in agreement — which is the rule — but
-  the user has to pick Arbor again after adding the workspace.
+The owner's option (a) — one routing handle per session that stays the agent DSH
+binds to, deciding embedded or arbor at the first followup — cannot be built on
+dsh-v0.2.2-rc.1, and the reason is three lines of source:
 
-Both are honest rather than untrue: nothing claims a driver that is not running.
-They are the remaining work for the closed loop, and both live in DSH's own
-composer binding, which this repository does not own.
+- `AgentRegistry.enter` refuses a second entry for one id:
+  `if (this.store.has(id)) throw new Error(`agent "${id}" is already registered`)`
+  (`@deepseek-ai/dsh-agent`, `lib/index.js`), and `register` refuses for the same
+  reason. So the registered agent for a session id can only be replaced, never
+  wrapped, and `prompt()` reaches the registered one
+  (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`: `liveAgent` is
+  `ctx.agents.get(sessionId)`, and `agent.followup(message)` is called on it).
+- The only public way to remove that entry is `AgentHandle.dispose()`
+  (`@deepseek-ai/dsh-agent`, `lib/types/index.d.ts`), which also removes the
+  Session from the store.
+- Neither inner factory can adopt a session that already exists: AgentLoop's
+  `createAgent` and `resume` both call
+  `this.runtime.ctx.sessions.prepare(id, …)`
+  (`@deepseek-ai/dsh-agent-loop`, `lib/index.js`), and `SessionStore.prepare`
+  throws `session "<id>" already exists` (`@deepseek-ai/dsh-session`,
+  `lib/index.js`).
+
+So the re-route must release the session, and the client sees it leave and come
+back. What breaks is the hero's session scope: `ScopeProvider` subscribes to the
+main binding (`@deepseek-ai/dsh-client-ui-renderer`, `lib/client.js`) and the
+scoped props are materialized per session *binding* through
+`ctx.uiSession.provide` (`@deepseek-ai/dsh-client-ui-session`, `lib/client.js`),
+keyed by the binding owner the sessions controller hands out for that id. The
+re-route replaces the owner, so the hero keeps the props resolved against the old
+one, and its `InputBar` computes
+`live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
+(`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`) — false, for good.
+
+Three public re-resolve paths were tried and measured, and none of them moves the
+main binding while the session id is unchanged: `uiWorkspace.openSession(id)`,
+`clearMain()` followed by `openSession(id)`, and
+`uiWorkspace.startSession(undefined, { agentPreset: 'arbor' })` (which reuses the
+same blank, because `createInWorkspace` matches it by cwd and preset). What does
+work is a change of session id — a workspace switch, or a page reload — and a
+reload is the proof that the session itself is fine: after one, the hero comes
+back on the same arbor session with a working composer
+(`contenteditable=true`, verified). So the missing piece is a public way to
+re-publish the main binding for an unchanged session id, which is a DSH seam, not
+something this repository can reach from a `dsh.client` package.
 
 ## What arbor's core still lacks (back to the arbor repo)
 

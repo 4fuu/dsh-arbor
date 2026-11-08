@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3d
+git checkout b3e
 pnpm install
 ```
 
@@ -339,14 +339,15 @@ Works, and is covered by a proof:
 
 Not finished, and not to be worked around here:
 
-- **B3b, B3c and B3d have landed** (see `docs/b3b-projects-and-sandbox.md`):
+- **B3b, B3c, B3d and b3e have landed** (see `docs/b3b-projects-and-sandbox.md`):
   arbor owns project management for arbor sessions and DSH's sandbox is gone for
   them. The workspace is arbor's own over the shared folder (ovnfs, with the
   plain directory as the fallback) and per-window checkouts;
   `DshSandboxSeam` / `DshSandboxWorkspace` / `sandbox_escalate` are removed, and
   the shared folder's projects are the DSH project list. Ordinary sessions keep
   their sandbox and cwd. Branch `b3d` adds the project line inside
-  `<workspace>` and the per-preset picker filter.
+  `<workspace>` and the per-preset picker filter; branch `b3e` carries the Arbor
+  pick across a workspace switch.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
 - ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
   `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through
@@ -414,20 +415,21 @@ Not finished, and not to be worked around here:
   and one created under arbor resolve it the same way, a restart brings it back,
   and a project that moves before the first turn reaches a running window as a
   delta of only the changed lines. Proof 17 covers all of it.
-- **Two web-hero behaviours that are not finished.** (1) Picking Arbor in the
-  hero runs arbor — proof 15 and a live run confirm the driver follows — but the
-  hero's own composer goes disabled at that moment and stays disabled: DSH's
-  `InputBar` computes `live = input !== undefined && keyboard !== undefined &&
-  inputActions !== undefined` (`@deepseek-ai/dsh-client-ui-conversation`,
-  `lib/client.js`), and the re-route ends the embedded agent whose session scope
-  held those services. Choosing a project in the picker, or opening the session
-  from the sidebar tree, re-mounts the composer and it works; a fresh "New
-  Session" also works but starts on the default preset. (2) Adding a workspace
-  from the hero re-uses the blank session, and DSH's `reuseLive` re-selects the
-  deployment default preset, so an Arbor pick made a moment earlier is followed
-  back to the embedded loop. Both are honest — the label always names the driver
-  actually running — and both are recorded in
-  `docs/b3b-projects-and-sandbox.md`.
+- **Two web-hero behaviours, one fixed on `b3e` and one still open.** (1) Picking
+  Arbor in the hero runs arbor — proof 15 and a live run confirm the driver
+  follows — but the hero's own composer goes disabled at that moment and stays
+  disabled: DSH's `InputBar` computes
+  `live = input !== undefined && keyboard !== undefined && inputActions !== undefined`
+  (`@deepseek-ai/dsh-client-ui-conversation`, `lib/client.js`), and the re-route
+  replaces the session binding those three are resolved against. The full source
+  analysis, the three public re-resolve paths that were tried and measured, and
+  the reload evidence that the session itself is fine are in
+  `docs/b3b-projects-and-sandbox.md`. A workspace switch or a page reload brings
+  the composer back on the same arbor session. (2) Adding a workspace used to
+  drop the Arbor pick, because DSH's `reuseLive` re-selects the deployment
+  default on the blank session the switch reuses; `b3e` re-commits the pick
+  through the hero seat after the switch, so the label and the driver stay in
+  agreement.
 - The rest of the UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.

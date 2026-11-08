@@ -53,6 +53,29 @@
  * rule is a path convention rather than a host answer. It is documented as a
  * known limitation in `docs/b3b-projects-and-sandbox.md` and pinned by the same
  * test.
+ *
+ * ## The pick the workspace switch drops, put back
+ *
+ * The same wrapper carries the composer's preset across a workspace switch.
+ * DSH's `reuseLive` (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`)
+ * re-selects the resolved deployment default on the blank session a workspace
+ * switch reuses, because the picker's own adopt path
+ * (`createInWorkspace` → `createNamed`) names no preset: an Arbor pick made a
+ * moment earlier is followed back off arbor by the driver's reverse re-route,
+ * which leaves a session labelled Arbor running the embedded loop until the
+ * pick is re-committed. So the wrapped `onPick` re-commits it, through the same
+ * hero seat the user clicked, once the session the switch opened is there to
+ * take it: the seat's own `select` stages the pick and its `apply` hands it to
+ * the session the main view shows
+ * (`@deepseek-ai/dsh-client-ui-agent-preset`, `lib/client.js`), which is the
+ * same remote call the chip itself makes — no verb of this package's own.
+ *
+ * The log cannot tell the two selections apart: `presets.select` is the single
+ * writer of `agent-preset/selected`
+ * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/index.js`), so a
+ * controller-issued re-select and a user's pick append the same event. That is
+ * why the fix is here, in the surface that knows what the user clicked, rather
+ * than in the driver second-guessing an event it cannot attribute.
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -75,6 +98,9 @@ const POLL_MS = 40
 
 /** Give up looking for the hero seat after this many polls (~20s). */
 const MAX_POLLS = 500
+
+/** How long a workspace switch is given to open the session it opens. */
+const CARRY_MS = 2_000
 
 /**
  * The session the main view is showing, which is the session a composer belongs
@@ -172,6 +198,34 @@ interface SlotsService {
   ): () => void
 }
 
+/**
+ * The slice of DSH's own workspace service this package uses: the same call the
+ * shipped plugin makes when a session row is opened
+ * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`, `openSession`), which
+ * re-retains the session for the main view and re-publishes the main binding.
+ * That is the public path that re-resolves the hero's session scope after the
+ * driver has replaced the agent under it.
+ */
+/** One session row of the client sessions store, as far as this package reads it. */
+interface SessionSummary {
+  readonly id: string
+  readonly blank?: boolean
+  readonly cwd?: string
+  readonly projectionValues?: { readonly agentPreset?: unknown }
+  readonly retainedBy?: { readonly mainView?: number }
+}
+
+/** The client sessions store: the rows and the retention facts beside them. */
+interface SessionsStore {
+  list: {
+    getSnapshot(): { byId: Readonly<Record<string, SessionSummary>> }
+    subscribe(listener: () => void): () => void
+  }
+  retainInfo(sessionId: string): {
+    getSnapshot(): { retainedBy?: { mainView?: number } }
+  }
+}
+
 /** The staged pick DSH's hero chip keeps for the session about to start. */
 interface AgentPresetSeatSnapshot {
   /** The staged choice, empty until the roster loads. */
@@ -195,6 +249,15 @@ interface AgentPresetSeatInjected {
   readonly hooks: {
     readonly agentPresetSeat: AgentPresetSeatStore
   }
+  /**
+   * The seat's own commit, which is the hero chip's: stage the pick and hand it
+   * to the session the main view shows
+   * (`@deepseek-ai/dsh-client-ui-agent-preset`, `lib/client.js`: the face's
+   * `select` → `AgentPresetSeatController.select` → `apply` →
+   * `ctx.remote.agentPresets.select`). Reading it is how this package re-commits
+   * a pick the workspace switch dropped, without a verb of its own.
+   */
+  readonly select?: (id: string) => unknown
 }
 
 /** The hero seat's `inject`, called the way the slot runtime calls it. */
@@ -330,23 +393,81 @@ export function apply(ctx: Context): void {
     )
   }
 
+  const sessions = (ctx as unknown as { sessions: SessionsStore }).sessions
+
+  /** The hero seat's registration-side face for one session, when it is there. */
+  const heroFace = (sessionId: string): AgentPresetSeatInjected | undefined => (
+    heroInject === undefined ? undefined : heroInject(sessionId)
+  )
+
+  /**
+   * The session the main view retains, which is the session a composer belongs
+   * to. Read from the store rather than from a component's props, because the
+   * follow-up below runs from an event handler, not from a render.
+   */
+  const mainSession = (): SessionSummary | undefined => {
+    const byId = sessions?.list.getSnapshot().byId ?? {}
+    for (const id of Object.keys(byId)) {
+      if ((byId[id]?.retainedBy?.mainView ?? 0) > 0) return byId[id]
+    }
+    return undefined
+  }
+
   /**
    * The shipped component with a filtered `useWorkspaces`: the pick flow's own
    * selector calls are forwarded to the shipped hook, and the state they read is
    * this composer's filtered view. Every other prop passes through untouched, so
    * the picker is the shipped one in every other respect.
+   *
+   * `onPick` is wrapped as well, and that wrapper carries the composer's preset
+   * across a workspace switch. DSH's own `reuseLive`
+   * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) re-selects the
+   * resolved deployment default on the blank session a workspace switch reuses,
+   * because the picker's adopt path (`createInWorkspace` →
+   * `createNamed`) names no preset — so an Arbor pick made a moment earlier is
+   * followed back off arbor by the driver's own reverse re-route. The pick is
+   * re-committed here through the same hero seat the user clicked, which is the
+   * seat's own `select` → `apply` → `ctx.remote.agentPresets.select` path.
    */
   const gate = (shipped: unknown) => (props: Record<string, unknown>): unknown => {
-    const preset = usePresetPick(useMainSessionId(props), useProjectionOf(props))
+    const sessionId = useMainSessionId(props)
+    const preset = usePresetPick(sessionId, useProjectionOf(props))
     const useWorkspaces = props['useWorkspaces'] as WorkspaceHook | undefined
     const filtered = (selector: (state: WorkspaceState) => unknown): unknown => (
       useWorkspaces === undefined
         ? undefined
         : selector(filterState(useWorkspaces(state => state) as WorkspaceState, preset))
     )
+    const onPick = props['onPick'] as ((workspaceId: string) => unknown) | undefined
+    const carryPick = onPick === undefined ? undefined : (workspaceId: string): unknown => {
+      const outcome = onPick(workspaceId)
+      // The switch is asynchronous and its promise is not handed back — the hero's
+      // own `onPick` is a block-bodied arrow — so the session it opens is waited
+      // for by watching the store. DSH's `reuseLive` re-selects the resolved
+      // deployment default on that session, and the pick is re-committed here
+      // once it is there to take it: the seat's own `select` stages the pick and
+      // `apply` hands it to the session the main view then shows.
+      if (preset === ARBOR_PRESET) {
+        const before = sessionId
+        const deadline = Date.now() + CARRY_MS
+        const settle = (): void => {
+          const main = mainSession()
+          if (main === undefined || main.blank !== true) return
+          if (main.id === before && Date.now() < deadline) {
+            setTimeout(settle, POLL_MS)
+            return
+          }
+          const committed = main.projectionValues?.agentPreset
+          if (committed !== ARBOR_PRESET) heroFace(main.id)?.select?.(ARBOR_PRESET)
+        }
+        setTimeout(settle, POLL_MS)
+      }
+      return outcome
+    }
     return createElement(shipped as ComponentType<Record<string, unknown>>, {
       ...props,
       useWorkspaces: filtered,
+      ...carryPick === undefined ? {} : { onPick: carryPick },
     })
   }
 
