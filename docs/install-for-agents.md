@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3h
+git checkout b3i
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty-five, in order, against the scripted model
+pnpm proofs         # all twenty-six, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -92,6 +92,7 @@ pnpm proof:picker-pin         # 18 the picker filter is pinned to the shipped pl
 pnpm proof:hero-create-routing # 19 the hero pick creates the session as arbor
 pnpm proof:ovnfs-project       # 20 the ovnfs project line: where paths start, read in place
 pnpm proof:arbor-workspace-membership  # 21 the session belongs to the workspace the user picked
+pnpm proof:reload-preset                # 22 a cold client restores a blank under its recorded preset
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -192,10 +193,12 @@ const ctx = await bootArborProfile({
 
 It prints `dsh web: http://127.0.0.1:3080/?token=…`. Open that in a browser and
 the hero composer is there: the workspace chip, the preset chip, and (for a
-Standard composer) the sandbox access-mode switch. A session created through the
-controller's own calls — `ctx.agents.create` with no preset, then
-`agentPresets.select(agent, 'arbor')` — is the path the hero chip takes, and it
-is what proof 15 drives.
+Standard composer) the sandbox access-mode switch. Picking Arbor on the hero
+mints a session created under the preset (`session/create` with `agentPreset`,
+no `sessionId`), which is what proof 19 drives; the older path —
+`ctx.agents.create` with no preset, then `agentPresets.select(agent, 'arbor')`
+— is what an SDK or a remote `agent-preset/select` still takes, and it is what
+proof 15 drives.
 
 **ovnfs is chosen only when its binary is on `PATH`.** `openWorkspace` runs
 `execFile('ovnfs', …)` and falls back to the plain-directory workspace when the
@@ -359,7 +362,15 @@ Not finished, and not to be worked around here:
   project in place is fine; branch `b3h` keeps the arbor session's cwd the
   directory the user picked, so the sidebar shows it under that row instead of
   under a "shared" row, never registers the shared folder as a DSH workspace, and
-  marks arbor's rows `（Arbor）` in the sidebar browser.
+  marks arbor's rows `（Arbor）` in the sidebar browser. Branch `b3i` closes the
+  reload question on both sides: `@4fu/dsh-arbor-ui-workspace` holds a cold page's
+  restore of a saved blank until the session's recorded preset is in the client's
+  cache, and the driver never reverse-routes a session whose creation header says
+  `agentPreset: 'arbor'`, re-asserting its label through the registry's own
+  `select` instead. The `b3h` live finding — a plain reload turning an Arbor
+  session into a Standard one — did not reproduce on this tree (two reloads and a
+  browser relaunch, no `agent-preset/selected` at all), and the correction is
+  recorded in `docs/b3b-projects-and-sandbox.md`.
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
 - ovnfs is offered again for arbor sessions. B3 kept it out because its host-side
   `node:fs`, `spawn('/bin/sh')` and daemon subprocess would be a hole through
@@ -387,19 +398,20 @@ Not finished, and not to be worked around here:
   the pointer only then. Pointers are per session and render inside arbor's
   `<workspace>`, answered per window. Proof 16 covers the chain; proof 8 covers
   recording, listing, dropping and the mid-window delta.
-- **Picking Arbor in the web hero runs arbor.** DSH's preset registry commits the
-  hero chip's staged pick as an `agent-preset/selected` event on the session log;
-  the driver observes that event, ends the embedded agent with the handle its
-  creation returned, and opens the same session id under arbor, so the session
-  keeps its identity and its log and its next turn runs arbor. A selection after
-  the first turn is refused by DSH with a visible reason ("This session has
-  already started"), and the driver guards on the turn boundary as well: nothing
-  silently keeps the driver it began with. The other direction is followed too —
-  a blank arbor session that selects another preset goes back to the embedded
-  loop — because DSH re-selects the default preset whenever the picker reuses a
-  blank session. Proof 15 covers all of it. On the hero path the pick is a create
-  instead of a selection (see the `b3f` bullet below), so this event is what the
-  paths that are not the hero — an SDK or remote `agent-preset/select` — write.
+- **Picking Arbor in a composer that is not the hero runs arbor.** DSH's preset
+  registry commits the staged pick as an `agent-preset/selected` event on the
+  session log; the driver observes that event, ends the embedded agent with the
+  handle its creation returned, and opens the same session id under arbor, so the
+  session keeps its identity and its log and its next turn runs arbor. A
+  selection after the first turn is refused by DSH with a visible reason ("This
+  session has already started"), and the driver guards on the turn boundary as
+  well: nothing silently keeps the driver it began with. Which way a selection
+  *before* the first turn is followed depends on where the session's arbor came
+  from: a blank that selected arbor goes back to the embedded loop when it
+  selects another preset, and a blank **created** as arbor is never moved off it
+  — the only selection that can reach it is the controller's own default
+  re-select on a reused blank, and the driver puts the label back through the
+  registry's own `select` instead. Proof 15 covers both halves.
 - **The project picker is filtered per preset, in the browser.**
   `@4fu/dsh-arbor-ui-workspace` is a `dsh.client` package that wraps
   `ctx.slots.register` for the one registration that matters: the shipped
@@ -468,18 +480,15 @@ Not finished, and not to be worked around here:
   Arbor. The shipped path is otherwise untouched, and the host records no second
   `agent-preset/selected`. This replaces the `b3e` re-commit, which is what made
   DSH's `reuseLive` follow the pick back off arbor.
-- **A directory outside the shared folder is the one place the create cannot take
-  the pick** (`b3f`, a known limitation with the reason). An arbor session always
-  works in arbor's own directory, so a session created under arbor for such a
-  directory has its cwd resolved into the shared folder
-  (`DshProjectBridge.resolveProject`), which the workspace attach refuses
-  (`session/workspace-attach-failed`); a session created *without* the workspace
-  is not a member of it and its composer has no workspace to name. So for those
-  the shipped adopt runs and the pick is committed on the session it opened — the
-  `b3e` path, which is also what records the external pointer. The pick survives
-  and the pointer is recorded, but the re-route replaces the session binding, so
-  that session's composer stays disabled until its id changes (a workspace switch
-  or a reload). The hero path — pick Arbor, type, send — never goes through it.
+- **A directory outside the shared folder takes the pick at create too** (`b3h`,
+  which reversed the `b3f` limitation). `DshProjectBridge.resolveProject` answers
+  the requested directory as-is, so a session created under arbor for a directory
+  the user added keeps that directory as its cwd, is a member of that workspace,
+  and records it as an external pointer; the hero mints there as well, so the
+  pick never has to be committed on a live session. The `b3f` limitation — the
+  cwd resolved into the shared folder, the attach refused, the composer left
+  without a workspace to name — is gone, and the `b3e` re-commit that worked
+  around it is gone with it.
 - **Two gate corrections in the same step**, both so that nothing untrue is left
   showing: the staged pick decides only while the session has not started a turn
   (a started session keeps the driver it began with, so only its committed
@@ -535,10 +544,11 @@ one-shot runner refuses to adopt any session that runs under a preset —
 `session "..." runs under agent preset "arbor", which the one-shot runner does
 not compose` — and it has no flag to select one. A session reaches arbor from a
 surface that composes presets: the web client's hero chip (pick Arbor on a blank
-session and the driver re-routes it, which is what proof 15 drives), the SDK path
-the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
-`ctx.agents.resume`), or the TUI. The proofs in step 2 are the verified path for
-the arbor preset today.
+session and a new session is created under the preset, which is what proof 19
+drives), the SDK path the proofs use (`ctx.agents.create` with
+`meta.agentPreset: 'arbor'`, then `ctx.agents.resume`), or a remote
+`agent-preset/select` on a blank, which the driver re-routes (proof 15). The
+proofs in step 2 are the verified path for the arbor preset today.
 
 ## 8. The prompt bridge: `<harness>`, `<dsh>`, and the decision table
 

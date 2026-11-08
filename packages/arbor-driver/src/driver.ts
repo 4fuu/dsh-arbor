@@ -81,6 +81,19 @@ export interface SessionArborLike {
 }
 
 /**
+ * The slice of DSH's preset registry this driver re-asserts a label through:
+ * `select(agent, id)` is the registry's own commit and the single writer of
+ * `agent-preset/selected` (`@deepseek-ai/dsh-agent-preset-registry`,
+ * `lib/index.js`). It is read from the context rather than imported, because
+ * the registry is a DSH row this driver never depends on — a deployment with no
+ * preset roster has none, and the gate then keeps arbor with nothing to
+ * re-assert.
+ */
+interface ArborPresetSelect {
+  select(agent: Agent, agentPreset: string): Promise<string>
+}
+
+/**
  * One session the embedded AgentLoop is running, as far as this driver needs it:
  * the handle that can end it, and the create options a re-route replays.
  */
@@ -331,12 +344,17 @@ export class ArborDriver extends Service implements AgentFactory {
     // listen on. A session that has started a turn never gets here — the registry
     // refuses that selection before it is committed — so the only case is a
     // session still waiting for its first turn, which is exactly the hero.
-    // The event carries the OTHER direction too, and it has to be honoured: DSH's
-    // session controller re-selects the default preset whenever a blank session is
-    // reused (`reuseLive` calls `presets.select` with the resolved default), so an
-    // arbor session the user then opens in another workspace is relabelled
-    // `standard` while it still runs arbor. Following the event back is what keeps
-    // the label and the driver saying the same thing.
+    // The event carries the OTHER direction too, and it has to be honoured for a
+    // session that SELECTED arbor: DSH's session controller re-selects the
+    // default preset whenever a blank session is reused (`reuseLive` calls
+    // `presets.select` with the resolved default, and `reuseSetup` appends the
+    // event itself), so a session the user opened in another workspace is
+    // relabelled `standard` while it still runs arbor. Following the event back
+    // is what keeps the label and the driver saying the same thing. A session
+    // CREATED under arbor is the exception, and the gate is in
+    // {@link rerouteToEmbedded}: that session is never switched in place by any
+    // surface that knows what the user clicked, so the only selection that can
+    // reach it is the controller's default.
     ctx.on('session/event', (session: Session, event: { type: string; data?: unknown }) => {
       if (event.type !== 'agent-preset/selected') return
       const selected = (event.data as { agentPreset?: unknown }).agentPreset
@@ -348,7 +366,7 @@ export class ArborDriver extends Service implements AgentFactory {
         })
         return
       }
-      void this.rerouteToEmbedded(session.id).catch((error: unknown) => {
+      void this.rerouteToEmbedded(session.id, typeof selected === 'string' ? selected : undefined).catch((error: unknown) => {
         this.runtime.ctx.logger.warn(
           `arbor driver: re-routing session ${session.id} off arbor failed: ${error instanceof Error ? error.message : String(error)}`,
         )
@@ -431,24 +449,50 @@ export class ArborDriver extends Service implements AgentFactory {
   /**
    * Re-route one session from arbor back to the embedded AgentLoop.
    *
-   * The mirror of {@link rerouteToArbor}, and it exists for the same reason: a
-   * session's label and the driver under it must say the same thing. DSH re-selects
-   * the default preset when a blank session is reused, and a user may pick another
-   * preset on a blank session at any time, so a session that selected arbor can
-   * select something else again while it is still waiting for its first turn. The
-   * arbor agent is ended with the handle this driver holds, the window keeps
-   * running out arbor's own idle policy, and the session is opened again on the
-   * embedded loop with the same id, the same log and the same cwd it was created
-   * with.
+   * The mirror of {@link rerouteToArbor}, and it exists for one case only: a
+   * session that SELECTED arbor while it was blank can select something else
+   * again while it is still blank, and the label and the driver under it must
+   * say the same thing. That is the SDK or remote `agent-preset/select` path —
+   * every surface that knows what the user clicked creates the session under
+   * the picked preset instead (the hero mint, the adopt at create), so nothing
+   * in the web profile switches a blank in place. The arbor agent is ended with
+   * the handle this driver holds, the window keeps running out arbor's own idle
+   * policy, and the session is opened again on the embedded loop with the same
+   * id, the same log and the same cwd it was created with.
+   *
+   * **A session created under arbor is never moved off it here.** Its creation
+   * header says `agentPreset: 'arbor'`, which is a frozen creation fact
+   * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/types/session.js`), and the
+   * one selection that can still arrive on it is DSH's own: the session
+   * controller re-selects the resolved deployment default whenever a blank is
+   * reused with no preset named — `reuseLive` calls `presets.select` with
+   * `composition.agentPreset` and `reuseSetup` appends the event itself
+   * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`). The log cannot
+   * tell that re-select from a user's pick, because `presets.select` is the
+   * single writer of `agent-preset/selected` (`lib/index.js`), so the
+   * attribution has to come from the header instead: a session created as arbor
+   * keeps arbor, and its label is put back through the registry's own select so
+   * the projection and the driver agree ({@link reassertArbor}). The client side
+   * of the same guarantee is that the restore names the recorded preset, so the
+   * re-select is never written in the first place — this gate is what stands
+   * behind it.
    *
    * A session that has started a turn keeps the driver it began with: DSH refuses
    * that selection before it is committed, so this is the same defensive guard the
    * arbor direction carries, and the alternative — silently keeping the old driver
    * — is the one outcome the owner ruled out.
    */
-  private async rerouteToEmbedded(sessionId: SessionId): Promise<void> {
+  private async rerouteToEmbedded(sessionId: SessionId, selected?: string): Promise<void> {
     const arbor = this.sessions.get(sessionId)
     if (arbor === undefined) return
+    if (arbor.agent.session.header.agentPreset === ARBOR_PRESET) {
+      this.runtime.ctx.logger.warn(
+        `arbor driver: session ${sessionId} was created under arbor and keeps it; `
+        + `a selection of ${selected ?? '(unnamed)'} is not followed off a creation header`,
+      )
+      await this.reassertArbor(arbor)
+      return
+    }
     this.sessions.delete(sessionId)
     const boundary = this.runtime.ctx.agents.turnBoundaryOf(arbor.agent.session)
     if (boundary.openTurnStartSeq !== null || boundary.lastTurn > 0) {
@@ -464,6 +508,33 @@ export class ArborDriver extends Service implements AgentFactory {
     }
     await arbor.dispose()
     await this.resumeEmbedded(this.runtime.ctx, options)
+  }
+
+  /**
+   * Put a session's label back on arbor, through the registry's own select.
+   *
+   * The selection being refused has already been appended to the log, so the
+   * session's `agentPreset` projection now names another preset while this
+   * driver still runs arbor — a label that says one thing while the driver does
+   * another, which is the untruth the gate exists to prevent. `presets.select`
+   * is the single writer of that event (`@deepseek-ai/dsh-agent-preset-registry`,
+   * `lib/index.js`), and it appends only when the projection does not already
+   * name the preset, so this writes one honest event and nothing else: the
+   * registry's `bind` is a no-op when the agent's context already holds the
+   * preset's generation. The event reaches this driver's own observer, which
+   * finds the session already running arbor and does nothing.
+   */
+  private async reassertArbor(arbor: SessionArbor): Promise<void> {
+    const presets = this.runtime.ctx.get('agentPresets') as ArborPresetSelect | undefined
+    if (presets === undefined) return
+    try {
+      await presets.select(arbor.agent, ARBOR_PRESET)
+    } catch (error: unknown) {
+      this.runtime.ctx.logger.warn(
+        `arbor driver: re-asserting arbor on session ${arbor.agent.session.id} failed: `
+        + `${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }
 
   /** The driver's own DSH context, for the per-session arbor worlds. */

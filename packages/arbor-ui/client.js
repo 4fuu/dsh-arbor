@@ -109,13 +109,6 @@ function apply(ctx) {
     const items = service("workspaces")?.list.getSnapshot().items ?? [];
     return items.find((item) => item.sessionIds.includes(sessionId));
   };
-  const isArborProject = (path) => {
-    const segments = path.split(/[\\/]/).filter((segment) => segment !== "");
-    for (let index = 0; index + 1 < segments.length; index++) {
-      if (segments[index] === "arbor" && segments[index + 1] === "shared") return true;
-    }
-    return false;
-  };
   const crossesArbor = (id) => {
     const main = mainSession();
     if (main === void 0 || main.blank !== true) return false;
@@ -157,7 +150,7 @@ function apply(ctx) {
     const navigation = service("uiWorkspace");
     if (main === void 0 || sessions === void 0 || navigation === void 0) return false;
     const workspace = workspaceOf(main.id);
-    if (workspace === void 0 || !isArborProject(workspace.path)) return false;
+    if (workspace === void 0) return false;
     try {
       const minted = await sessions.create({ workspaceId: workspace.workspaceId, agentPreset: id });
       navigation.openSession(minted);

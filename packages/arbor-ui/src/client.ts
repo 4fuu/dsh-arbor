@@ -91,11 +91,15 @@
  * user who typed before switching preset loses nothing.
  *
  * Both directions are minted, so Arbor back to Standard is a fresh embedded
- * session too. A pick that does not cross the boundary, and a pick on a session
- * that has already started a turn, are handed straight to the shipped `select`:
- * DSH's own seat then stages or drops it exactly as it does today. The driver's
- * own re-route stays as the fallback for the paths that never reach this seat —
- * an SDK or remote `agent-preset/select` on a blank — and it never fires on the
+ * session too, and every workspace row the client has listed is minted in:
+ * `DshProjectBridge.resolveProject` answers the requested directory as-is, so a
+ * shared-folder project, a directory the user added outside it and an ordinary
+ * directory alike hold the session's cwd and the workspace attach succeeds. A
+ * pick that does not cross the boundary, and a pick on a session that has
+ * already started a turn, are handed straight to the shipped `select`: DSH's
+ * own seat then stages or drops it exactly as it does today. The driver's own
+ * re-route stays as the fallback for the paths that never reach this seat — an
+ * SDK or remote `agent-preset/select` on a blank — and it never fires on the
  * hero path, because that path writes no selection event at all.
  *
  * ## What this package does not do, and why
@@ -428,26 +432,6 @@ export function apply(ctx: Context): void {
   }
 
   /**
-   * Whether a workspace path is one an arbor session may work in.
-   *
-   * An arbor project is a subfolder of the shared folder, `DSH_HOME/arbor/shared`,
-   * so its path carries those two segments in a row. The rule is the same path
-   * convention `@4fu/dsh-arbor-ui-workspace`'s picker filter uses, and it is what
-   * decides whether DSH's create can hold the picked preset: a session created
-   * under arbor for a directory outside the shared folder has its cwd resolved
-   * into the shared folder (`DshProjectBridge.resolveProject`,
-   * `packages/arbor-workspace/src/projects.ts`), which the workspace attach then
-   * refuses.
-   */
-  const isArborProject = (path: string): boolean => {
-    const segments = path.split(/[\\/]/).filter(segment => segment !== '')
-    for (let index = 0; index + 1 < segments.length; index++) {
-      if (segments[index] === 'arbor' && segments[index + 1] === 'shared') return true
-    }
-    return false
-  }
-
-  /**
    * Whether a pick crosses the arbor boundary on a session that has not started.
    *
    * Only that case is worth a new session: crossing the boundary is the one
@@ -525,18 +509,18 @@ export function apply(ctx: Context): void {
    * `ArborAgentRegistry.create` routes on — so the session runs the driver it
    * was created under and there is nothing to re-route.
    *
-   * The mint is placed in the workspace the composer already belongs to, and only
-   * where DSH's create can hold it: a project of the shared folder, whose path an
-   * arbor session's resolved cwd still matches, so the workspace attach succeeds.
-   * A session the composer belongs to that is *not* such a workspace is not minted
-   * at all — the caller runs DSH's own select instead — because a session created
-   * under arbor for a directory outside the shared folder has its cwd resolved
-   * into the shared folder (`DshProjectBridge.resolveProject`,
-   * `packages/arbor-workspace/src/projects.ts`), which the workspace attach then
-   * refuses (`session/workspace-attach-failed`), and a session created without the
-   * workspace is not a member of it, which leaves the composer without a workspace
-   * to name. The pick is committed on the session instead, and the driver re-routes
-   * it — the path that also records the external pointer.
+   * The mint is placed in the workspace the composer already belongs to, for
+   * every workspace row the client has listed: `DshProjectBridge.resolveProject`
+   * answers the requested directory as-is
+   * (`packages/arbor-workspace/src/projects.ts`), so a project of the shared
+   * folder, a directory the user added outside it and an ordinary directory
+   * alike end up as the session's cwd, and the workspace attach succeeds for
+   * all three. That is what makes the mint the answer for every boundary-
+   * crossing pick in both directions: the pick is creation-time routing, so
+   * DSH's own select never runs on the blank and the driver never has to
+   * re-route a live session. An earlier revision minted only for a shared-
+   * folder project, because an outside directory's resolved cwd was then the
+   * shared folder; that is no longer what `resolveProject` answers.
    *
    * Opening the minted session changes the hero's session id, which is what
    * re-resolves its session scope: the composer's props are materialized per
@@ -552,7 +536,7 @@ export function apply(ctx: Context): void {
     const navigation = service<WorkspaceNavigation>('uiWorkspace')
     if (main === undefined || sessions === undefined || navigation === undefined) return false
     const workspace = workspaceOf(main.id)
-    if (workspace === undefined || !isArborProject(workspace.path)) return false
+    if (workspace === undefined) return false
     try {
       const minted = await sessions.create({ workspaceId: workspace.workspaceId, agentPreset: id })
       navigation.openSession(minted)

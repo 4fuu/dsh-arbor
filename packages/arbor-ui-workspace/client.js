@@ -42,6 +42,8 @@ var POLL_MS = 40;
 var MAX_POLLS = 500;
 var NAVIGATION_SERVICE = "uiWorkspace";
 var CARRY_MS = 2e3;
+var PRESET_WAIT_MS = 2e3;
+var PRESET_POLL_MS = 25;
 function useMainSessionId(props) {
   const useSessions = props["useSessions"];
   return useSessions?.((state) => {
@@ -113,6 +115,7 @@ function apply(ctx) {
   let poll;
   let attempts = 0;
   let adoptWrapped = false;
+  let restoreWrapped = false;
   const stop = () => {
     if (poll !== void 0) {
       clearInterval(poll);
@@ -128,20 +131,25 @@ function apply(ctx) {
       const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject;
       if (typeof face === "function") heroInject = face;
     }
-    if (!adoptWrapped) {
+    if (!adoptWrapped || !restoreWrapped) {
       const navigation = ctx.get(NAVIGATION_SERVICE);
       if (navigation !== void 0) {
-        wrapAdopt();
-        adoptWrapped = true;
+        if (!adoptWrapped) {
+          wrapAdopt();
+          adoptWrapped = true;
+        }
+        if (!restoreWrapped) {
+          wrapRestoreBlank();
+          restoreWrapped = true;
+        }
       }
     }
-    if (heroInject !== void 0 && adoptWrapped) stop();
+    if (heroInject !== void 0 && adoptWrapped && restoreWrapped) stop();
   };
   ctx.effect(() => () => {
     stop();
   }, "dsh-arbor-ui-workspace: stop the hero-seat poll");
   poll = setInterval(look, POLL_MS);
-  look();
   function usePresetPick(sessionId, projected) {
     const bound = heroSeatFor(sessionId);
     const unbound = heroSeatFor(void 0);
@@ -215,6 +223,37 @@ function apply(ctx) {
       delete navigation.__arborAdopt;
     }, "dsh-arbor-ui-workspace: restore uiWorkspace.openWorkspace");
   };
+  const presetInList = (sessionId) => {
+    const sessions2 = ctx.get("sessions");
+    const recorded = sessions2?.list.getSnapshot().byId[sessionId]?.projectionValues?.agentPreset;
+    return typeof recorded === "string" ? recorded : void 0;
+  };
+  const recordedPreset = async (sessionId) => {
+    const sessions2 = ctx.get("sessions");
+    if (sessions2 === void 0) return void 0;
+    const deadline = Date.now() + PRESET_WAIT_MS;
+    for (; ; ) {
+      const recorded = presetInList(sessionId);
+      if (recorded !== void 0) return recorded;
+      if (Date.now() >= deadline) return void 0;
+      await sessions2.refreshProjections(sessionId).catch(() => void 0);
+      const after = presetInList(sessionId);
+      if (after !== void 0) return after;
+      await new Promise((resolve) => setTimeout(resolve, PRESET_POLL_MS));
+    }
+  };
+  const wrapRestoreBlank = () => {
+    const navigation = ctx.get(NAVIGATION_SERVICE);
+    if (navigation === void 0 || typeof navigation.restoreBlank !== "function") return;
+    const original2 = navigation.restoreBlank.bind(navigation);
+    navigation.restoreBlank = async (workspaceId, sessionId) => {
+      await recordedPreset(sessionId);
+      return original2(workspaceId, sessionId);
+    };
+    ctx.effect(() => () => {
+      navigation.restoreBlank = original2;
+    }, "dsh-arbor-ui-workspace: restore uiWorkspace.restoreBlank");
+  };
   const gate = (shipped) => (props) => {
     const sessionId = useMainSessionId(props);
     const preset = usePresetPick(sessionId, useProjectionOf(props));
@@ -252,3 +291,4 @@ function apply(ctx) {
 		return module.exports;
 	}
 });
+

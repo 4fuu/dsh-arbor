@@ -20,13 +20,15 @@
  *  - {@link DshProjectBridge.resolveProject} answers where an arbor session
  *    works: a requested directory that is already inside the shared folder is a
  *    project; the shared folder itself means "no specific project yet"; and a
- *    directory outside the shared folder is answered as the shared folder too —
- *    an arbor session always works in arbor's own directory, and the outside
- *    directory is recorded as a {@link ExternalPointer} (name and absolute path)
- *    rather than copied, linked or adopted, because the owner's decision is no
- *    copy: arbor's tools run on the host, so the model can work in the user's
- *    own directory directly, and the pointer line in arbor's prompt says so.
- *    The pointer is recorded for the session that asked for it — see
+ *    directory outside the shared folder is answered as itself, so the session's
+ *    cwd is the directory the user picked for it. That directory is also
+ *    recorded as a {@link ExternalPointer} (name and absolute path) when the user
+ *    added it through DSH's own add-workspace action — never copied, linked or
+ *    adopted, because the owner's decision is no copy: arbor's tools run on the
+ *    host, so the model can work in the user's own directory directly, and the
+ *    pointer line in arbor's prompt says so. Arbor's own window still works in
+ *    arbor's own directory either way; the pointer is what names the user's
+ *    files. The pointer is recorded for the session that asked for it — see
  *    {@link addedDirectories} for which directory counts as asked for — so a
  *    session that never asked never has the line in its prompt.
  *

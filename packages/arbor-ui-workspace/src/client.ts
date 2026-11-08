@@ -88,6 +88,23 @@
  * A row the client has not listed yet falls through to the shipped adopt and the
  * pick is asked for again afterwards ({@link reaskPick}).
  *
+ * **The restore of a saved blank names the preset its log recorded.** A cold
+ * page load restores the blank the main view saved through `restoreBlank`
+ * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`), which reads the
+ * session's `agentPreset` projection and passes it at create. The projection is
+ * the session header folded with its selection events
+ * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/types/session.js`), and it is
+ * not a summary key — it declares no `wire.summary` — so the session list's
+ * projection blocks never fill it and the only read that does is the Host's own
+ * projections read. `restoreBlank` makes that read once and reads the cache
+ * straight after, so a read that answers before the session's row is visible,
+ * or that fails, leaves the cache cold: the create then names no preset,
+ * resolves the deployment default, and an arbor session comes back on the
+ * embedded loop. This package therefore wraps `restoreBlank` on the service
+ * instance and holds the call until the session's own answer is in the cache,
+ * against a bounded deadline; the request itself is still DSH's, made by DSH's
+ * own method, with nothing invented here.
+ *
  * The earlier fix re-committed the pick through the hero seat after the switch,
  * which is what made DSH's own `reuseLive`
  * (`@deepseek-ai/dsh-api-session-controller`, `lib/index.js`) follow it back off
@@ -158,6 +175,20 @@ const NAVIGATION_SERVICE = 'uiWorkspace'
 const CARRY_MS = 2_000
 
 /**
+ * How long a restore waits for the session's recorded preset before it goes
+ * out. A cold page load has none: `agentPreset` is not a summary key
+ * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/types/session.js` declares no
+ * `wire.summary`), so the session list's projection blocks do not carry it and
+ * the only read that fills it is the Host's own projections read. That read is
+ * one local round trip, so the wait is bounded and only spent when the first
+ * attempt does not answer.
+ */
+const PRESET_WAIT_MS = 2_000
+
+/** How often the recorded preset is looked for while a restore waits. */
+const PRESET_POLL_MS = 25
+
+/**
  * The session the main view is showing, which is the session a composer belongs
  * to. The hero seats are rendered without a session id — the conversation's own
  * hero row passes only `open`, `anchorRef`, `selectedId`, `onPick` and `onClose`
@@ -225,6 +256,7 @@ type WorkspaceHook = (selector: (state: WorkspaceState) => unknown) => unknown
 
 /** One session row of the client sessions store, as far as this package reads it. */
 interface SessionRow {
+  readonly projectionValues?: { readonly agentPreset?: unknown }
   readonly retainedBy?: { readonly mainView?: number }
 }
 
@@ -321,7 +353,9 @@ type AgentPresetSeatInject = (sessionId?: string) => AgentPresetSeatInjected
 /**
  * The slice of DSH's own workspace service this package wraps: the adopt call
  * the hero picker reaches with no options bag
- * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`, `openWorkspace`).
+ * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`, `openWorkspace`),
+ * and the restore a cold page load makes for the blank it saved
+ * (`restoreBlank`).
  */
 interface WorkspaceAdopt {
   openWorkspace(
@@ -329,6 +363,7 @@ interface WorkspaceAdopt {
     beforeOpen?: (sessionId: string) => void,
     options?: { agentPreset?: string },
   ): void
+  restoreBlank(workspaceId: string, sessionId: string): Promise<string>
 }
 
 /** The slice of the client workspaces service this package reads a row from. */
@@ -336,6 +371,20 @@ interface WorkspacesService {
   list: {
     getSnapshot(): { items: readonly WorkspaceRow[] }
   }
+}
+
+/**
+ * The slice of the client sessions service the restore wrap reads. The
+ * `agentPreset` projection is the session header folded with its selection
+ * events (`@deepseek-ai/dsh-agent-preset-registry`,
+ * `lib/types/session.js`), and it is the one value a restore needs: it is what
+ * `restoreBlank` reads to name the preset at create.
+ */
+interface SessionsRead {
+  list: {
+    getSnapshot(): { byId: Readonly<Record<string, SessionRow>> }
+  }
+  refreshProjections(sessionId: string): Promise<unknown>
 }
 
 /**
@@ -442,6 +491,7 @@ export function apply(ctx: Context): void {
   let poll: ReturnType<typeof setInterval> | undefined
   let attempts = 0
   let adoptWrapped = false
+  let restoreWrapped = false
   const stop = (): void => {
     if (poll !== undefined) { clearInterval(poll); poll = undefined }
   }
@@ -451,15 +501,24 @@ export function apply(ctx: Context): void {
       const face = slots.entriesOfSlot?.(HERO_SEAT_SLOT)[0]?.inject
       if (typeof face === 'function') heroInject = face as AgentPresetSeatInject
     }
-    if (!adoptWrapped) {
+    // Both wraps go on the one workspace service instance, at the one moment it
+    // appears, because the shipped plugin registers it on its own timeline.
+    if (!adoptWrapped || !restoreWrapped) {
       const navigation = (ctx as unknown as { get(name: string): unknown }).get(NAVIGATION_SERVICE)
-      if (navigation !== undefined) { wrapAdopt(); adoptWrapped = true }
+      if (navigation !== undefined) {
+        if (!adoptWrapped) { wrapAdopt(); adoptWrapped = true }
+        if (!restoreWrapped) { wrapRestoreBlank(); restoreWrapped = true }
+      }
     }
-    if (heroInject !== undefined && adoptWrapped) stop()
+    if (heroInject !== undefined && adoptWrapped && restoreWrapped) stop()
   }
   ctx.effect(() => () => { stop() }, 'dsh-arbor-ui-workspace: stop the hero-seat poll')
+  // The first look is left to the interval rather than run here: `wrapAdopt` and
+  // `wrapRestoreBlank` are declared below, so a workspace service that is
+  // already registered at this moment would reach them before they exist. The
+  // shipped plugin registers that service on its own timeline, so the wait is
+  // one tick either way.
   poll = setInterval(look, POLL_MS)
-  look()
 
   /**
    * The pick the composer is about to run with. The seat the hero chip writes to
@@ -607,6 +666,84 @@ export function apply(ctx: Context): void {
       navigation.openWorkspace = original
       delete (navigation as { __arborAdopt?: boolean }).__arborAdopt
     }, 'dsh-arbor-ui-workspace: restore uiWorkspace.openWorkspace')
+  }
+
+  /**
+   * The preset one session's log recorded, as far as the client's own cache
+   * holds it, and undefined while it does not.
+   *
+   * This is the value `restoreBlank` reads to name the preset at create
+   * (`@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`:
+   * `byId[sessionId]?.projectionValues?.agentPreset`), and the projection is
+   * the session header folded with its selection events
+   * (`@deepseek-ai/dsh-agent-preset-registry`, `lib/types/session.js`), so it
+   * is the session's own answer rather than this package's guess.
+   */
+  const presetInList = (sessionId: string): string | undefined => {
+    const sessions = (ctx as unknown as { get(name: string): unknown })
+      .get('sessions') as SessionsRead | undefined
+    const recorded = sessions?.list.getSnapshot().byId[sessionId]?.projectionValues?.agentPreset
+    return typeof recorded === 'string' ? recorded : undefined
+  }
+
+  /**
+   * Wait for the preset one session's log recorded, so the restore that is
+   * about to go out can name it.
+   *
+   * The wait is the whole point. A cold page load has no `agentPreset` in its
+   * cache — the key carries no `wire.summary`, so the session list's projection
+   * blocks do not fill it — and `restoreBlank` names the preset only when that
+   * cache already has it. Its own read is one attempt: when it answers before
+   * the session's row is visible to the Host, or fails, the cache stays cold
+   * and the create goes out with no preset, which resolves to the deployment
+   * default and re-selects an arbor session off arbor. So the read is retried
+   * here, against a deadline, until the session's own answer arrives. A session
+   * that genuinely records no preset answers null and the wait ends with
+   * undefined, which leaves DSH's own behaviour exactly as it stands.
+   */
+  const recordedPreset = async (sessionId: string): Promise<string | undefined> => {
+    const sessions = (ctx as unknown as { get(name: string): unknown })
+      .get('sessions') as SessionsRead | undefined
+    if (sessions === undefined) return undefined
+    const deadline = Date.now() + PRESET_WAIT_MS
+    for (;;) {
+      const recorded = presetInList(sessionId)
+      if (recorded !== undefined) return recorded
+      if (Date.now() >= deadline) return undefined
+      await sessions.refreshProjections(sessionId).catch(() => undefined)
+      const after = presetInList(sessionId)
+      if (after !== undefined) return after
+      await new Promise(resolve => setTimeout(resolve, PRESET_POLL_MS))
+    }
+  }
+
+  /**
+   * Make the restore of a saved blank name the preset its log recorded.
+   *
+   * `restoreBlank` is the call a cold page load makes for the blank session the
+   * main view saved (`restoreSelection` in
+   * `@deepseek-ai/dsh-client-ui-workspace`, `lib/client.js`), and it is the one
+   * path that reuses a session without a pick: it reads the recorded preset and
+   * passes it at create, so a session that ran arbor comes back on arbor. What
+   * it cannot do is wait for a cache that is still cold, so this wrap waits —
+   * it changes nothing about the request itself, only about when it is made,
+   * and it hands the same call to DSH once the session's own answer is there.
+   *
+   * The method is wrapped on the service instance rather than replaced, and the
+   * original is restored with this plugin.
+   */
+  const wrapRestoreBlank = (): void => {
+    const navigation = (ctx as unknown as { get(name: string): unknown })
+      .get(NAVIGATION_SERVICE) as WorkspaceAdopt | undefined
+    if (navigation === undefined || typeof navigation.restoreBlank !== 'function') return
+    const original = navigation.restoreBlank.bind(navigation)
+    navigation.restoreBlank = async (workspaceId: string, sessionId: string): Promise<string> => {
+      await recordedPreset(sessionId)
+      return original(workspaceId, sessionId)
+    }
+    ctx.effect(() => () => {
+      navigation.restoreBlank = original
+    }, 'dsh-arbor-ui-workspace: restore uiWorkspace.restoreBlank')
   }
 
   /**
