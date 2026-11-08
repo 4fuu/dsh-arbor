@@ -37,7 +37,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { openWorkspace, type OpenWorkspaceResult, type WorkspaceBackend } from '@4fu/arbor-core'
 import type { Journal, TextTable, Workspace } from '@4fu/arbor-interfaces'
-import { withPointerSection, type PointerSource } from './section.ts'
+import { withPointerSection, REACH_OF, type PointerSource } from './section.ts'
 
 /** Inputs for {@link openArborWorkspace}. */
 export interface ArborWorkspaceOptions {
@@ -109,14 +109,21 @@ export function arborSharedFolder(root: string, source?: string): string {
  * @param workspace - the workspace `openWorkspace` settled on.
  * @param pointers - where the pointers are read from, or undefined to leave the
  *   implementation's own section exactly as it is.
+ * @param backend - which workspace implementation runs, so the project's reach
+ *   line is the one that is true: `ovnfs` opens a checkout of the project
+ *   subfolder, `dir` reaches it by absolute path.
  */
-export function withArborWorkspace(workspace: Workspace, pointers: PointerSource | undefined): Workspace {
+export function withArborWorkspace(
+  workspace: Workspace,
+  pointers: PointerSource | undefined,
+  backend: 'ovnfs' | 'dir',
+): Workspace {
   const sectionOf = pointers === undefined
     ? workspace.promptSection?.bind(workspace)
     : (table: TextTable) => {
         const base = workspace.promptSection?.(table)
         // An implementation that contributes no section keeps contributing none.
-        return base === undefined ? undefined : withPointerSection(base, pointers)
+        return base === undefined ? undefined : withPointerSection(base, pointers, REACH_OF[backend])
       }
   return new Proxy(workspace, {
     get(target, property) {
@@ -157,6 +164,7 @@ export async function openArborWorkspace(options: ArborWorkspaceOptions): Promis
   return {
     ...result,
     sharedFolder,
-    workspace: withArborWorkspace(result.workspace, options.pointers),
+    backend: result.backend,
+    workspace: withArborWorkspace(result.workspace, options.pointers, result.backend),
   }
 }

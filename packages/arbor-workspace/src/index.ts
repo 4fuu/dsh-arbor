@@ -34,4 +34,5 @@ export {
   type DshProject,
   type DshProjectBridgeOptions,
   type ExternalPointer,
+  type ExternalProject,
 } from './projects.ts'

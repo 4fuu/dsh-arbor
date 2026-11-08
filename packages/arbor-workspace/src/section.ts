@@ -34,7 +34,7 @@
  */
 
 import type { Block, BlockKindSpec, PromptSection, TextTable, WindowRef } from '@4fu/arbor-interfaces'
-import type { ExternalPointer } from './projects.ts'
+import type { ExternalPointer, ExternalProject } from './projects.ts'
 
 /** Where the pointers come from, read at every render of the section. */
 export interface PointerSource {
@@ -46,6 +46,14 @@ export interface PointerSource {
    * answer is that window's session's list and never another session's.
    */
   list(window?: WindowRef): Promise<readonly ExternalPointer[]>
+  /**
+   * The project of the shared folder the named window's session works in, or
+   * undefined when the session named none — the shared folder itself, or a
+   * directory that is not a project. This is the line that answers "where is my
+   * project" for a session the user opened on one, and it is absent rather than
+   * empty when there is nothing to name.
+   */
+  project?(window?: WindowRef): ExternalProject | undefined | Promise<ExternalProject | undefined>
   /**
    * A revision that moves whenever that set moves, so the host re-renders the
    * section and hands a live window a delta of only the changed lines. It is
@@ -69,6 +77,16 @@ export const POINTER_TEXT: TextTable = {
   'workspace.external.item': '外部项目 {name}：{path}',
   'workspace.external.reason': '用户添加的是已有目录，arbor 没有复制它：这些路径上的改动直接落在用户自己的文件上。',
   'workspace.external.consequence': '要改外部项目就在原处改：按上面的绝对路径直接读写执行，没有检出、没有 apply，也没有可合并的东西。',
+  // The project the session was opened on, and how the window reaches it. The
+  // name is the project folder's own and the path is its place in the shared
+  // folder, so this line, the DSH project list and the checkout all agree. The
+  // reach line is the implementation's own, because the two get there
+  // differently: ovnfs opens a checkout of the project subfolder, and the plain
+  // directory workspace works in a directory of its own and reaches the project
+  // by its absolute path.
+  'workspace.project.item': '当前项目 {name}：{path}',
+  'workspace.project.ovnfs': '它在共享目录里：用 workspace.checkout("{name}") 打开它的检出，在检出里改，用 workspace.apply 合回共享目录。',
+  'workspace.project.directory': '它在共享目录里，路径就是 {path}；本窗口另有自己的工作目录，按这个绝对路径直接读写该项目。',
 }
 
 /** The lead line: untagged, no fields, written once before the items. */
@@ -98,8 +116,43 @@ const POINTER_NOTE_BLOCK: BlockKindSpec = {
   lines: ['workspace.external.reason', 'workspace.external.consequence'],
 }
 
+/**
+ * The project the session works in: its name, its path, and how the window
+ * reaches it. The reach line is one of two, chosen by the workspace
+ * implementation this deployment runs, and the block carries the name and the
+ * path so the checkout a window opens names the project the prompt named.
+ *
+ * The `reach` field names which reach line to write, and the renderer resolves
+ * a line key that names a field (`workspace.project.{reach}`), so the words stay
+ * in the text table and only the choice travels in the block.
+ */
+const PROJECT_BLOCK: BlockKindSpec = {
+  kind: 'workspace_project',
+  data: false,
+  fields: [
+    { name: 'name', type: 'string', required: true },
+    { name: 'path', type: 'string', required: true },
+    { name: 'reach', type: 'string', required: true },
+  ],
+  lines: ['workspace.project.item', 'workspace.project.{reach}'],
+}
+
+/**
+ * Which reach line each workspace implementation's project gets.
+ *
+ * Arbor's own prompt keys name the plain-directory implementation `directory`
+ * (`workspace.method.directory`), while `openWorkspace` reports the backend it
+ * settled on as `dir` (`@4fu/arbor-core`, `WorkspaceBackend`), so the id is
+ * mapped to the key here rather than the key being renamed to the id.
+ */
+export const REACH_OF: Record<'ovnfs' | 'dir', 'ovnfs' | 'directory'> = {
+  ovnfs: 'ovnfs',
+  dir: 'directory',
+}
+
 /** The blocks this module adds to the section's own. */
 export const POINTER_BLOCKS: readonly BlockKindSpec[] = [
+  PROJECT_BLOCK,
   POINTER_LEAD_BLOCK,
   POINTER_ITEM_BLOCK,
   POINTER_NOTE_BLOCK,
@@ -107,20 +160,27 @@ export const POINTER_BLOCKS: readonly BlockKindSpec[] = [
 
 /**
  * Extend the workspace implementation's own `<workspace>` section with the
- * external-project pointers.
+ * session's project and the external-project pointers.
  *
  * The base section is the ovnfs one (or the plain-directory one): its tag, its
  * block kinds, its text table and its `content`. Everything it says is kept
- * exactly as it stands and the pointer lines are appended after it, so the
- * method a window follows and the directories a user added are answered in one
- * place, in one tag. `perWindow: true` is what the API asks of a section that
- * answers for the window it is rendered for, which is what the workspace's own
- * section is.
+ * exactly as it stands and the added lines follow it, so the method a window
+ * follows, the project the session was opened on and the directories a user
+ * added are answered in one place, in one tag. `perWindow: true` is what the API
+ * asks of a section that answers for the window it is rendered for, which is what
+ * the workspace's own section is.
  *
  * @param base - the implementation's own section, from `workspace.promptSection`.
- * @param pointers - where the pointers are read from, per render.
+ * @param pointers - where the pointers and the project are read from, per render.
+ * @param reach - which reach line the project's block carries, so the line is
+ *   the one that is true: `ovnfs` opens a checkout of the project subfolder,
+ *   `directory` reaches it by absolute path.
  */
-export function withPointerSection(base: PromptSection, pointers: PointerSource): PromptSection {
+export function withPointerSection(
+  base: PromptSection,
+  pointers: PointerSource,
+  reach: 'ovnfs' | 'directory',
+): PromptSection {
   return {
     tag: base.tag,
     blocks: [...base.blocks, ...POINTER_BLOCKS],
@@ -130,19 +190,31 @@ export function withPointerSection(base: PromptSection, pointers: PointerSource)
       // whose content failed keeps what it last said, so this is awaited inside
       // the same try the host renders under.
       const method: readonly Block[] = await base.content(window)
+      const project = await pointers.project?.(window)
       const listed = await pointers.list(window)
+      const blocks: Block[] = [...method]
+      // The project the session was opened on, named once. A session that named
+      // none has no line at all: the implementation's own lines already say
+      // where the window works, and an empty "current project" would be noise.
+      if (project !== undefined) {
+        blocks.push({
+          kind: 'workspace_project',
+          fields: { name: project.name, path: project.path, reach },
+        })
+      }
       // Nothing recorded, or nothing that still exists: no line at all, rather
       // than a lead line about nothing.
-      if (listed.length === 0) return method
-      return [
-        ...method,
-        { kind: 'workspace_external_lead', fields: {} },
-        ...listed.map(pointer => ({
-          kind: 'workspace_external',
-          fields: { name: pointer.name, path: pointer.path },
-        })),
-        { kind: 'workspace_external_note', fields: {} },
-      ]
+      if (listed.length > 0) {
+        blocks.push({ kind: 'workspace_external_lead', fields: {} })
+        for (const pointer of listed) {
+          blocks.push({
+            kind: 'workspace_external',
+            fields: { name: pointer.name, path: pointer.path },
+          })
+        }
+        blocks.push({ kind: 'workspace_external_note', fields: {} })
+      }
+      return blocks
     },
     revision: () => pointers.revision(),
     perWindow: true,

@@ -75,7 +75,7 @@ import {
   type PersonaVariables,
 } from '@4fu/dsh-arbor-prompt'
 import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
-import { openArborWorkspace, arborSharedFolder, DshProjectBridge, type DshProject, type ExternalPointer } from '@4fu/dsh-arbor-workspace'
+import { openArborWorkspace, arborSharedFolder, DshProjectBridge, type DshProject, type ExternalPointer, type ExternalProject } from '@4fu/dsh-arbor-workspace'
 import type { WorkspaceBackend } from '@4fu/arbor-core'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { DshSendExecutor } from './send.ts'
@@ -161,15 +161,28 @@ export function sessionOfTarget(target: Target): SessionId | undefined {
  * and before the window's prompt epoch is rendered, and it carries the window
  * ref together with the task's targets — the only moment at which a window can
  * be attributed to a session before its prefix is built. A prompt section that
- * answers per session (the external-project pointers) is rendered for a window,
- * and a window's prefix is frozen when it opens, so the attribution has to
- * exist by then: reading it later would put the pointer in a delta of the
- * window's opening instead of in the prefix it opens with.
+ * answers per session (the external-project pointers, the project line) is
+ * rendered for a window, and a window's prefix is frozen when it opens, so the
+ * attribution has to exist by then: reading it later would put those lines in a
+ * delta of the window's opening instead of in the prefix it opens with.
  *
- * The hook observes and changes nothing, so a window it cannot attribute — one
- * dispatched from outside a DSH session — opens exactly as it would without it.
+ * The `windowContinue` hook is the same moment for a continuation window, which
+ * carries no targets of its own — a continuation continues its predecessor's
+ * work, so it serves the session that window served. Without it a window the
+ * host continues (the hard limit, an idle handover, a restart's recovery) opens
+ * with a prefix that names no session and loses both per-session lines.
+ *
+ * The hooks observe and change nothing, so a window they cannot attribute — one
+ * dispatched from outside a DSH session — opens exactly as it would without them.
+ *
+ * @param note - called with the window and the session it serves.
+ * @param sessionOf - the session a window already recorded serves, for a
+ *   continuation to inherit.
  */
-export function windowSessionPlugin(note: (window: WindowRef, sessionId: SessionId) => void): Plugin {
+export function windowSessionPlugin(
+  note: (window: WindowRef, sessionId: SessionId) => void,
+  sessionOf: (window: WindowRef) => SessionId | undefined,
+): Plugin {
   return {
     name: 'dsh-arbor-window-session',
     hooks: {
@@ -178,6 +191,11 @@ export function windowSessionPlugin(note: (window: WindowRef, sessionId: Session
           const sessionId = sessionOfTarget(target)
           if (sessionId !== undefined) note(context.window, sessionId)
         }
+        return { allow: true as const, context }
+      },
+      windowContinue: (context) => {
+        const inherited = sessionOf(context.previous)
+        if (inherited !== undefined) note(context.window, inherited)
         return { allow: true as const, context }
       },
     },
@@ -237,6 +255,12 @@ export class ArborHostService extends Service {
    * so this is the mapping that section reads.
    */
   private readonly windowSessions = new Map<WindowRef, SessionId>()
+  /**
+   * The stored cwd of a session whose agent is not live, read once. A session's
+   * stored header never moves, so the answer is remembered; the live projection
+   * takes over the moment the session is back.
+   */
+  private readonly storedCwds = new Map<SessionId, string | undefined>()
   /** Raised whenever a DSH prompt provider changes, so both sections follow. */
   private promptChanges = 0
   /** Plan mode's projection, so the `<harness>` section can read it per step. */
@@ -338,7 +362,12 @@ export class ArborHostService extends Service {
         // from outside a DSH session) names no session, and an unnamed session
         // has no pointers rather than another session's.
         list: (window) => projects.listPointers(window === undefined ? undefined : this.sessionOfWindow(window)),
-        revision: () => projects.pointerRevision(),
+        // The project the session was opened on, read from the session's own cwd
+        // through the window that serves it: the project is a fact about where
+        // the user pointed the session, and the cwd is where the driver resolved
+        // that to.
+        project: (window) => this.projectOfWindow(window),
+        revision: () => this.workspaceRevision(),
       },
     })
     // `/env`: arbor's own environment under DSH_HOME/arbor, with DSH's skills
@@ -377,7 +406,10 @@ export class ArborHostService extends Service {
             ctx.logger.warn(message)
           },
         }),
-        windowSessionPlugin((window, sessionId) => { this.windowSessions.set(window, sessionId) }),
+        windowSessionPlugin(
+          (window, sessionId) => { this.windowSessions.set(window, sessionId) },
+          (window) => this.windowSessions.get(window),
+        ),
       ],
       settings,
       executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
@@ -403,6 +435,13 @@ export class ArborHostService extends Service {
     // both are no-ops here and the injected child above does them instead.
     await projects.sync()
     projects.start()
+    // Which session every recorded window serves, rebuilt from the journal
+    // before the host starts: the recovery below continues every window the
+    // journal still holds open, a continuation carries no targets of its own, and
+    // the map the hooks would have written died with the process that wrote it.
+    // Reading it here is what keeps the per-session prompt lines — the project
+    // line and the pointers — in the prefix a recovered window opens with.
+    await this.rebuildWindowSessions()
     // Rebuild every window the journal still holds open: a window a previous
     // process stopped is continued here, the way the hard limit continues one.
     await host.start()
@@ -544,6 +583,100 @@ export class ArborHostService extends Service {
   }
 
   /**
+   * The project of the shared folder the named window's session works in, or
+   * undefined when it works in none.
+   *
+   * The project is read from the session's own current directory, which the
+   * driver resolves into the shared folder for every arbor session — created
+   * under arbor, re-routed onto it, or resumed after a restart — so a session the
+   * user opened on a project and a session that picked arbor afterwards answer
+   * the same way.
+   */
+  async projectOfWindow(window: WindowRef | undefined): Promise<ExternalProject | undefined> {
+    if (window === undefined) return undefined
+    const sessionId = this.windowSessions.get(window)
+    if (sessionId === undefined) return undefined
+    return this.requireState().projects.projectOf(await this.directoryOfSession(sessionId))
+  }
+
+  /**
+   * The directory one session works in, the way DSH answers it.
+   *
+   * The `workingDirectory` projection is DSH's own answer for a session's
+   * current directory — the cwd display, the session listing and the skill
+   * catalog all read it — while the session header carries the directory the
+   * session was created with and never moves. A session whose directory changed
+   * therefore names the new one, which is what the project line has to say: the
+   * alternative is a prompt that names a project the UI no longer shows.
+   *
+   * A window recovered before its session resumed has no live agent to read —
+   * the host continues it at boot, long before the user opens the session again
+   * — and its prefix is frozen then. The stored session header is the durable
+   * answer for that moment, the same one the driver resolves a resume from, so
+   * the recovered window opens naming the project it was opened on. It is read
+   * once per session and remembered: a session's stored header never moves, and
+   * the live answer takes over the moment the session is back.
+   */
+  private async directoryOfSession(sessionId: SessionId): Promise<string | undefined> {
+    const session = this.ctx.agents.get(sessionId)?.session
+    if (session !== undefined) {
+      const projected = this.ctx.sessionProjections
+        .snapshot(session, ['workingDirectory']).values.workingDirectory
+      return projected ?? session.header.cwd
+    }
+    if (!this.storedCwds.has(sessionId)) {
+      this.storedCwds.set(sessionId, await this.storedCwdOf(sessionId))
+    }
+    return this.storedCwds.get(sessionId)
+  }
+
+  /** The cwd a persisted session was created with, or undefined without a store. */
+  private async storedCwdOf(sessionId: SessionId): Promise<string | undefined> {
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence === undefined) return undefined
+    try {
+      const handle = await persistence.open(sessionId, 'read')
+      try {
+        return handle.header.cwd
+      } finally {
+        await handle.close()
+      }
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * A revision that moves whenever anything the `<workspace>` section names
+   * moves: any session's pointers, or any session's project. The host asks for it
+   * once per step, so a window whose session picks another project before its
+   * first turn is handed a delta of only the project line, and a session that
+   * gains or loses a pointer is handed a delta of only that line.
+   */
+  private async workspaceRevision(): Promise<string> {
+    const projects = this.requireState().projects
+    const pointers = await projects.pointerRevision()
+    const parts: string[] = []
+    for (const sessionId of this.sessionProjects()) {
+      const project = projects.projectOf(await this.directoryOfSession(sessionId))
+      parts.push(`${sessionId}=${project?.path ?? ''}`)
+    }
+    return `${pointers}#${parts.sort().join(';')}`
+  }
+
+  /**
+   * Every session the `<workspace>` section answers for: the live ones, plus the
+   * ones a recovered window still names — a window the host continued at boot
+   * belongs to a session whose agent is not back yet, and its project is part of
+   * what the section says.
+   */
+  private sessionProjects(): readonly SessionId[] {
+    const ids = new Set<SessionId>(this.ctx.agents.list().map(agent => agent.session.id))
+    for (const sessionId of this.windowSessions.values()) ids.add(sessionId)
+    return [...ids]
+  }
+
+  /**
    * Where one arbor session works: a project folder inside the shared folder.
    *
    * The driver calls this for an arbor session's requested cwd and sets the
@@ -644,6 +777,57 @@ export class ArborHostService extends Service {
       current = continued.get(current)
     }
     return chain
+  }
+
+  /**
+   * Rebuild which session every recorded window serves, from the journal.
+   *
+   * The two hooks attribute a window the moment it opens — `windowStart` from
+   * the task's targets, `windowContinue` from the window it continues — and that
+   * map is process memory: it died with the process that wrote it. The journal
+   * is the durable record of the same fact, because every `window_start` carries
+   * the session's target and a continuation names its predecessor in its body.
+   * So the attribution is rebuilt here, before the host starts, so that a window
+   * the recovery continues opens with a prefix that still names its session.
+   *
+   * A window no chain leads back to a target — one dispatched from outside a DSH
+   * session — is left unattributed, which is the answer the hooks give it too.
+   */
+  private async rebuildWindowSessions(): Promise<void> {
+    const { journal } = this.requireState()
+    const previous = new Map<WindowRef, WindowRef>()
+    const sessions = new Map<WindowRef, SessionId>()
+    for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
+      const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
+      for (const event of page.items) {
+        if (event.window === null) continue
+        const before = continuedWindow(event.body)
+        if (before !== undefined) previous.set(event.window, before)
+        for (const target of event.targets) {
+          const sessionId = sessionOfTarget(target)
+          if (sessionId !== undefined) sessions.set(event.window, sessionId)
+        }
+      }
+      if (page.items.length < MAX_PAGE_LIMIT) break
+    }
+    // Walk each window back to the window that carried the target: a continuation
+    // serves the session its predecessor served, however many continuations deep
+    // the chain runs.
+    for (const window of previous.keys()) {
+      if (sessions.has(window)) continue
+      let current: WindowRef | undefined = previous.get(window)
+      const seen = new Set<WindowRef>([window])
+      while (current !== undefined && !seen.has(current)) {
+        seen.add(current)
+        const found = sessions.get(current)
+        if (found !== undefined) {
+          sessions.set(window, found)
+          break
+        }
+        current = previous.get(current)
+      }
+    }
+    for (const [window, sessionId] of sessions) this.windowSessions.set(window, sessionId)
   }
 
   /**

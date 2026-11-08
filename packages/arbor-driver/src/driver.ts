@@ -53,7 +53,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { SessionPreparation, interruptedTurnClosers } from '@deepseek-ai/dsh-session'
 import { createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 // The `working-directory/change` event's declaration lives in the
 // working-directory row's own types; importing it puts the augmentation in
 // scope, which is what lets the driver read the event and the proof append one.
@@ -88,6 +88,16 @@ interface EmbeddedHold {
   readonly handle: AgentHandle
   readonly agentOptions: AgentOptions | undefined
   readonly setup: AgentSetup | undefined
+}
+
+/**
+ * The options an arbor resume takes: DSH's own, plus the cwd the session resumes
+ * with. A re-route passes the cwd it resolved from the directory the user picked,
+ * and a restart passes none so the stored header's own is resolved here — either
+ * way the live session names the shared folder or a project of it.
+ */
+interface ResumeArborOptions extends ResumeAgentOptions {
+  readonly cwd?: string | undefined
 }
 
 /** One session's arbor world: its window, its bridge, its window agent. */
@@ -383,6 +393,7 @@ export class ArborDriver extends Service implements AgentFactory {
       resumeSessionId: sessionId,
       agentOptions: hold.agentOptions,
       setup: hold.setup,
+      cwd: await this.hostService.resolveArborCwd(requested),
     })
     this.noteExternalProject(requested, sessionId)
   }
@@ -635,7 +646,18 @@ export class ArborDriver extends Service implements AgentFactory {
     // selected another, which is why the log is folded rather than the header
     // read. Everything else runs the embedded AgentLoop, with its handle kept
     // for the same reason `createAgent` keeps one.
-    if (await this.ownsSession(options.resumeSessionId)) return this.resumeArbor(ownerCtx, options)
+    if (await this.ownsSession(options.resumeSessionId)) {
+      // A restart resolves the stored cwd the way a creation resolves a requested
+      // one, so the session comes back naming the shared folder or the project
+      // the user pointed it at — never the directory it happened to be created
+      // in before it selected arbor.
+      const persistence = this.runtime.ctx.get('sessionPersistence')
+      const stored = persistence === undefined ? undefined : await this.storedCwd(persistence, options.resumeSessionId)
+      return this.resumeArbor(ownerCtx, {
+        ...options,
+        cwd: await this.hostService.resolveArborCwd(stored),
+      })
+    }
     const hold = await this.resumeEmbedded(ownerCtx, options)
     return {
       agent: hold.handle.agent,
@@ -646,8 +668,26 @@ export class ArborDriver extends Service implements AgentFactory {
     }
   }
 
+  /**
+   * The cwd a persisted session was created with, read without taking its write
+   * ownership: the resume path needs it to resolve the session's cwd before it
+   * opens the log for writing.
+   */
+  private async storedCwd(persistence: SessionPersistence, sessionId: SessionId): Promise<string | undefined> {
+    try {
+      const handle = await persistence.open(sessionId, 'read')
+      try {
+        return handle.header.cwd
+      } finally {
+        await handle.close()
+      }
+    } catch {
+      return undefined
+    }
+  }
+
   /** Resume a persisted session that runs arbor. */
-  private async resumeArbor(ownerCtx: Context, options: ResumeAgentOptions): Promise<AgentHandle> {
+  private async resumeArbor(ownerCtx: Context, options: ResumeArborOptions): Promise<AgentHandle> {
     const ctx = this.runtime.ctx
     const persistence = ctx.get('sessionPersistence')
     if (persistence === undefined) {
@@ -673,7 +713,14 @@ export class ArborDriver extends Service implements AgentFactory {
       const seed = [...coldRead.events, ...relayed, ...closers]
       preparation = SessionPreparation.create(ctx.sessions.prepare(id, {
         seed,
-        meta: structuredClone(open.header),
+        // The cwd a persisted session resumes with is resolved into the shared
+        // folder exactly as a creation resolves it, so a session created under
+        // arbor, one re-routed onto it and one resumed after a restart all name
+        // the same directory: the shared folder, or the project subfolder the
+        // user pointed the session at. The stored header keeps what creation
+        // wrote; the live session is what the model, the cwd display and the
+        // project line all read.
+        meta: { ...structuredClone(open.header), cwd: options.cwd ?? open.header.cwd },
         inheritedEventCount: open.inheritedEventCount,
         eventState: coldRead.eventState,
       }))

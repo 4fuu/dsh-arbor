@@ -69,6 +69,14 @@ export interface ExternalPointer {
   readonly path: string
 }
 
+/** One project of the shared folder: the one a session works in. */
+export interface ExternalProject {
+  /** The project folder's own name, the name the DSH project list shows. */
+  readonly name: string
+  /** The project's absolute path, a subfolder of the shared folder. */
+  readonly path: string
+}
+
 /** What this bridge needs. */
 export interface DshProjectBridgeOptions {
   /**
@@ -184,6 +192,25 @@ export class DshProjectBridge {
   insideSharedFolder(path: string): boolean {
     const absolute = resolve(path)
     return absolute === this.sharedFolder || absolute.startsWith(this.sharedFolder + sep)
+  }
+
+  /**
+   * The project a directory names, or undefined when it names none.
+   *
+   * A project is a subfolder of the shared folder, which is the one place a
+   * project lives: the shared folder itself is "no specific project yet", and a
+   * directory outside it is not a project at all (it is a pointer, when the user
+   * added it). The name is the folder's own, so the prompt, the DSH project list
+   * and the checkout a window opens all name the same thing.
+   */
+  projectOf(path: string | undefined): ExternalProject | undefined {
+    if (path === undefined) return undefined
+    const absolute = resolve(path)
+    if (absolute === this.sharedFolder) return undefined
+    if (!this.insideSharedFolder(absolute)) return undefined
+    const relative = absolute.slice(this.sharedFolder.length + 1)
+    if (relative === '' || relative.includes(sep)) return undefined
+    return { name: relative, path: absolute }
   }
 
   /**
