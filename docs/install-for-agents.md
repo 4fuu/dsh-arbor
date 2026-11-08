@@ -18,7 +18,7 @@ Pins, and do not change them without being asked:
 
 - DeepSeek Harness `dsh-v0.2.2-rc.1`, installed from npm as
   `@deepseek-ai/dsh@0.2.2-rc.1` and its companion packages.
-- arbor `@4fu/arbor-*` `2026.1107.0`, from npm.
+- arbor `@4fu/arbor-*` `2026.1107.1`, from npm.
 - This repository's packages are `@4fu/dsh-arbor-*` and are not published;
   installing means checking out this repository.
 
@@ -37,7 +37,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b2
+git checkout b3c
 pnpm install
 ```
 
@@ -60,7 +60,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all seventeen, in order, against the scripted model
+pnpm proofs         # all twenty, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -85,6 +85,8 @@ pnpm proof:sections    # 12 the decision table against the pinned DSH
 pnpm proof:loop        # 13 the closed loop, across a restart (live-capable)
 pnpm proof:send-links  # 13 what <harness> promises about send and @path
 pnpm proof:windows     # 14 two windows on one project do not collide
+pnpm proof:preset-selection   # 15 picking Arbor in a composer runs arbor
+pnpm proof:external-project   # 16 add-workspace becomes a pointer for that session
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -251,7 +253,9 @@ Works, and is covered by a proof:
 
 - Per-preset routing: an `agentPreset: 'arbor'` session runs through the arbor
   driver while an ordinary session in the same process keeps running on the
-  embedded official AgentLoop.
+  embedded official AgentLoop. A blank session that selects arbor afterwards is
+  re-routed onto the same driver, keeping its identity and its log, and a
+  selection after the first turn is refused with a visible reason.
 - One arbor host per DSH process, with the journal and note store under
   `DSH_HOME/arbor/`, so a session survives a restart; resume replays from the
   journal onto the session log.
@@ -295,17 +299,34 @@ Not finished, and not to be worked around here:
   disappears the moment Arbor is picked in the hero and returns when Standard is
   picked again; an ordinary composer keeps the control byte-for-byte. See the UI
   section of `docs/b3b-projects-and-sandbox.md`.
-- The project picker's per-preset filter and the "Add workspace…" pointer action
-  are not wired. The picker seat cannot be shadowed (it declares a child slot, and
-  DSH refuses a second declaration of the same child key), and dsh-arbor has no
-  browser-to-host verb for `pointerArborProject`. Both reasons, with the DSH
-  source locations, are in `docs/b3b-projects-and-sandbox.md`.
-- **Selecting Arbor in the web hero does not yet make the session run arbor.**
-  The routing registry decides at agent creation from `meta.agentPreset`, and no
-  DSH surface passes the staged preset into session creation, so a session picked
-  as Arbor keeps running on the embedded AgentLoop. The composer's switch is
-  hidden by the pick, not by the running composition. See the routing finding in
-  `docs/b3b-projects-and-sandbox.md`.
+- **"Add workspace…" records a pointer for the arbor session that asked, with no
+  new verb and no client change.** The client's add-workspace action calls the
+  `workspace/create` remote verb, which is the one caller of
+  `WorkspaceRegistry.create` besides the project bridge's own sync, so the bridge
+  hooks `create` and remembers every directory registered outside the shared
+  folder as one the user added; the driver then asks at the two moments a session
+  becomes an arbor session whether the directory it names was added, and records
+  the pointer only then. Pointers are per session and render inside arbor's
+  `<workspace>`, answered per window. Proof 16 covers the chain; proof 8 covers
+  recording, listing, dropping and the mid-window delta.
+- **Picking Arbor in the web hero runs arbor.** DSH's preset registry commits the
+  hero chip's staged pick as an `agent-preset/selected` event on the session log;
+  the driver observes that event, ends the embedded agent with the handle its
+  creation returned, and opens the same session id under arbor, so the session
+  keeps its identity and its log and its next turn runs arbor. A selection after
+  the first turn is refused by DSH with a visible reason ("This session has
+  already started"), and the driver guards on the turn boundary as well: nothing
+  silently keeps the driver it began with. Proof 15 covers both halves.
+- **The project picker's per-preset filter is not wired, and cannot be in
+  dsh-v0.2.2-rc.1.** Ordinary sessions should not list arbor's shared-folder
+  projects, but neither side offers a seam: the picker seat declares a child slot
+  DSH refuses to re-declare, an occupant without the children table loses its
+  `renderSlot` and abdicates, `useWorkspaces` cannot be wrapped, and the server's
+  workspace list is process-global with no session or caller — its only filter is
+  the remote *peer*'s access policy, and the web client holds one peer for every
+  session. The full source analysis and the smallest pinned patch that would
+  deliver it are in `docs/b3b-projects-and-sandbox.md`; it is a decision for the
+  owner because it disables a DSH row and re-mounts it through this repository.
 - The rest of the UI is B4.
 - The bundle is not published to npm, so an installation is a checkout plus the
   profile wiring below.
@@ -354,11 +375,12 @@ dependency together with the sandbox.
 What the installed CLI cannot do yet: drive an arbor-preset session. The
 one-shot runner refuses to adopt any session that runs under a preset —
 `session "..." runs under agent preset "arbor", which the one-shot runner does
-not compose` — and it has no flag to select one. A session gets
-`meta.agentPreset: 'arbor'` from a surface that composes presets: the TUI or
-web client (the picker is B4), or the SDK path the proofs use
-(`ctx.agents.create` with that meta, then `ctx.agents.resume`). The proofs in
-step 2 are the verified path for the arbor preset today.
+not compose` — and it has no flag to select one. A session reaches arbor from a
+surface that composes presets: the web client's hero chip (pick Arbor on a blank
+session and the driver re-routes it, which is what proof 15 drives), the SDK path
+the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
+`ctx.agents.resume`), or the TUI. The proofs in step 2 are the verified path for
+the arbor preset today.
 
 ## 8. The prompt bridge: `<harness>`, `<dsh>`, and the decision table
 
