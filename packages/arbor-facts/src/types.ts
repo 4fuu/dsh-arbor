@@ -252,6 +252,12 @@ export type ArborStreamEvent =
 export interface ArborHostSessionFacts {
   /** DSH's session id, which is also the label every window carries. */
   readonly sessionId: string
+  /**
+   * The title DSH shows for the session, read from its latest `session/title`
+   * event. The host page leads with it so one session never reads as two
+   * different things in the sidebar and the page.
+   */
+  readonly title?: string
   readonly preset: string
   /** Every window of this session, oldest first. */
   readonly windows: readonly ArborWindowFacts[]

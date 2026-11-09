@@ -96,7 +96,15 @@ interface ConnectionService {
 
 /** The session services the facts service reads, as far as it uses them. */
 interface AgentsService {
-  get(id: SessionId): { readonly session: { readonly header: { readonly agentPreset?: string } } } | undefined
+  get(id: SessionId): {
+    readonly session: {
+      readonly header: { readonly agentPreset?: string }
+      snapshotEvents(): readonly {
+        readonly type: string
+        readonly data: unknown
+      }[]
+    }
+  } | undefined
 }
 
 interface ProjectionsService {
@@ -398,7 +406,7 @@ export class ArborFactsService extends Service {
   private async buildHost(): Promise<ArborHostFacts> {
     const host = this.arborHost()
     this.host.revision = this.revision
-    const facts = await buildHostFacts(host, this.revision)
+    const facts = await buildHostFacts(host, this.revision, sessionId => this.titleOf(sessionId))
     this.host.facts = facts
     for (const session of facts.sessions) {
       for (const window of session.windows) this.windowSession.set(window.ref, session.sessionId)
@@ -531,6 +539,19 @@ export class ArborFactsService extends Service {
     this.host.streams.clear()
     this.host.facts = undefined
     this.host.dirty = true
+  }
+
+  /** The title DSH shows for a session: its latest `session/title` event. */
+  private titleOf(sessionId: SessionId): string | undefined {
+    const session = serviceOf<AgentsService>(this.ctx, 'agents')?.get(sessionId)?.session
+    if (session === undefined) return undefined
+    for (const event of session.snapshotEvents().toReversed()) {
+      if (event.type !== 'session/title') continue
+      const title = (event.data as { title?: unknown } | null)?.title
+      if (typeof title === 'string' && title.trim() !== '') return title.trim()
+      return undefined
+    }
+    return undefined
   }
 
   /** The preset DSH projects for a session, from its live session or its header. */

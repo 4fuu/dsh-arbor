@@ -231,6 +231,7 @@ var en = {
   now: "Now",
   noLiveWindow: "No live window.",
   chain: "Window chain",
+  chainSummary: "{count} windows \xB7 {window} {state}",
   summarySessions: "Sessions",
   summaryWindows: "Live windows",
   summaryNotes: "Active notes",
@@ -373,6 +374,7 @@ var zh = {
   now: "\u6B63\u5728\u8FD0\u884C",
   noLiveWindow: "\u5F53\u524D\u6CA1\u6709\u6D3B\u52A8\u7A97\u53E3\u3002",
   chain: "\u7A97\u53E3\u94FE",
+  chainSummary: "{count} \u4E2A\u7A97\u53E3 \xB7 {window} {state}",
   summarySessions: "\u4F1A\u8BDD",
   summaryWindows: "\u6D3B\u52A8\u7A97\u53E3",
   summaryNotes: "\u6D3B\u8DC3\u7B14\u8BB0",
@@ -1299,8 +1301,12 @@ function SearchBlock(props) {
     )
   );
 }
-function sessionName(session) {
+function sessionTitle(session) {
+  if (session.title !== void 0 && session.title !== "") return session.title;
   return session.project?.name ?? (session.sessionId.length > 22 ? `${session.sessionId.slice(0, 22)}\u2026` : session.sessionId);
+}
+function projectLabel(session) {
+  return session.project === void 0 ? session.cwd ?? "" : `${session.project.name} \xB7 ${session.project.path}`;
 }
 function liveWindowOf(windows) {
   return [...windows].reverse().find((window) => window.live);
@@ -1355,22 +1361,18 @@ function Overview(props) {
               (0, import_react.createElement)(
                 "div",
                 { className: "arbor-session-title" },
-                (0, import_react.createElement)("span", { className: "arbor-label arbor-session-name" }, sessionName(session)),
+                (0, import_react.createElement)("span", { className: "arbor-label arbor-session-name" }, sessionTitle(session)),
                 (0, import_react.createElement)("span", { className: "arbor-num arbor-session-id" }, session.sessionId.slice(0, 14))
               ),
-              (0, import_react.createElement)(
-                "div",
-                { className: "arbor-muted arbor-session-doing" },
-                last?.doing ?? (session.windows.at(-1)?.doing ?? "")
-              ),
+              (0, import_react.createElement)("div", { className: "arbor-muted arbor-session-project" }, projectLabel(session)),
               (0, import_react.createElement)(
                 "div",
                 { className: "arbor-muted arbor-session-meta" },
-                session.project?.path ?? session.cwd ?? session.sessionId,
-                " \xB7 ",
-                t("chain"),
-                " ",
-                String(session.windows.length)
+                t("chainSummary", {
+                  count: session.windows.length,
+                  window: last?.ref ?? "\u2014",
+                  state: last === void 0 ? t("statusIdle") : stateLabel(t, last)
+                })
               )
             ),
             (0, import_react.createElement)("button", {
@@ -1474,7 +1476,7 @@ function SessionView(props) {
         (0, import_react.createElement)(
           "div",
           { className: "arbor-session-head-title" },
-          (0, import_react.createElement)("span", { className: "arbor-label arbor-session-name" }, session === void 0 ? sessionId : sessionName(session)),
+          (0, import_react.createElement)("span", { className: "arbor-label arbor-session-name" }, session === void 0 ? sessionId : sessionTitle(session)),
           (0, import_react.createElement)("span", { className: "arbor-num arbor-session-id" }, sessionId.slice(0, 18)),
           (0, import_react.createElement)(
             "span",
@@ -1482,7 +1484,7 @@ function SessionView(props) {
             now === void 0 ? t("statusEnded") : stateLabel(t, now)
           )
         ),
-        (0, import_react.createElement)("div", { className: "arbor-muted" }, now?.doing ?? facts.workspace.project?.path ?? "")
+        (0, import_react.createElement)("div", { className: "arbor-muted" }, session === void 0 ? facts.workspace.project?.path ?? "" : projectLabel(session))
       ),
       openDshSession === void 0 ? null : (0, import_react.createElement)("button", {
         type: "button",
@@ -1532,7 +1534,7 @@ function ArborPage(props) {
   };
   const tabLabel = (sessionId) => {
     const session = sessions.find((one) => one.sessionId === sessionId);
-    return session === void 0 ? sessionId.slice(0, 14) : sessionName(session);
+    return session === void 0 ? sessionId.slice(0, 14) : sessionTitle(session);
   };
   return (0, import_react.createElement)(
     "div",

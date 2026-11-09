@@ -531,9 +531,15 @@ function SearchBlock(props: { readonly t: Translate }): ReactNode {
           })))
 }
 
-/** A session's short display name: its project, or the label's first characters. */
-function sessionName(session: ArborHostSessionFacts): string {
+/** The session's title as DSH shows it, falling back to its project and id. */
+function sessionTitle(session: ArborHostSessionFacts): string {
+  if (session.title !== undefined && session.title !== '') return session.title
   return session.project?.name ?? (session.sessionId.length > 22 ? `${session.sessionId.slice(0, 22)}…` : session.sessionId)
+}
+
+/** The project part of a session card, which is secondary to DSH's title. */
+function projectLabel(session: ArborHostSessionFacts): string {
+  return session.project === undefined ? (session.cwd ?? '') : `${session.project.name} · ${session.project.path}`
 }
 
 /** The live window of a session, if it has one. */
@@ -578,14 +584,15 @@ function Overview(props: {
               createElement('span', { className: `arbor-dot arbor-dot-${active ? 'running' : 'ended'}` }),
               createElement('div', { className: 'arbor-session-main' },
                 createElement('div', { className: 'arbor-session-title' },
-                  createElement('span', { className: 'arbor-label arbor-session-name' }, sessionName(session)),
+                  createElement('span', { className: 'arbor-label arbor-session-name' }, sessionTitle(session)),
                   createElement('span', { className: 'arbor-num arbor-session-id' }, session.sessionId.slice(0, 14))),
-                createElement('div', { className: 'arbor-muted arbor-session-doing' },
-                  last?.doing ?? (session.windows.at(-1)?.doing ?? '')),
+                createElement('div', { className: 'arbor-muted arbor-session-project' }, projectLabel(session)),
                 createElement('div', { className: 'arbor-muted arbor-session-meta' },
-                  session.project?.path ?? session.cwd ?? session.sessionId,
-                  ' · ',
-                  t('chain'), ' ', String(session.windows.length))),
+                  t('chainSummary', {
+                    count: session.windows.length,
+                    window: last?.ref ?? '—',
+                    state: last === undefined ? t('statusIdle') : stateLabel(t, last),
+                  }))),
               createElement('button', {
                 type: 'button',
                 className: 'arbor-session-open arbor-label',
@@ -655,11 +662,11 @@ function SessionView(props: {
     createElement('div', { className: 'arbor-session-head' },
       createElement('div', { className: 'arbor-session-head-main' },
         createElement('div', { className: 'arbor-session-head-title' },
-          createElement('span', { className: 'arbor-label arbor-session-name' }, session === undefined ? sessionId : sessionName(session)),
+          createElement('span', { className: 'arbor-label arbor-session-name' }, session === undefined ? sessionId : sessionTitle(session)),
           createElement('span', { className: 'arbor-num arbor-session-id' }, sessionId.slice(0, 18)),
           createElement('span', { className: `arbor-chip arbor-label arbor-chip-${now?.state ?? 'ended'}` },
             now === undefined ? t('statusEnded') : stateLabel(t, now))),
-        createElement('div', { className: 'arbor-muted' }, now?.doing ?? facts.workspace.project?.path ?? '')),
+        createElement('div', { className: 'arbor-muted' }, session === undefined ? (facts.workspace.project?.path ?? '') : projectLabel(session))),
       openDshSession === undefined
         ? null
         : createElement('button', {
@@ -698,7 +705,7 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
   }
   const tabLabel = (sessionId: string): string => {
     const session = sessions.find(one => one.sessionId === sessionId)
-    return session === undefined ? sessionId.slice(0, 14) : sessionName(session)
+    return session === undefined ? sessionId.slice(0, 14) : sessionTitle(session)
   }
   return createElement('div', { className: 'arbor-page', 'data-arbor-page': true },
     createElement('header', { className: 'arbor-page-head' },

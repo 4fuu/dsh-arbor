@@ -410,14 +410,23 @@ async function sessionLabels(host: ArborHostService): Promise<string[]> {
   return [...labels]
 }
 
-/** One session's row in the whole-host view. */
-async function hostSessionOf(host: ArborHostService, sessionId: SessionId): Promise<ArborHostSessionFacts> {
+/**
+ * One session's row in the whole-host view.
+ * @param titleOf - the title DSH shows for a session, when the caller can read it.
+ */
+async function hostSessionOf(
+  host: ArborHostService,
+  sessionId: SessionId,
+  titleOf?: (sessionId: SessionId) => string | undefined,
+): Promise<ArborHostSessionFacts> {
   const { windows, board } = await windowsOf(host, sessionId)
   const chain = windows.map(window => window.ref)
   const workspace = await workspaceOf(host, sessionId, chain)
   const liveLine = [...board].reverse().find(line => windows.some(window => window.ref === line.window && window.live))
+  const title = titleOf?.(sessionId)
   return {
     sessionId,
+    ...(title === undefined || title === '' ? {} : { title }),
     preset: 'arbor',
     windows,
     live: windows.filter(window => window.live).length,
@@ -430,12 +439,19 @@ async function hostSessionOf(host: ArborHostService, sessionId: SessionId): Prom
   }
 }
 
-/** Assemble the whole-host view the left sidebar's arbor page reads. */
-export async function buildHostFacts(host: ArborHostService, revision: number): Promise<ArborHostFacts> {
+/**
+ * Assemble the whole-host view the left sidebar's arbor page reads.
+ * @param titleOf - DSH's own session title, which the page leads with.
+ */
+export async function buildHostFacts(
+  host: ArborHostService,
+  revision: number,
+  titleOf?: (sessionId: SessionId) => string | undefined,
+): Promise<ArborHostFacts> {
   const labels = await sessionLabels(host)
   const sessions: ArborHostSessionFacts[] = []
   for (const label of labels) {
-    sessions.push(await hostSessionOf(host, label as SessionId))
+    sessions.push(await hostSessionOf(host, label as SessionId, titleOf))
   }
   sessions.sort((left, right) => {
     const one = left.windows.at(-1)?.startedAt ?? 0
