@@ -187,9 +187,16 @@ export function windowSessionPlugin(
     name: 'dsh-arbor-window-session',
     hooks: {
       windowStart: (context) => {
-        for (const target of context.task.targets) {
-          const sessionId = sessionOfTarget(target)
-          if (sessionId !== undefined) note(context.window, sessionId)
+        const label = context.task.label
+        if (label !== undefined && label !== '') {
+          note(context.window, label as SessionId)
+        } else {
+          // An unlabeled task from an SDK or a remote integration still carries
+          // its session target; the label is the deployment's own attachment.
+          for (const target of context.task.targets) {
+            const sessionId = sessionOfTarget(target)
+            if (sessionId !== undefined) note(context.window, sessionId)
+          }
         }
         return { allow: true as const, context }
       },
@@ -211,6 +218,18 @@ function continuedWindow(body: string | null): WindowRef | undefined {
     return typeof previous === 'string' ? previous as WindowRef : undefined
   } catch {
     return undefined
+  }
+}
+
+/** The opaque label a `window_start` carries, or the empty string. */
+function readLabel(event: { body: string | null }): string {
+  if (event.body === null) return ''
+  try {
+    const parsed: unknown = JSON.parse(event.body)
+    const label = (parsed as { label?: unknown } | null)?.label
+    return typeof label === 'string' ? label : ''
+  } catch {
+    return ''
   }
 }
 
@@ -791,18 +810,50 @@ export class ArborHostService extends Service {
   }
 
   /**
-   * Every window of this session's chain, oldest first.
+   * Every window that serves this session, oldest first.
    *
-   * The chain is the session's first window, its continuations, and the one a
-   * restart opened for it. The first window carries the session's target, and
-   * every window after it names its predecessor in its own `window_start` body
-   * — which is what makes the chain walkable: a restart continuation carries no
-   * targets of its own, so the target alone does not name the newest window.
-   * The relay reads the chain's tool calls back out of the journal on resume.
+   * A window carries the session's target in its own `window_start`, and a
+   * continuation carries its predecessor instead; a chain therefore starts at a
+   * target-carrying window and every continuation leads back to one. A session
+   * can have several such roots — one per turn after an idle window ended — and
+   * each root's continuations belong to the same session. The journal's start
+   * order is what orders them all, and it is what the relay reads the chain's
+   * tool calls back out of on resume.
    */
   async windowChainOf(sessionId: SessionId): Promise<WindowRef[]> {
+    // A window carries the label its task named, and arbor carries that label
+    // onto the window's continuations and the journal's record of both. The
+    // label is the embedding's own session id, so it names this session's
+    // windows directly - every root a turn after an idle end opened, and every
+    // continuation of each - without walking targets or a process map.
+    const labeled: Array<{ window: WindowRef; seq: number }> = []
+    const { journal } = this.requireState()
+    for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
+      const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
+      for (const event of page.items) {
+        if (event.window === null) continue
+        if (readLabel(event) === sessionId) labeled.push({ window: event.window, seq: event.seq })
+      }
+      if (page.items.length < MAX_PAGE_LIMIT) break
+    }
+    if (labeled.length > 0) {
+      return labeled.sort((left, right) => left.seq - right.seq).map(entry => entry.window)
+    }
+    // A journal written before arbor carried labels has no direct answer; the
+    // target walk it used is kept so an upgraded DSH_HOME stays readable.
+    return this.windowChainByTarget(sessionId)
+  }
+
+  /**
+   * The pre-label chain walk: the session's target names its first windows and
+   * each continuation names its predecessor. Only a journal with no labels
+   * reaches this; a current one answers by label.
+   */
+  private async windowChainByTarget(sessionId: SessionId): Promise<WindowRef[]> {
     const target = sessionTarget(sessionId)
     const { journal } = this.requireState()
+    /** When each `window_start` was appended, in the journal's own order. */
+    const startedAt = new Map<WindowRef, number>()
     /** The window each `window_start` names as its predecessor. */
     const previousOf = new Map<WindowRef, WindowRef>()
     /** The windows whose own start carries this session's target. */
@@ -811,13 +862,13 @@ export class ArborHostService extends Service {
       const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
       for (const event of page.items) {
         if (event.window === null) continue
+        startedAt.set(event.window, event.seq)
         if (event.targets.includes(target)) roots.add(event.window)
         const previous = continuedWindow(event.body)
         if (previous !== undefined) previousOf.set(event.window, previous)
       }
       if (page.items.length < MAX_PAGE_LIMIT) break
     }
-    /** The first window of the chain a window belongs to, or undefined. */
     const rootOf = (window: WindowRef): WindowRef | undefined => {
       const seen = new Set<WindowRef>()
       let current: WindowRef | undefined = window
@@ -828,33 +879,9 @@ export class ArborHostService extends Service {
       }
       return undefined
     }
-    const chainSet = new Set<WindowRef>()
-    for (const window of previousOf.keys()) {
-      if (rootOf(window) !== undefined) chainSet.add(window)
-    }
-    for (const window of roots) chainSet.add(window)
-    // The chain's last window is the one no other window in the chain continues
-    // - a continuation carries its predecessor, never the reverse - so the walk
-    // starts there and follows the links back.
-    const continued = new Set<WindowRef>()
-    for (const window of chainSet) {
-      const previous = previousOf.get(window)
-      if (previous !== undefined && chainSet.has(previous)) continued.add(previous)
-    }
-    const newest = [...chainSet].find(window => !continued.has(window))
-      ?? [...chainSet].at(-1)
-    if (newest === undefined) return []
-    const chain: WindowRef[] = []
-    const seen = new Set<WindowRef>()
-    let current: WindowRef | undefined = newest
-    while (current !== undefined && !seen.has(current) && chain.length < 1000) {
-      seen.add(current)
-      chain.push(current)
-      current = previousOf.get(current)
-    }
-    // The walk collected the newest window first; the method promises the
-    // session's chain oldest first, which is what a relay and a reader want.
-    return chain.reverse()
+    return [...startedAt.keys()]
+      .filter(window => rootOf(window) !== undefined)
+      .sort((left, right) => (startedAt.get(left) ?? 0) - (startedAt.get(right) ?? 0))
   }
 
   /**
@@ -879,18 +906,25 @@ export class ArborHostService extends Service {
       const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
       for (const event of page.items) {
         if (event.window === null) continue
+        const label = readLabel(event)
+        if (label !== '') {
+          // The embedding's own label, which arbor carried onto the window's
+          // start and its continuations: no target matching is needed.
+          sessions.set(event.window, label as SessionId)
+        } else {
+          // A journal written before labels carries the target instead.
+          for (const target of event.targets) {
+            const sessionId = sessionOfTarget(target)
+            if (sessionId !== undefined) sessions.set(event.window, sessionId)
+          }
+        }
         const before = continuedWindow(event.body)
         if (before !== undefined) previous.set(event.window, before)
-        for (const target of event.targets) {
-          const sessionId = sessionOfTarget(target)
-          if (sessionId !== undefined) sessions.set(event.window, sessionId)
-        }
       }
       if (page.items.length < MAX_PAGE_LIMIT) break
     }
-    // Walk each window back to the window that carried the target: a continuation
-    // serves the session its predecessor served, however many continuations deep
-    // the chain runs.
+    // A continuation of a window whose start named no label inherits its
+    // predecessor's attribution, however many continuations deep it runs.
     for (const window of previous.keys()) {
       if (sessions.has(window)) continue
       let current: WindowRef | undefined = previous.get(window)
@@ -912,9 +946,9 @@ export class ArborHostService extends Service {
    * The window this session's work is running in, when it has a live one.
    *
    * The journal is the record of which window belongs to which session: every
-   * `window_start` carries the session's target, a continuation carries its
-   * predecessor's, and a window a restart stopped is continued under a new ref
-   * with the same target. So the newest `window_start` for the target names the
+   * `window_start` carries the label its task named, arbor carries that label
+   * onto the window's continuations, and a window a restart stopped is continued
+   * under a new ref with the same label. So the newest labeled start names the
    * session's window, and it is the live one unless the chain has ended.
    */
   async windowFor(sessionId: SessionId): Promise<WindowRef | undefined> {

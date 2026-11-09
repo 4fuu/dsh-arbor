@@ -65,10 +65,14 @@ export interface ArborWindowFacts {
   readonly continuationOf?: string
   /** The window that continues this one, when the chain went on. */
   readonly continuedBy?: string
-  /** The end recorded a handoff, with the refs the handoff cited. */
+  /** The end recorded a handoff, with the refs and parts arbor kept. */
   readonly handoff?: {
     readonly present: true
     readonly refs: readonly string[]
+    readonly topics?: readonly string[]
+    readonly progress?: readonly string[]
+    readonly pending?: readonly string[]
+    readonly agreements?: readonly string[]
   }
   /** Why the end was refused, when arbor recorded one. */
   readonly refused?: string
@@ -244,10 +248,53 @@ export type ArborStreamEvent =
   | { readonly kind: 'text_delta'; readonly delta: string }
   | { readonly kind: 'tool_call_delta'; readonly name: string; readonly args: string }
 
+/** One arbor session in the whole-host view. */
+export interface ArborHostSessionFacts {
+  /** DSH's session id, which is also the label every window carries. */
+  readonly sessionId: string
+  readonly preset: string
+  /** Every window of this session, oldest first. */
+  readonly windows: readonly ArborWindowFacts[]
+  readonly live: number
+  /** What it is doing now, from its newest live board line. */
+  readonly doing?: string
+  readonly project?: {
+    readonly name: string
+    readonly path: string
+  }
+  readonly cwd?: string
+  readonly pointers: readonly ArborKeepFacts[]
+}
+
+/** Everything the overall arbor view reads, across every session of the host. */
+export interface ArborHostFacts {
+  readonly version: 1
+  readonly revision: number
+  readonly at: number
+  readonly dataRoot: string
+  readonly backend: 'ovnfs' | 'dir'
+  readonly shared: string
+  /** Every arbor session the host holds windows for, most recent first. */
+  readonly sessions: readonly ArborHostSessionFacts[]
+  /** Every window of every session, oldest first. */
+  readonly windows: readonly ArborWindowFacts[]
+  readonly board: readonly ArborBoardFacts[]
+  readonly notes: ArborNotesFacts
+  readonly env: ArborEnvFacts
+  readonly schedules: readonly ArborScheduleFacts[]
+  readonly settings: ArborSettingsFacts
+}
+
 /** One frame of the NDJSON facts stream. */
 export type ArborFactsFrame =
   | { readonly type: 'facts'; readonly facts: ArborFacts }
   | { readonly type: 'stream'; readonly window: string; readonly event: ArborStreamEvent }
+  | { readonly type: 'error'; readonly message: string }
+
+/** One frame of the whole-host NDJSON stream. */
+export type ArborHostFrame =
+  | { readonly type: 'facts'; readonly facts: ArborHostFacts }
+  | { readonly type: 'stream'; readonly window: string; readonly sessionId?: string; readonly event: ArborStreamEvent }
   | { readonly type: 'error'; readonly message: string }
 
 /** One journal hit, as arbor's own search answered it. */

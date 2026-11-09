@@ -22,6 +22,8 @@ import type {
   ArborEnvFacts,
   ArborEnvItemFacts,
   ArborFacts,
+  ArborHostFacts,
+  ArborHostSessionFacts,
   ArborNotesFacts,
   ArborScheduleFacts,
   ArborOpenWorkFacts,
@@ -52,11 +54,38 @@ function text(event: Event, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-/** The handoff an end recorded, when it recorded one. */
-function handoffOf(event: Event): ArborWindowFacts['handoff'] {
-  const recorded = body(event)['handoff']
+/** A string list recorded in a handoff part. */
+function parts(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value.filter((item): item is string => typeof item === 'string')
+  return items.length === 0 ? undefined : items
+}
+
+/**
+ * The handoff an end recorded, when it recorded one.
+ *
+ * `window_end` itself carries only `handoff: true` and the refs. The model's
+ * `end` tool call carries the four parts, and it is arbor's own journal event,
+ * so the page reads them from there when they are present; a handoff made
+ * through `WindowSession.end` without that call still shows as a handoff with
+ * its refs.
+ */
+async function handoffOf(host: ArborHostService, window: string, end: Event): Promise<ArborWindowFacts['handoff']> {
+  const recorded = body(end)['handoff']
   if (recorded !== true) return undefined
-  return { present: true, refs: [...event.refs] }
+  const page = await host.journal.list({ window: window as never, kinds: ['tool_call'], limit: 100 })
+  const call = page.items.findLast(event => typeof body(event)['handoff'] === 'object')
+  const value = call === undefined ? undefined : body(call)['handoff'] as Record<string, unknown>
+  return {
+    present: true,
+    refs: [...end.refs],
+    ...(value === undefined ? {} : {
+      ...(parts(value['topics']) === undefined ? {} : { topics: parts(value['topics']) }),
+      ...(parts(value['progress']) === undefined ? {} : { progress: parts(value['progress']) }),
+      ...(parts(value['pending']) === undefined ? {} : { pending: parts(value['pending']) }),
+      ...(parts(value['agreements']) === undefined ? {} : { agreements: parts(value['agreements']) }),
+    }),
+  }
 }
 
 /** One window's own journal events, oldest first. */
@@ -107,7 +136,7 @@ async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<
       ...(start === undefined ? {} : { task: text(start, 'task') }),
       targets,
       ...(continuationOf === undefined ? {} : { continuationOf }),
-      ...(end === undefined ? {} : { handoff: handoffOf(end) }),
+      ...(end === undefined ? {} : { handoff: await handoffOf(host, ref, end) }),
       ...(end === undefined ? {} : { refused: text(end, 'refused') }),
       ...(line?.openWork === undefined ? {} : { openWork: line.openWork }),
     })
@@ -243,8 +272,8 @@ function repeatOf(schedule: ScheduledTask): Pick<ArborScheduleFacts, 'everyMs' |
 }
 
 /** The schedules arbor holds, marking the ones that name this session's target. */
-async function schedulesOf(host: ArborHostService, sessionId: SessionId): Promise<ArborScheduleFacts[]> {
-  const target = sessionTarget(sessionId)
+async function schedulesOf(host: ArborHostService, sessionId?: SessionId): Promise<ArborScheduleFacts[]> {
+  const target = sessionId === undefined ? undefined : sessionTarget(sessionId)
   const schedules = await host.host.schedules()
   return schedules.map(schedule => ({
     ref: schedule.ref,
@@ -255,7 +284,7 @@ async function schedulesOf(host: ArborHostService, sessionId: SessionId): Promis
     ...(schedule.fired === undefined ? {} : { fired: schedule.fired }),
     paused: schedule.paused,
     ...repeatOf(schedule),
-    mine: schedule.targets.includes(target),
+    mine: target === undefined ? false : schedule.targets.includes(target),
     targets: [...schedule.targets],
   }))
 }
@@ -347,6 +376,98 @@ export async function buildFacts(
     windows,
     board,
     workspace,
+    notes,
+    env,
+    schedules,
+    settings,
+  }
+}
+
+
+/** The label a `window_start` carries, or the empty string. */
+function labelOf(event: Event): string {
+  if (event.body === null) return ''
+  try {
+    const parsed: unknown = JSON.parse(event.body)
+    const label = (parsed as { label?: unknown } | null)?.label
+    return typeof label === 'string' ? label : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Every session the host holds windows for, by the label on their starts. */
+async function sessionLabels(host: ArborHostService): Promise<string[]> {
+  const labels = new Set<string>()
+  for (let offset = 0; ; offset += 200) {
+    const page = await host.journal.list({ kinds: ['window_start'], limit: 200, offset })
+    for (const event of page.items) {
+      const label = labelOf(event)
+      if (label !== '') labels.add(label)
+    }
+    if (page.items.length < 200) break
+  }
+  return [...labels]
+}
+
+/** One session's row in the whole-host view. */
+async function hostSessionOf(host: ArborHostService, sessionId: SessionId): Promise<ArborHostSessionFacts> {
+  const { windows, board } = await windowsOf(host, sessionId)
+  const chain = windows.map(window => window.ref)
+  const workspace = await workspaceOf(host, sessionId, chain)
+  const liveLine = [...board].reverse().find(line => windows.some(window => window.ref === line.window && window.live))
+  return {
+    sessionId,
+    preset: 'arbor',
+    windows,
+    live: windows.filter(window => window.live).length,
+    ...(liveLine === undefined && windows.at(-1)?.doing === undefined
+      ? {}
+      : { doing: liveLine?.doing ?? windows.at(-1)?.doing }),
+    ...(workspace.project === undefined ? {} : { project: workspace.project }),
+    ...(workspace.cwd === undefined ? {} : { cwd: workspace.cwd }),
+    pointers: workspace.pointers,
+  }
+}
+
+/** Assemble the whole-host view the left sidebar's arbor page reads. */
+export async function buildHostFacts(host: ArborHostService, revision: number): Promise<ArborHostFacts> {
+  const labels = await sessionLabels(host)
+  const sessions: ArborHostSessionFacts[] = []
+  for (const label of labels) {
+    sessions.push(await hostSessionOf(host, label as SessionId))
+  }
+  sessions.sort((left, right) => {
+    const one = left.windows.at(-1)?.startedAt ?? 0
+    const other = right.windows.at(-1)?.startedAt ?? 0
+    return other - one
+  })
+  const windows = sessions.flatMap(session => [...session.windows])
+    .sort((left, right) => (left.startedAt ?? 0) - (right.startedAt ?? 0))
+  const board: ArborBoardFacts[] = host.host.boardLines().map(line => ({
+    window: line.window,
+    doing: line.doing,
+    state: line.state,
+    targets: [...line.targets],
+    usage: { ...line.usage },
+    ...(line.openWork === undefined ? {} : { openWork: [...line.openWork] }),
+  }))
+  const [notes, env, schedules, settings] = await Promise.all([
+    notesOf(host),
+    envOf(host),
+    schedulesOf(host),
+    settingsOf(host),
+  ])
+  return {
+    version: 1,
+    revision,
+    at: Date.now(),
+    dataRoot: host.dataRoot,
+    backend: host.workspaceBackend,
+    shared: host.sharedFolder,
+    sessions,
+    windows,
+    board,
     notes,
     env,
     schedules,

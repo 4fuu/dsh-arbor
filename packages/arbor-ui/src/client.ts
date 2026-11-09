@@ -119,6 +119,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { createElement, useSyncExternalStore, type ComponentType } from 'react'
+import { closeChannels } from './channel.ts'
+import { en, fallbackTranslate, NAMESPACE, zh, type Translate } from './i18n.ts'
+import { installStyles } from './styles.ts'
+import { ArborPage, ArborPanelIcon, PANEL_ID } from './ui.ts'
 
 /** The composer seat DSH's permission-presets package occupies. */
 const SEAT_SLOT = 'conversation.input.permission'
@@ -274,6 +278,12 @@ interface ConversationService {
   }
 }
 
+/** The locale service's dictionary and bind faces. */
+interface LocaleService {
+  register(namespace: string, dictionary: { zh: Record<string, string>; en: Record<string, string> }): () => void
+  bind(namespace: string): Translate
+}
+
 /**
  * The slice of the client slots service this package uses. `ctx.slots` is added
  * to the cordis Context by the frontend bundle's slot runtime, a type-only
@@ -282,9 +292,13 @@ interface ConversationService {
  */
 interface SlotsService {
   entriesOfSlot(name: string): readonly SeatEntry[]
+  inject(name: string, factory: () => () => void): () => void
   register(
     options: {
       name: string
+      id?: string
+      key?: string
+      order?: number
       priority?: number
       locale?: unknown
       inject?: unknown
@@ -317,6 +331,98 @@ export function apply(ctx: Context): void {
   const stop = (): void => {
     if (poll !== undefined) { clearInterval(poll); poll = undefined }
   }
+
+  // ---- the arbor panel: its locale, its stylesheet, its tab type and body,
+  // and the session-header chip. All four are DSH's own seams: a locale
+  // namespace, plugin-owned style, the sidebar-right tab registry with its
+  // keyed body seat, and the conversation header's actions list.
+  let bound: Translate | undefined
+  ctx.inject(['locale'], () => {
+    const locale = service<LocaleService>('locale')
+    if (locale === undefined) return
+    try {
+      locale.register(NAMESPACE, { zh, en })
+      bound = locale.bind(NAMESPACE)
+    } catch (error: unknown) {
+      ctx.logger.warn(`arbor-ui: the arbor locale did not register: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  })
+  const t: Translate = (key, args) => (bound ?? fallbackTranslate)(key, args)
+  installStyles()
+  ctx.effect(() => () => { closeChannels() }, 'arbor-ui: channels')
+
+  /** Switch DSH to the session whose tab a row names. */
+  const openDshSession = (sessionId: string): void => {
+    service<WorkspaceNavigation>('uiWorkspace')?.openSession(sessionId)
+  }
+
+  /**
+   * Register one seat once its slot is declared. The slots service refuses a
+   * name no declaration carries, and a client package's apply may run before
+   * the package that declares the seat (the module graph's load order is not
+   * the slot ledger's), so a refusal is retried on a short bound instead of
+   * leaving the panel unreachable for the life of the page. A successful
+   * registration is final.
+   */
+  const registerSeat = (
+    options: { name: string; id?: string; key?: string; order?: number; label?: () => string; locale?: unknown; inject?: unknown },
+    component: (props: never) => unknown,
+  ): (() => void) => {
+    let stop: (() => void) | undefined
+    let timer: ReturnType<typeof setInterval> | undefined
+    let attempts = 0
+    const attempt = (): void => {
+      if (stop !== undefined) return
+      if (++attempts > MAX_POLLS) {
+        if (timer !== undefined) clearInterval(timer)
+        timer = undefined
+        return
+      }
+      try {
+        stop = slots.register(options, component)
+        document.body.dataset['arborSeat'] = `${document.body.dataset['arborSeat'] ?? ''}|ok:${options.name}:${options.id ?? options.key ?? ''}`
+      } catch (error: unknown) {
+        document.body.dataset['arborSeat'] = `${document.body.dataset['arborSeat'] ?? ''}|fail:${options.name}:${error instanceof Error ? error.message : String(error)}`
+        return
+      }
+      if (timer !== undefined) clearInterval(timer)
+      timer = undefined
+    }
+    attempt()
+    if (stop === undefined) timer = setInterval(attempt, POLL_MS)
+    return () => {
+      if (timer !== undefined) clearInterval(timer)
+      timer = undefined
+      stop?.()
+    }
+  }
+
+  // The permanent left-sidebar entry and the root-scoped page it selects.
+  //
+  // `sidebar.panellist` is DSH's own list slot for global navigation rows and
+  // `main` is the root-scoped keyed slot that renders the selected page; the
+  // sidebar selects a page by the row's `id`, which is also the page seat's
+  // `key`. This is exactly the pair the shipped Automation-tasks row
+  // (`@deepseek-ai/dsh-client-ui-schedule`) and the official plugin manager
+  // (`@deepseek-ai/dsh-client-ui-plugin-manager`, `lib/client.js`:
+  // `slots.inject("sidebar.panellist", ... id: PANEL_ID, order: 0, label, locale)`
+  // and `slots.inject("main", ... key: PANEL_ID)`) register. Registering the
+  // seats directly, with a retry, rather than through `slots.inject` is what
+  // works for a list entry and a keyed page in this package; see the note on
+  // `registerSeat`.
+  registerSeat({
+    name: 'main',
+    key: PANEL_ID,
+    locale: NAMESPACE,
+    inject: () => ({ openDshSession }),
+  }, ArborPage as unknown as (props: never) => unknown)
+  registerSeat({
+    name: 'sidebar.panellist',
+    id: PANEL_ID,
+    order: 10,
+    locale: NAMESPACE,
+    label: () => t('panelLabel'),
+  }, ArborPanelIcon as unknown as (props: never) => unknown)
 
   // The hero chip's staged pick. Resolved from the hero seat's own registration
   // once DSH's agent-preset surface has mounted; absent leaves the gate on the

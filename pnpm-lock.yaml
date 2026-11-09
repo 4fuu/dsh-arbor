@@ -48,14 +48,14 @@ importers:
   packages/arbor-driver:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-prompt':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-host':
         specifier: workspace:*
         version: link:../arbor-host
@@ -111,17 +111,17 @@ importers:
   packages/arbor-env:
     dependencies:
       '@4fu/arbor-environment-dir':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-errors':
         specifier: 2026.1107.0
         version: 2026.1107.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-prompt':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@deepseek-ai/dsh-skill':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-llm@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
@@ -132,11 +132,11 @@ importers:
   packages/arbor-facts:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-host':
         specifier: workspace:*
         version: link:../arbor-host
@@ -150,26 +150,26 @@ importers:
   packages/arbor-host:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-environment-dir':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-journal-sqlite':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-notes-sqlite':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-prompt':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-workspace-dir':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-env':
         specifier: workspace:*
         version: link:../arbor-env
@@ -222,11 +222,11 @@ importers:
   packages/arbor-llm:
     dependencies:
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-prompt':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-tools':
         specifier: workspace:*
         version: link:../arbor-tools
@@ -264,11 +264,11 @@ importers:
   packages/arbor-prompt:
     dependencies:
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-prompt':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@deepseek-ai/dsh-agent':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(d9740b81bf2b48fd86b0c38a41e906a0)
@@ -282,8 +282,8 @@ importers:
         specifier: 2026.1107.0
         version: 2026.1107.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-bundle':
         specifier: workspace:*
         version: link:../arbor-bundle
@@ -333,8 +333,8 @@ importers:
   packages/arbor-tools:
     dependencies:
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@deepseek-ai/dsh-agent':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(d9740b81bf2b48fd86b0c38a41e906a0)
@@ -347,10 +347,22 @@ importers:
 
   packages/arbor-ui:
     dependencies:
+      '@4fu/dsh-arbor-facts':
+        specifier: workspace:*
+        version: link:../arbor-facts
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      '@deepseek-ai/dsh-client-locale':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/dsh-client-ui-permission-presets':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
     devDependencies:
@@ -386,11 +398,11 @@ importers:
   packages/arbor-workspace:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@deepseek-ai/dsh-session':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
@@ -401,11 +413,11 @@ importers:
   proofs:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/arbor-interfaces':
-        specifier: 2026.1107.1
-        version: 2026.1107.1
+        specifier: 2026.1109.0
+        version: 2026.1109.0
       '@4fu/dsh-arbor-bundle':
         specifier: workspace:*
         version: link:../packages/arbor-bundle
@@ -476,67 +488,67 @@ importers:
 
 packages:
 
-  '@4fu/arbor-core@2026.1107.1':
-    resolution: {integrity: sha512-gqqWaM6m7KMqd+BvMsh7s4MJMTQ7Clggw0+onjrL1dfattLyZTpKdzgK9mBEmfCH/lGXaR5sL8p/B2I7Ffur7g==}
+  '@4fu/arbor-core@2026.1109.0':
+    resolution: {integrity: sha512-uWy3JYhi9exQ+WMyD3nj1NSU/5uGP2n5Xtxtz43boppkseH0sygdirapt0s+pgX1f6i9zMZ6BE/2upBYeC78+Q==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-environment-dir@2026.1107.1':
-    resolution: {integrity: sha512-m2jw8YqhNX5IRxWfAdmpiR3hd6rgS7doE/1Bwhh81FiHuXti/jfFmcFUlGBiDfDcvCN7roA1ZiBOr2ypgVA2xg==}
+  '@4fu/arbor-environment-dir@2026.1109.0':
+    resolution: {integrity: sha512-GjC2x6RxgdH6vBtgy1G0UoPIWvEQTDUtWvQV4MmdeGlJBu6nfnWRVu8IK0UqDcWsyGOqzSBUPWVakCGlr49cHA==}
     engines: {node: '>=24'}
 
   '@4fu/arbor-errors@2026.1107.0':
     resolution: {integrity: sha512-jcaS1I0yCPUp1f5w0/2pNrEk7shfHKsv2TvitjLEaBdBsGTDyNaypScBp+w/ExDeQ6aaXppGD2YzrCb6kxKBfQ==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-interfaces@2026.1107.1':
-    resolution: {integrity: sha512-2F4pLZBVJaaNDXGhZmm85M0C8Lx2Vhc7SntT8Ue4TVxSfAQwKJ3J5PzGJocMczKTxnC3WJN+Ar35e4S3NB5e1w==}
+  '@4fu/arbor-interfaces@2026.1109.0':
+    resolution: {integrity: sha512-VqRwgY6kkyLxLxb1EILZYxANI3YlaIip3nsbHk9Tfq0DcTLvkdFNaecuvFeUOjGhctZrXk1j3+84nEDO89od5g==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-journal-sqlite@2026.1107.1':
-    resolution: {integrity: sha512-tX3UOxdmrpYRlQ3Jz1adOeBj+PSMSr1Lh9mAGfZimk15iWOmHZu3m9CykuX2XKglfthQ5GnpEXNPen4XfsGiPQ==}
+  '@4fu/arbor-journal-sqlite@2026.1109.0':
+    resolution: {integrity: sha512-qf2mH+jjljP/Qh3ucXqz0KwCPfny7CcUkLasQpoRmlzlYFMEA2+9TNpZtnK/YCjywOqQjWoVZvfT6Gp3Z/NR6A==}
     engines: {node: '>=24'}
     peerDependencies:
-      '@4fu/arbor-search-zvec': 2026.1107.1
+      '@4fu/arbor-search-zvec': 2026.1109.0
     peerDependenciesMeta:
       '@4fu/arbor-search-zvec':
         optional: true
 
-  '@4fu/arbor-judge-jev@2026.1107.1':
-    resolution: {integrity: sha512-chmaOLXnqiRd2X0ufCzv7/PccrvQANB4lCqQG+Nctze6tCNpBeqOcEsTJWKR+N2qhxnHimvRHvVjTJ4sfDv9/w==}
+  '@4fu/arbor-judge-jev@2026.1109.0':
+    resolution: {integrity: sha512-XDLYkeP33C4nyz0BPOyHLIcxCRbAWg2sfiIQoP6CcSqFBIQdWyzKR0Hc83x+/dMPbMSYy9UmyQIw5agwDqbF1Q==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-lexical@2026.1107.1':
-    resolution: {integrity: sha512-4byoJjfQ9avf9FW+CHREmXUuM+o24O0xZ/ziFI/XCOiVoGIk7MUuqAspuoMJjUN2tJ6ZuyT4FafVzlDgLL15+w==}
+  '@4fu/arbor-lexical@2026.1109.0':
+    resolution: {integrity: sha512-FPvLnzHMGiz++iHvQLXRsZtYXUk4HJ9v1FEsS8F8NgVKZEjPpE3/AHgvkko3cPN25YLi6aE/6aod5m9ZWL2yoQ==}
     engines: {node: '>=24'}
     peerDependencies:
-      '@4fu/arbor-segmenter-jieba': 2026.1107.1
+      '@4fu/arbor-segmenter-jieba': 2026.1109.0
     peerDependenciesMeta:
       '@4fu/arbor-segmenter-jieba':
         optional: true
 
-  '@4fu/arbor-notes-sqlite@2026.1107.1':
-    resolution: {integrity: sha512-nmEbJQ0WKJRQ1eceTF5KwUDBbvzfiu1F35MVSaFeOg7n9fCGoXjN8AvPtxojiVspw6qH/By2VkVqTSomsbXNRw==}
+  '@4fu/arbor-notes-sqlite@2026.1109.0':
+    resolution: {integrity: sha512-vKoIFcKRRNh0Kf6DUWHlpCNik63+VlhR5FkUk7CD+f8T1Un2gbV+SEq+O+DcCKjFhaVDHYYYNsdcHG+NMPwuXw==}
     engines: {node: '>=24'}
     peerDependencies:
-      '@4fu/arbor-search-zvec': 2026.1107.1
+      '@4fu/arbor-search-zvec': 2026.1109.0
     peerDependenciesMeta:
       '@4fu/arbor-search-zvec':
         optional: true
 
-  '@4fu/arbor-prompt@2026.1107.1':
-    resolution: {integrity: sha512-OccUnAmEqhbdJnD82Lw/epjgljORCibO8G73BRoIF+q5AnuKWZzWMHWMFC+TlnXa5jDOBc6yACOfV8hL7NXdsQ==}
+  '@4fu/arbor-prompt@2026.1109.0':
+    resolution: {integrity: sha512-nH35aU3gcrPFWin9Bv4NF4VbeDD4URc1X/mw0WuOx3dZFKih0LhLgcRKJnsVkZhXiL3SajPxNYzNvgp4jbI6vA==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-tools@2026.1107.1':
-    resolution: {integrity: sha512-MoJ/eWtkRclJ8UzS0qLBLeNLAel/BvhRzbnn6cBEjmESS+uYtEzyaw3e1Nwt2X1MuILck65CXr14XRwl46hXCQ==}
+  '@4fu/arbor-tools@2026.1109.0':
+    resolution: {integrity: sha512-ubEivKtlPy6h3Uh+Z2aD0CjptnC5TUpxZIvMV8/cVGASpUfg51vSd+oS14arSfE4P5pS0LY9k4He6WjtlKWXWQ==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-workspace-dir@2026.1107.1':
-    resolution: {integrity: sha512-M0XPNKdQlEiZn+5bdR8s3cz0KIfc1oYZFbFj7oq+FXOurKvNM76zq6h5uFfsJfyOANbxGESL2VrZ8PWWoQpPVw==}
+  '@4fu/arbor-workspace-dir@2026.1109.0':
+    resolution: {integrity: sha512-3W9h694dQnFJGMv2vntK4M5zZoF3iLrElt1GO8hG7RjraAiDiQEGJGIqeiI7ALb++5QyHDegx/q/uaWQ/XMQEQ==}
     engines: {node: '>=24'}
 
-  '@4fu/arbor-workspace-ovnfs@2026.1107.1':
-    resolution: {integrity: sha512-GJT9Mh8j1S72+DrEakweSEjtbSog+8ApBUB369WYEjrgYYdrGXF9pK1nIXIf0k2wm30QjInVTuYv3dEconpwmw==}
+  '@4fu/arbor-workspace-ovnfs@2026.1109.0':
+    resolution: {integrity: sha512-Kb8Br2wEZpPtLtqjcVJLRSYWh4RuEL2ozuq7JPIOuoKoA1rjxTl/FeXD6KWKX0YK7Nw0rAbLO1+4ziFjsreW9A==}
     engines: {node: '>=24'}
 
   '@agentclientprotocol/sdk@1.4.0':
@@ -4823,77 +4835,77 @@ packages:
 
 snapshots:
 
-  '@4fu/arbor-core@2026.1107.1':
+  '@4fu/arbor-core@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-judge-jev': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
-      '@4fu/arbor-tools': 2026.1107.1
-      '@4fu/arbor-workspace-dir': 2026.1107.1
-      '@4fu/arbor-workspace-ovnfs': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-judge-jev': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
+      '@4fu/arbor-tools': 2026.1109.0
+      '@4fu/arbor-workspace-dir': 2026.1109.0
+      '@4fu/arbor-workspace-ovnfs': 2026.1109.0
 
-  '@4fu/arbor-environment-dir@2026.1107.1':
+  '@4fu/arbor-environment-dir@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
-      '@4fu/arbor-tools': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
+      '@4fu/arbor-tools': 2026.1109.0
 
   '@4fu/arbor-errors@2026.1107.0': {}
 
-  '@4fu/arbor-interfaces@2026.1107.1':
+  '@4fu/arbor-interfaces@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
 
-  '@4fu/arbor-journal-sqlite@2026.1107.1':
+  '@4fu/arbor-journal-sqlite@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-lexical': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-lexical': 2026.1109.0
     transitivePeerDependencies:
       - '@4fu/arbor-segmenter-jieba'
 
-  '@4fu/arbor-judge-jev@2026.1107.1':
+  '@4fu/arbor-judge-jev@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
 
-  '@4fu/arbor-lexical@2026.1107.1':
+  '@4fu/arbor-lexical@2026.1109.0':
     dependencies:
-      '@4fu/arbor-interfaces': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
 
-  '@4fu/arbor-notes-sqlite@2026.1107.1':
+  '@4fu/arbor-notes-sqlite@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-lexical': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-lexical': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
     transitivePeerDependencies:
       - '@4fu/arbor-segmenter-jieba'
 
-  '@4fu/arbor-prompt@2026.1107.1':
+  '@4fu/arbor-prompt@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
 
-  '@4fu/arbor-tools@2026.1107.1':
+  '@4fu/arbor-tools@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
 
-  '@4fu/arbor-workspace-dir@2026.1107.1':
+  '@4fu/arbor-workspace-dir@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
 
-  '@4fu/arbor-workspace-ovnfs@2026.1107.1':
+  '@4fu/arbor-workspace-ovnfs@2026.1109.0':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
-      '@4fu/arbor-interfaces': 2026.1107.1
-      '@4fu/arbor-prompt': 2026.1107.1
+      '@4fu/arbor-interfaces': 2026.1109.0
+      '@4fu/arbor-prompt': 2026.1109.0
 
   '@agentclientprotocol/sdk@1.4.0(zod@4.4.3)':
     dependencies:

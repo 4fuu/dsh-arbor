@@ -199,6 +199,10 @@ class SessionArbor {
       kind: 'batch',
       reason: 'a DeepSeek Harness session turn',
       targets: [sessionTarget(session.id)],
+      // The label is what the host carries onto every window this task opens,
+      // its continuations and the journal's record of both. A read-only surface
+      // finds a session's windows by it, with no map of its own.
+      label: session.id,
       time: Date.now(),
       content: [dataBlock(`dsh session ${session.id}`)],
       explicit: true,

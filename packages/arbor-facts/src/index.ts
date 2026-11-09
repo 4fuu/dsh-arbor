@@ -1,6 +1,6 @@
 /**
- * `@4fu/dsh-arbor-facts` — what arbor is doing in one DSH session, read from
- * arbor itself and served to the web client.
+ * `@4fu/dsh-arbor-facts` — what arbor is doing, read from arbor itself and
+ * served to the web client.
  *
  * The browser cannot read arbor's host: a `dsh.client` package runs in the
  * page, and DSH offers it no channel to a host service (the Remote namespaces
@@ -10,16 +10,22 @@
  * fetch })` (`@deepseek-ai/dsh-client-connection`, `HostConnectionFetch`) owns a
  * path under `/api` and answers it to an authenticated owner Peer — the browser
  * — without touching a compiled bundle or the session log. This package
- * registers `/api/arbor/facts` (an NDJSON stream) and `/api/arbor/search` on
- * that registry, and reads arbor through the public host service.
+ * registers three routes on that registry:
+ *
+ *  - `/api/arbor/facts?sessionId=…` — one session's windows, workspace, board,
+ *    notes, `/env`, schedules and settings, as NDJSON;
+ *  - `/api/arbor/host` — the whole host across sessions, for the left sidebar's
+ *    arbor page;
+ *  - `/api/arbor/search?q=…` — arbor's own search over its journal, notes and
+ *    board.
  *
  * Liveness comes from arbor, not from polling a heuristic: a plugin this
  * service registers on the host observes every journal append and every note
  * write, and each live window is watched with `Arbor.stream(window, …)` — the
  * per-window stream arbor documents for an embedding host. A change rebuilds
- * one session's facts and pushes them down the open streams; a live delta goes
- * down as its own frame, so a panel shows the model writing before the call
- * completes.
+ * the facts somebody is reading and pushes them down the open streams; a live
+ * delta goes down as its own frame, so a panel shows the model writing before
+ * the call completes.
  *
  * On a profile with no browser connection (headless, acp, sdk) no route is
  * registered and the service is inert until a caller asks it for facts.
@@ -30,25 +36,37 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { EventInput, Plugin, StreamEvent } from '@4fu/arbor-interfaces'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { sessionOfTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
-import { buildFacts } from './facts.ts'
+import { buildFacts, buildHostFacts } from './facts.ts'
 import type {
   ArborFacts,
   ArborFactsFrame,
+  ArborHostFacts,
+  ArborHostFrame,
   ArborSearchResult,
   ArborStreamEvent,
 } from './types.ts'
 
-export type { ArborFacts, ArborFactsFrame, ArborSearchResult, ArborStreamEvent } from './types.ts'
+export type {
+  ArborFacts,
+  ArborFactsFrame,
+  ArborHostFacts,
+  ArborHostFrame,
+  ArborSearchResult,
+  ArborStreamEvent,
+} from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** What arbor is doing in one session, and the streams that answer it. */
+    /** What arbor is doing in one session or across the host, and the streams that answer it. */
     arborFacts: ArborFactsService
   }
 }
 
-/** The exact route the facts stream answers on. */
+/** The exact route one session's facts answer on. */
 export const FACTS_PATH = '/api/arbor/facts'
+
+/** The exact route the whole-host facts answer on. */
+export const HOST_PATH = '/api/arbor/host'
 
 /** The exact route arbor's own search answers on. */
 export const SEARCH_PATH = '/api/arbor/search'
@@ -85,7 +103,7 @@ interface ProjectionsService {
   snapshot(session: unknown, keys?: readonly string[]): { readonly values: Readonly<Record<string, unknown>> }
 }
 
-/** What one open stream's listeners share: the last facts, the live subscriptions, the timer. */
+/** What one open session stream's listeners share: the facts, the streams, the timer. */
 interface SessionFacts {
   /** The change counter the facts carry. */
   revision: number
@@ -103,8 +121,20 @@ interface SessionFacts {
   readonly streams: Map<string, () => void>
 }
 
+/** What the whole-host stream's listeners share. */
+interface HostFacts {
+  revision: number
+  facts?: ArborHostFacts
+  building?: Promise<ArborHostFacts>
+  dirty: boolean
+  timer?: ReturnType<typeof setTimeout>
+  readonly listeners: Set<(frame: ArborHostFrame) => void>
+  readonly streams: Map<string, () => void>
+}
+
 /**
- * One session's facts and the watchers that read them.
+ * One session's facts and the watchers that read them, plus the host-wide view
+ * beside it.
  *
  * The service keeps one record per session id; the first watcher builds it and
  * the last one releases the live subscriptions. A build coalesces every change
@@ -116,13 +146,20 @@ export class ArborFactsService extends Service {
   /** What the host is doing, per session, for as long as somebody is reading. */
   private readonly sessions = new Map<string, SessionFacts>()
 
+  /** The whole-host view, built while the left sidebar's page is open. */
+  private readonly host: HostFacts = {
+    revision: 0,
+    dirty: true,
+    listeners: new Set(),
+    streams: new Map(),
+  }
+
   /** The host's change counter, bumped by the plugin below. */
   private revision = 0
 
   /**
-   * Which session each window the host has shown serves, so a continuation's
-   * `window_start` — which carries no target of its own — can be attached to the
-   * session its predecessor served before the first rebuild sees it.
+   * Which session each window serves, from the label the embedding attached.
+   * It covers the session streams' frames and a host stream's `sessionId`.
    */
   private readonly windowSession = new Map<string, string>()
 
@@ -156,6 +193,7 @@ export class ArborFactsService extends Service {
     this.ctx.effect(() => () => {
       for (const session of this.sessions.values()) this.release(session)
       this.sessions.clear()
+      this.releaseHost()
     }, 'arborFacts.close()')
     // The exact Fetch registry exists only where a browser can connect. On a
     // profile with no connection the service stays a plain read face and no
@@ -168,6 +206,12 @@ export class ArborFactsService extends Service {
         methods: ['GET'],
         requestBody: 'buffered',
         fetch: (request) => this.streamResponse(request),
+      })
+      void connection.fetch.register({
+        path: HOST_PATH,
+        methods: ['GET'],
+        requestBody: 'buffered',
+        fetch: (request) => this.hostResponse(request),
       })
       void connection.fetch.register({
         path: SEARCH_PATH,
@@ -189,6 +233,13 @@ export class ArborFactsService extends Service {
         void this.refresh(sessionId as SessionId).catch(() => undefined)
       }, REBUILD_MS)
     }
+    if (this.host.listeners.size === 0) return
+    this.host.dirty = true
+    if (this.host.timer !== undefined) return
+    this.host.timer = setTimeout(() => {
+      this.host.timer = undefined
+      void this.refreshHost().catch(() => undefined)
+    }, REBUILD_MS)
   }
 
   /**
@@ -227,6 +278,29 @@ export class ArborFactsService extends Service {
     }
   }
 
+  /** The whole-host facts, rebuilt from arbor now. */
+  async hostFactsFor(): Promise<ArborHostFacts> {
+    this.host.dirty = true
+    return this.refreshHost()
+  }
+
+  /**
+   * Open the whole-host view: the initial facts, every rebuild, and each live
+   * delta from any session's windows.
+   *
+   * @param onFrame - receives the host frames.
+   * @returns the listener's own stop function.
+   */
+  async openHost(onFrame: (frame: ArborHostFrame) => void): Promise<() => void> {
+    this.host.listeners.add(onFrame)
+    const facts = await this.refreshHost()
+    onFrame({ type: 'facts', facts })
+    return () => {
+      this.host.listeners.delete(onFrame)
+      if (this.host.listeners.size === 0) this.releaseHost()
+    }
+  }
+
   /**
    * One query over arbor's journal, notes and board, as `Arbor.search` answers it.
    * @param query - what the user typed.
@@ -251,46 +325,6 @@ export class ArborFactsService extends Service {
       board: outcome.windows.map(line => ({ window: line.window, doing: line.doing })),
       total: outcome.total,
     }
-  }
-
-  /**
-   * Subscribe a new window's live stream the moment its `window_start` is
-   * appended, not at the next rebuild: arbor appends the start before it opens
-   * the model call, so this is the one moment that cannot miss the first delta.
-   */
-  private attachFromStart(input: EventInput): void {
-    if (input.kind !== 'window_start') return
-    const window = input.window
-    if (window === null || window === undefined) return
-    let sessionId: string | undefined
-    for (const target of input.targets ?? []) {
-      sessionId ??= sessionOfTarget(target)
-    }
-    if (sessionId === undefined && input.body !== null && input.body !== undefined) {
-      try {
-        const parsed: unknown = JSON.parse(input.body)
-        const previous = (parsed as { continuation?: unknown } | null)?.continuation
-        if (typeof previous === 'string') sessionId = this.windowSession.get(previous)
-      } catch {
-        // A body that is not JSON names no predecessor.
-      }
-    }
-    if (sessionId === undefined) return
-    this.attachStream(sessionId, window)
-  }
-
-  /** Watch one live window for one session, once. */
-  private attachStream(sessionId: string, window: string): void {
-    const session = this.sessions.get(sessionId)
-    if (session === undefined || session.listeners.size === 0) return
-    if (session.streams.has(window)) return
-    const host = this.arborHost()
-    const stop = host.host.stream(window as never, (event) => {
-      const narrowed = narrowStreamEvent(event)
-      if (narrowed === undefined) return
-      for (const listener of session.listeners) listener({ type: 'stream', window, event: narrowed })
-    })
-    session.streams.set(window, stop)
   }
 
   /** The record for a session, created on first use. */
@@ -337,29 +371,148 @@ export class ArborFactsService extends Service {
     session.facts = facts
     for (const window of facts.windows) this.windowSession.set(window.ref, sessionId)
     for (const listener of session.listeners) listener({ type: 'facts', facts })
-    this.reconcileStreams(sessionId, session, facts)
+    this.reconcileStreams(session, facts.windows)
     if (session.dirty && session.timer === undefined) {
       session.timer = setTimeout(() => {
         session.timer = undefined
-        void this.refresh(sessionId as SessionId).catch(() => undefined)
+        void this.refresh(sessionId).catch(() => undefined)
+      }, REBUILD_MS)
+    }
+    return facts
+  }
+
+  /** Build the whole-host view once, sharing a build already in flight. */
+  private async refreshHost(): Promise<ArborHostFacts> {
+    while (this.host.building !== undefined) await this.host.building.catch(() => undefined)
+    if (this.host.facts !== undefined && !this.host.dirty) return this.host.facts
+    this.host.dirty = false
+    const building = this.buildHost()
+    this.host.building = building
+    try {
+      return await building
+    } finally {
+      if (this.host.building === building) this.host.building = undefined
+    }
+  }
+
+  private async buildHost(): Promise<ArborHostFacts> {
+    const host = this.arborHost()
+    this.host.revision = this.revision
+    const facts = await buildHostFacts(host, this.revision)
+    this.host.facts = facts
+    for (const session of facts.sessions) {
+      for (const window of session.windows) this.windowSession.set(window.ref, session.sessionId)
+    }
+    for (const listener of this.host.listeners) listener({ type: 'facts', facts })
+    this.reconcileHostStreams(facts)
+    if (this.host.dirty && this.host.timer === undefined) {
+      this.host.timer = setTimeout(() => {
+        this.host.timer = undefined
+        void this.refreshHost().catch(() => undefined)
       }, REBUILD_MS)
     }
     return facts
   }
 
   /**
-   * Subscribe `Arbor.stream` to every live window of the chain and let go of
-   * the windows that ended. The stream is arbor's own per-window read: the
-   * assistant text and the arguments of a call still being written.
+   * Subscribe `Arbor.stream` to every live window of one session's chain and
+   * let go of the windows that ended. The stream is arbor's own per-window read:
+   * the assistant text and the arguments of a call still being written.
    */
-  private reconcileStreams(sessionId: string, session: SessionFacts, facts: ArborFacts): void {
-    const live = new Set(facts.windows.filter(window => window.live).map(window => window.ref))
+  private reconcileStreams(session: SessionFacts, windows: ArborFacts['windows']): void {
+    const live = new Set(windows.filter(window => window.live).map(window => window.ref))
     for (const [window, stop] of session.streams) {
       if (live.has(window)) continue
       stop()
       session.streams.delete(window)
     }
-    for (const window of live) this.attachStream(sessionId, window)
+    for (const window of live) {
+      if (session.streams.has(window)) continue
+      session.streams.set(window, this.watch(window, (event) => {
+        const narrowed = narrowStreamEvent(event)
+        if (narrowed === undefined) return
+        for (const listener of session.listeners) listener({ type: 'stream', window, event: narrowed })
+      }))
+    }
+  }
+
+  /** Subscribe the host stream to every live window across sessions. */
+  private reconcileHostStreams(facts: ArborHostFacts): void {
+    const live = new Set(facts.windows.filter(window => window.live).map(window => window.ref))
+    for (const [window, stop] of this.host.streams) {
+      if (live.has(window)) continue
+      stop()
+      this.host.streams.delete(window)
+    }
+    for (const window of live) {
+      if (this.host.streams.has(window)) continue
+      this.host.streams.set(window, this.watch(window, (event) => {
+        const narrowed = narrowStreamEvent(event)
+        if (narrowed === undefined) return
+        const sessionId = this.windowSession.get(window)
+        for (const listener of this.host.listeners) {
+          listener({
+            type: 'stream',
+            window,
+            ...(sessionId === undefined ? {} : { sessionId }),
+            event: narrowed,
+          })
+        }
+      }))
+    }
+  }
+
+  /** One `Arbor.stream` subscription. */
+  private watch(window: string, onEvent: (event: StreamEvent) => void): () => void {
+    return this.arborHost().host.stream(window as never, onEvent)
+  }
+
+  /**
+   * Subscribe a new window's live stream the moment its `window_start` is
+   * appended, not at the next rebuild: arbor appends the start before it opens
+   * the model call, so this is the one moment that cannot miss the first delta.
+   */
+  private attachFromStart(input: EventInput): void {
+    if (input.kind !== 'window_start') return
+    const window = input.window
+    if (window === null || window === undefined) return
+    let sessionId: string | undefined
+    let previous: string | undefined
+    if (input.body !== null && input.body !== undefined) {
+      try {
+        const parsed: unknown = JSON.parse(input.body)
+        const body = parsed as { label?: unknown; continuation?: unknown } | null
+        if (typeof body?.label === 'string' && body.label !== '') sessionId = body.label
+        if (typeof body?.continuation === 'string') previous = body.continuation
+      } catch {
+        // A body that is not JSON names no label and no predecessor.
+      }
+    }
+    if (sessionId === undefined) {
+      for (const target of input.targets ?? []) {
+        sessionId ??= sessionOfTarget(target)
+      }
+    }
+    if (sessionId === undefined && previous !== undefined) sessionId = this.windowSession.get(previous)
+    if (sessionId === undefined) return
+    this.windowSession.set(window, sessionId)
+    const session = this.sessions.get(sessionId)
+    if (session !== undefined && session.listeners.size > 0 && !session.streams.has(window)) {
+      session.streams.set(window, this.watch(window, (event) => {
+        const narrowed = narrowStreamEvent(event)
+        if (narrowed === undefined) return
+        for (const listener of session.listeners) listener({ type: 'stream', window, event: narrowed })
+      }))
+    }
+    if (this.host.listeners.size > 0 && !this.host.streams.has(window)) {
+      this.host.streams.set(window, this.watch(window, (event) => {
+        const narrowed = narrowStreamEvent(event)
+        if (narrowed === undefined) return
+        for (const listener of this.host.listeners) {
+          listener({ type: 'stream', window, ...(sessionId === undefined ? {} : { sessionId }), event: narrowed })
+        }
+      }))
+    }
   }
 
   /** Drop one session's live subscriptions and timer. */
@@ -368,6 +521,16 @@ export class ArborFactsService extends Service {
     session.timer = undefined
     for (const stop of session.streams.values()) stop()
     session.streams.clear()
+  }
+
+  /** Drop the host view's live subscriptions and timer. */
+  private releaseHost(): void {
+    if (this.host.timer !== undefined) clearTimeout(this.host.timer)
+    this.host.timer = undefined
+    for (const stop of this.host.streams.values()) stop()
+    this.host.streams.clear()
+    this.host.facts = undefined
+    this.host.dirty = true
   }
 
   /** The preset DSH projects for a session, from its live session or its header. */
@@ -385,18 +548,37 @@ export class ArborFactsService extends Service {
 
   /** `GET /api/arbor/facts?sessionId=…`: the facts, then every rebuild and live delta. */
   private async streamResponse(request: Request): Promise<Response> {
-    const url = new URL(request.url)
-    const sessionId = url.searchParams.get('sessionId')
+    const sessionId = new URL(request.url).searchParams.get('sessionId')
     if (sessionId === null || sessionId === '') {
       return Response.json({ error: 'sessionId is required' }, { status: 400 })
     }
+    return this.ndjson(request.signal, write => this.open(sessionId as SessionId, write))
+  }
+
+  /** `GET /api/arbor/host`: the whole-host facts, then every rebuild and live delta. */
+  private async hostResponse(request: Request): Promise<Response> {
+    return this.ndjson(request.signal, write => this.openHost(write))
+  }
+
+  /**
+   * One NDJSON response over a Fetch route.
+   *
+   * The initial frame and every later one are written by `open`; a blank line
+   * every 15 seconds keeps a proxy from closing an idle panel. The stream is
+   * cancelled with the request, which is what releases the opener's
+   * subscription.
+   */
+  private ndjson(
+    signal: AbortSignal,
+    open: (write: (frame: ArborFactsFrame | ArborHostFrame) => void) => Promise<() => void>,
+  ): Response {
     const encoder = new TextEncoder()
     let stop: (() => void) | undefined
     let keepalive: ReturnType<typeof setInterval> | undefined
     const body = new ReadableStream<Uint8Array>({
       start: (controller) => {
         let closed = false
-        const write = (frame: ArborFactsFrame): void => {
+        const write = (frame: ArborFactsFrame | ArborHostFrame): void => {
           if (closed) return
           try {
             controller.enqueue(encoder.encode(`${JSON.stringify(frame)}\n`))
@@ -412,7 +594,7 @@ export class ArborFactsService extends Service {
             closed = true
           }
         }, KEEPALIVE_MS)
-        request.signal.addEventListener('abort', () => {
+        signal.addEventListener('abort', () => {
           closed = true
           stop?.()
           if (keepalive !== undefined) clearInterval(keepalive)
@@ -422,7 +604,7 @@ export class ArborFactsService extends Service {
             // The client closed the stream before the abort was observed.
           }
         }, { once: true })
-        void this.open(sessionId as SessionId, write)
+        void open(write)
           .then((halt) => {
             stop = halt
             if (closed) halt()

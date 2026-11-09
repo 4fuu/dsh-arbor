@@ -9,10 +9,10 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@4fu/arbor-environment-dir": "2026.1107.1",
+    "@4fu/arbor-environment-dir": "2026.1109.0",
     "@4fu/arbor-errors": "2026.1107.0",
-    "@4fu/arbor-interfaces": "2026.1107.1",
-    "@4fu/arbor-prompt": "2026.1107.1",
+    "@4fu/arbor-interfaces": "2026.1109.0",
+    "@4fu/arbor-prompt": "2026.1109.0",
     "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   }

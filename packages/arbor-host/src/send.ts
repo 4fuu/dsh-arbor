@@ -133,6 +133,18 @@ export class DshSendExecutor implements EffectExecutor {
     for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
       const page = await this.journal.list({ window, kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
       for (const event of page.items) {
+        // The label is the deployment's own attachment - the DSH session id -
+        // carried by arbor onto the window's start. A journal written before
+        // labels carries the session as a target instead.
+        if (event.body !== null) {
+          try {
+            const parsed: unknown = JSON.parse(event.body)
+            const label = (parsed as { label?: unknown } | null)?.label
+            if (typeof label === 'string' && label !== '') return label as SessionId
+          } catch {
+            // A body that is not JSON names no label.
+          }
+        }
         const target = event.targets.find(one => one.startsWith(SESSION_TARGET_PREFIX))
         if (target !== undefined) return target.slice(SESSION_TARGET_PREFIX.length) as SessionId
       }

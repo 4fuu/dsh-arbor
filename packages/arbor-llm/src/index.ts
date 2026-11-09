@@ -67,21 +67,6 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-/**
- * The delivery kinds that say what changed under a window rather than what the
- * window should do about it.
- *
- * A prompt delta, a tools delta and an environment delta are all diffs of the
- * window's own context. They belong at the next step boundary of a running
- * window and in the next turn's prefix of a quiet one; neither is a reason to
- * start a turn.
- */
-const DELTA_KINDS: ReadonlySet<Delivery['kind']> = new Set<Delivery['kind']>([
-  'prompt_delta',
-  'tools_delta',
-  'environment_delta',
-])
-
 /** One model call's inputs, supplied by the DSH-side session agent. */
 export interface DshModelCall {
   /** The window whose frozen epoch this call runs under. */
@@ -264,12 +249,13 @@ class DshWindowSession implements WindowSession {
       content: [{ type: 'text', text }],
       source: { kind: 'arbor-delivery' },
     })
-    // A delta is context for the window, not an input that deserves a turn of
-    // its own: it says what changed under the window's feet, so it goes in at
-    // the next step boundary and is never what starts a turn. Steering one into
-    // a quiet window would wake that window's session to read a diff, which is
-    // a turn the user did not ask for and the model has nothing to do in.
-    if (how === 'steer' && DELTA_KINDS.has(delivery.kind)) agent.inject(message)
+    // Arbor marks every delivery with what it is to the turn it enters: a
+    // context delivery is read by the next request and must never start one, and
+    // an input delivery is what continues a quiet window. The mark is
+    // authoritative; the delivery kind is not consulted. Steering context into
+    // a quiet window would wake its session to read a diff, which is a turn the
+    // user did not ask for and the model has nothing to do in.
+    if (delivery.role === 'context') agent.inject(message)
     else if (how === 'steer') agent.steer(message)
     else agent.followup(message)
   }
