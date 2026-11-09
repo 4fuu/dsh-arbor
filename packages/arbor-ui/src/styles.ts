@@ -56,9 +56,9 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-sky-cell{position:absolute;min-width:0;z-index:1;transform-origin:50% 50%;transition:transform 150ms ease}
 .arbor-page .arbor-sky-cell>.arbor-card{width:100%}
 .arbor-page .arbor-sky-cell[data-paper="true"]{transform:rotate(var(--arbor-tilt,0deg))}
-.arbor-page .arbor-sky-cell[data-paper="true"]:hover{transform:rotate(0deg) translateY(-2px);z-index:4}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover{transform:rotate(0deg) translateY(-5px) scale(1.01);z-index:4}
 .arbor-page .arbor-sky-cell[data-paper="true"]>.arbor-card{transition:box-shadow 150ms ease}
-.arbor-page .arbor-sky-cell[data-paper="true"]:hover>.arbor-card{box-shadow:0 14px 30px #00000024}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover>.arbor-card{box-shadow:0 18px 36px #0000002b}
 .arbor-page .arbor-index-card{background:var(--dsw-alias-bg-layer-1,#fff);border-top:3px solid color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 55%,transparent);border-radius:7px;box-shadow:0 7px 18px #00000012}
 .arbor-page .arbor-note-card{border-radius:8px;box-shadow:0 8px 20px #00000014}
 .arbor-page .arbor-card{min-width:0;display:flex;flex-direction:column;gap:7px;padding:15px 17px 12px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008);color:var(--dsw-alias-label-primary,#0f1115)}
@@ -96,6 +96,7 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-stream-label{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-md-wrap{max-height:260px;overflow:hidden;position:relative}
 .arbor-page .arbor-md-wrap.is-clamped{mask-image:linear-gradient(180deg,#000 72%,transparent 100%)}
+.arbor-page .arbor-window-card .arbor-md-wrap{max-height:140px}
 .arbor-page .arbor-md-wrap.is-expanded{max-height:none;overflow:visible}
 .arbor-page .arbor-md{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-md-p{margin:0 0 8px}

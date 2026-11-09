@@ -695,9 +695,9 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-sky-cell{position:absolute;min-width:0;z-index:1;transform-origin:50% 50%;transition:transform 150ms ease}
 .arbor-page .arbor-sky-cell>.arbor-card{width:100%}
 .arbor-page .arbor-sky-cell[data-paper="true"]{transform:rotate(var(--arbor-tilt,0deg))}
-.arbor-page .arbor-sky-cell[data-paper="true"]:hover{transform:rotate(0deg) translateY(-2px);z-index:4}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover{transform:rotate(0deg) translateY(-5px) scale(1.01);z-index:4}
 .arbor-page .arbor-sky-cell[data-paper="true"]>.arbor-card{transition:box-shadow 150ms ease}
-.arbor-page .arbor-sky-cell[data-paper="true"]:hover>.arbor-card{box-shadow:0 14px 30px #00000024}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover>.arbor-card{box-shadow:0 18px 36px #0000002b}
 .arbor-page .arbor-index-card{background:var(--dsw-alias-bg-layer-1,#fff);border-top:3px solid color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 55%,transparent);border-radius:7px;box-shadow:0 7px 18px #00000012}
 .arbor-page .arbor-note-card{border-radius:8px;box-shadow:0 8px 20px #00000014}
 .arbor-page .arbor-card{min-width:0;display:flex;flex-direction:column;gap:7px;padding:15px 17px 12px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008);color:var(--dsw-alias-label-primary,#0f1115)}
@@ -735,6 +735,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-stream-label{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-md-wrap{max-height:260px;overflow:hidden;position:relative}
 .arbor-page .arbor-md-wrap.is-clamped{mask-image:linear-gradient(180deg,#000 72%,transparent 100%)}
+.arbor-page .arbor-window-card .arbor-md-wrap{max-height:140px}
 .arbor-page .arbor-md-wrap.is-expanded{max-height:none;overflow:visible}
 .arbor-page .arbor-md{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-md-p{margin:0 0 8px}
@@ -988,6 +989,22 @@ function hero(template, values) {
     }, text);
   });
 }
+var CJK = /[\u2018\u2019\u201c\u201d\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef\uac00-\ud7af]/;
+function softJoin(lines) {
+  let joined = "";
+  for (const line of lines) {
+    const next = line.trim();
+    if (next === "") continue;
+    if (joined === "") {
+      joined = next;
+      continue;
+    }
+    const left = joined.at(-1) ?? "";
+    const right = next[0] ?? "";
+    joined += (CJK.test(left) && CJK.test(right) ? "" : " ") + next;
+  }
+  return joined;
+}
 function inlineMarkdown(text, key) {
   return text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`|\n)/g).map((piece, index) => {
     const id = `${key}-${index}`;
@@ -1006,7 +1023,7 @@ function inlineMarkdown(text, key) {
     if (piece.startsWith("`") && piece.endsWith("`")) {
       return (0, import_react.createElement)("code", { key: id, className: "arbor-md-code", "data-arbor-text": "code" }, piece.slice(1, -1));
     }
-    if (piece === "\n") return (0, import_react.createElement)("br", { key: id });
+    if (piece === "\n") return " ";
     return piece;
   });
 }
@@ -1066,7 +1083,7 @@ function MarkdownText(props) {
     blocks.push((0, import_react.createElement)(
       "p",
       { className: "arbor-md-p", "data-arbor-text": "body", key: `b${block++}` },
-      ...inlineMarkdown(paragraph.join("\n"), `p${block}`)
+      ...inlineMarkdown(softJoin(paragraph), `p${block}`)
     ));
   }
   return (0, import_react.createElement)("div", { className: "arbor-md" }, ...blocks);
@@ -1114,7 +1131,7 @@ function cardWidth(item, surface) {
         return 240 + Math.min(40, length);
       }
       case "schedule":
-        return 240;
+        return 230;
       default:
         return 240;
     }
@@ -1123,61 +1140,6 @@ function cardWidth(item, surface) {
 }
 function clearOf(box, placed) {
   return placed.every((other) => box.x >= other.x + other.width + SKY_GUTTER || box.x + box.width + SKY_GUTTER <= other.x || box.y >= other.y + other.height + SKY_GUTTER || box.y + box.height + SKY_GUTTER <= other.y);
-}
-function packSky(items, widths, heights, surface) {
-  const placements = [];
-  const placed = [];
-  const narrow = surface < SKY_NARROW;
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    const width = widths[index];
-    const height = heights[index];
-    const paper = paperOf(item);
-    const offset = paper?.offset ?? 0;
-    const reserved = height + offset;
-    let x = 0;
-    let y = 0;
-    if (narrow) {
-      x = 0;
-      y = placed.length === 0 ? 0 : Math.max(...placed.map((box2) => box2.y + box2.height + SKY_GUTTER));
-    } else {
-      const ys = /* @__PURE__ */ new Set([0]);
-      const xs = /* @__PURE__ */ new Set([0]);
-      for (const box2 of placed) {
-        ys.add(box2.y + box2.height + SKY_GUTTER);
-        xs.add(box2.x + box2.width + SKY_GUTTER);
-      }
-      let found;
-      for (const at of [...ys].sort((left, right) => left - right)) {
-        for (const left of [...xs].sort((one, two) => one - two)) {
-          if (left + width > surface) continue;
-          if (!clearOf({ x: left, y: at, width, height: reserved }, placed)) continue;
-          found = { x: left, y: at };
-          break;
-        }
-        if (found !== void 0) break;
-      }
-      if (found === void 0) {
-        x = 0;
-        y = placed.length === 0 ? 0 : Math.max(...placed.map((box2) => box2.y + box2.height + SKY_GUTTER));
-      } else {
-        x = found.x;
-        y = found.y;
-      }
-    }
-    const box = { x, y, width, height: reserved };
-    placed.push(box);
-    placements.push({
-      key: item.key,
-      x,
-      y: y + offset,
-      width,
-      height,
-      tilt: paper?.tilt ?? 0,
-      offset
-    });
-  }
-  return placements;
 }
 function measureCards(surface, items) {
   const cells = /* @__PURE__ */ new Map();
@@ -1191,6 +1153,102 @@ function measureCards(surface, items) {
     const card = cell.querySelector(".arbor-card") ?? cell;
     return card.offsetHeight;
   });
+}
+function largestHoleArea(placements, surface) {
+  const boxes = placements.map((one) => ({ x: one.x, y: one.y, width: one.width, height: one.height }));
+  if (boxes.length === 0) return 0;
+  const top = Math.min(...boxes.map((box) => box.y));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+  const xs = [.../* @__PURE__ */ new Set([0, surface, ...boxes.flatMap((box) => [box.x, box.x + box.width])])].filter((value) => value >= 0 && value <= surface).sort((left, right) => left - right);
+  const ys = [.../* @__PURE__ */ new Set([top, bottom, ...boxes.flatMap((box) => [box.y, box.y + box.height])])].sort((left, right) => left - right);
+  const nx = xs.length - 1;
+  const ny = ys.length - 1;
+  if (nx <= 0 || ny <= 0) return 0;
+  const heights = Array(nx).fill(0);
+  let largest = 0;
+  for (let yi = 0; yi < ny; yi += 1) {
+    for (let xi = 0; xi < nx; xi += 1) {
+      const x = (xs[xi] + xs[xi + 1]) / 2;
+      const y = (ys[yi] + ys[yi + 1]) / 2;
+      const inside = boxes.some((box) => x > box.x + 0.25 && x < box.x + box.width - 0.25 && y > box.y + 0.25 && y < box.y + box.height - 0.25);
+      heights[xi] = inside ? 0 : heights[xi] + (ys[yi + 1] - ys[yi]);
+    }
+    const stack = [];
+    for (let xi = 0; xi <= nx; xi += 1) {
+      const height = xi < nx ? heights[xi] : 0;
+      let start = xi;
+      while (stack.length > 0 && stack[stack.length - 1].height >= height) {
+        const topBar = stack.pop();
+        const width = xs[xi] - xs[topBar.start];
+        largest = Math.max(largest, width * topBar.height);
+        start = topBar.start;
+      }
+      if (stack.length === 0 || stack[stack.length - 1].height < height) stack.push({ height, start });
+    }
+  }
+  return largest;
+}
+function packSkySearch(items, widths, heights, surface) {
+  let states = [{ placements: [], boxes: [], lefts: 0, hole: 0 }];
+  const beam = 1e4;
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const width = widths[index];
+    const height = heights[index];
+    const paper = paperOf(item);
+    const offset = paper?.offset ?? 0;
+    const reserved = height + offset;
+    const next = [];
+    for (const state of states) {
+      const ys = [0, ...state.boxes.map((box) => box.y + box.height + SKY_GUTTER)].sort((left, right) => left - right);
+      let placedAtSomeY = false;
+      for (const at of ys) {
+        const xs = /* @__PURE__ */ new Set([0, surface - width]);
+        for (const box of state.boxes) {
+          xs.add(box.x);
+          xs.add(box.x + box.width + SKY_GUTTER);
+          xs.add(box.x - width - SKY_GUTTER);
+          xs.add(box.x + box.width - width);
+        }
+        const fitting = [...xs].filter((left) => left >= 0 && left + width <= surface).filter((left) => clearOf({ x: left, y: at, width, height: reserved }, state.boxes)).filter((value, atIndex, all) => all.indexOf(value) === atIndex).sort((left, right) => left - right);
+        if (fitting.length === 0) continue;
+        placedAtSomeY = true;
+        const leftmost = fitting[0];
+        for (const x of fitting) {
+          const placements2 = [...state.placements, {
+            key: item.key,
+            x,
+            y: at + offset,
+            width,
+            height,
+            tilt: paper?.tilt ?? 0,
+            offset
+          }];
+          const boxes = [...state.boxes, { x, y: at, width, height: reserved }];
+          next.push({
+            placements: placements2,
+            boxes,
+            lefts: state.lefts + (x === leftmost ? 1 : 0),
+            hole: largestHoleArea(placements2, surface)
+          });
+        }
+        break;
+      }
+      if (placedAtSomeY) continue;
+      const y = state.boxes.length === 0 ? 0 : Math.max(...state.boxes.map((box) => box.y + box.height + SKY_GUTTER));
+      const placements = [...state.placements, { key: item.key, x: 0, y: y + offset, width, height, tilt: paper?.tilt ?? 0, offset }];
+      next.push({
+        placements,
+        boxes: [...state.boxes, { x: 0, y, width, height: reserved }],
+        lefts: state.lefts + 1,
+        hole: largestHoleArea(placements, surface)
+      });
+    }
+    const filtered = index === 0 ? next.filter((state) => state.placements[0]?.x === 0) : next;
+    states = (filtered.length === 0 ? next : filtered).sort((left, right) => left.hole - right.hole || right.lefts - left.lefts).slice(0, beam);
+  }
+  states.sort((left, right) => left.hole - right.hole || right.lefts - left.lefts);
+  return states[0] === void 0 ? [] : [...states[0].placements];
 }
 function samePlacements(left, right) {
   if (left.length !== right.length) return false;
@@ -1226,7 +1284,7 @@ function Skyline(props) {
     if (surface === null || width === 0) return;
     const heights = measureCards(surface, props.items);
     if (heights.every((height) => height === 0)) return;
-    const placements = packSky(props.items, widths, heights, width);
+    const placements = packSkySearch(props.items, widths, heights, width);
     const bottom = placements.length === 0 ? 0 : Math.max(...placements.map((one) => one.y + one.height));
     const next = { key, placements, height: bottom + SKY_GUTTER };
     setLayout((current) => current !== void 0 && current.key === key && samePlacements(current.placements, placements) ? current : next);

@@ -220,6 +220,30 @@ function hero(template: string, values: Readonly<Record<string, string | HeroVal
   })
 }
 
+/** One CJK character, for a soft line break with no added space. */
+const CJK = /[\u2018\u2019\u201c\u201d\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef\uac00-\ud7af]/
+
+/**
+ * Join the lines of one Markdown paragraph with soft breaks. A single newline
+ * is whitespace, not a hard break: Latin text gets a space, two CJK characters
+ * get nothing. Blank lines still separate paragraphs before this runs.
+ */
+function softJoin(lines: readonly string[]): string {
+  let joined = ''
+  for (const line of lines) {
+    const next = line.trim()
+    if (next === '') continue
+    if (joined === '') {
+      joined = next
+      continue
+    }
+    const left = joined.at(-1) ?? ''
+    const right = next[0] ?? ''
+    joined += (CJK.test(left) && CJK.test(right) ? '' : ' ') + next
+  }
+  return joined
+}
+
 /** Inline Markdown: links, bold and code, with local paths kept as text. */
 function inlineMarkdown(text: string, key: string): ReactNode[] {
   return text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`|\n)/g).map((piece, index) => {
@@ -239,7 +263,7 @@ function inlineMarkdown(text: string, key: string): ReactNode[] {
     if (piece.startsWith('`') && piece.endsWith('`')) {
       return createElement('code', { key: id, className: 'arbor-md-code', 'data-arbor-text': 'code' }, piece.slice(1, -1))
     }
-    if (piece === '\n') return createElement('br', { key: id })
+    if (piece === '\n') return ' '
     return piece
   })
 }
@@ -290,7 +314,7 @@ function MarkdownText(props: { readonly text: string }): ReactNode {
       index += 1
     }
     blocks.push(createElement('p', { className: 'arbor-md-p', 'data-arbor-text': 'body', key: `b${block++}` },
-      ...inlineMarkdown(paragraph.join('\n'), `p${block}`)))
+      ...inlineMarkdown(softJoin(paragraph), `p${block}`)))
   }
   return createElement('div', { className: 'arbor-md' }, ...blocks)
 }
@@ -370,7 +394,7 @@ function cardWidth(item: SkyItem, surface: number): number {
         const length = item.text?.length ?? 0
         return 240 + Math.min(40, length)
       }
-      case 'schedule': return 240
+      case 'schedule': return 230
       default: return 240
     }
   })()
@@ -411,62 +435,6 @@ function clearOf(box: SkyBox, placed: readonly SkyBox[]): boolean {
  * the left. The paper offset is reserved in the height so a tilted card cannot
  * reach into the next row.
  */
-function packSky(items: readonly SkyItem[], widths: readonly number[], heights: readonly number[], surface: number): SkyPlacement[] {
-  const placements: SkyPlacement[] = []
-  const placed: SkyBox[] = []
-  const narrow = surface < SKY_NARROW
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index]!
-    const width = widths[index]!
-    const height = heights[index]!
-    const paper = paperOf(item)
-    const offset = paper?.offset ?? 0
-    const reserved = height + offset
-    let x = 0
-    let y = 0
-    if (narrow) {
-      x = 0
-      y = placed.length === 0 ? 0 : Math.max(...placed.map(box => box.y + box.height + SKY_GUTTER))
-    } else {
-      const ys = new Set<number>([0])
-      const xs = new Set<number>([0])
-      for (const box of placed) {
-        ys.add(box.y + box.height + SKY_GUTTER)
-        xs.add(box.x + box.width + SKY_GUTTER)
-      }
-      let found: { x: number; y: number } | undefined
-      for (const at of [...ys].sort((left, right) => left - right)) {
-        for (const left of [...xs].sort((one, two) => one - two)) {
-          if (left + width > surface) continue
-          if (!clearOf({ x: left, y: at, width, height: reserved }, placed)) continue
-          found = { x: left, y: at }
-          break
-        }
-        if (found !== undefined) break
-      }
-      if (found === undefined) {
-        x = 0
-        y = placed.length === 0 ? 0 : Math.max(...placed.map(box => box.y + box.height + SKY_GUTTER))
-      } else {
-        x = found.x
-        y = found.y
-      }
-    }
-    const box = { x, y, width, height: reserved }
-    placed.push(box)
-    placements.push({
-      key: item.key,
-      x,
-      y: y + offset,
-      width,
-      height,
-      tilt: paper?.tilt ?? 0,
-      offset,
-    })
-  }
-  return placements
-}
-
 /** Measure each card's natural height at its own width. */
 function measureCards(surface: HTMLElement, items: readonly SkyItem[]): number[] {
   const cells = new Map<string, HTMLElement>()
@@ -480,6 +448,130 @@ function measureCards(surface: HTMLElement, items: readonly SkyItem[]): number[]
     const card = cell.querySelector<HTMLElement>('.arbor-card') ?? cell
     return card.offsetHeight
   })
+}
+
+
+/** The largest empty rectangle in a layout, including right-edge notches above the last line. */
+function largestHoleArea(placements: readonly SkyPlacement[], surface: number): number {
+  const boxes = placements.map(one => ({ x: one.x, y: one.y, width: one.width, height: one.height }))
+  if (boxes.length === 0) return 0
+  const top = Math.min(...boxes.map(box => box.y))
+  const bottom = Math.max(...boxes.map(box => box.y + box.height))
+  const xs = [...new Set([0, surface, ...boxes.flatMap(box => [box.x, box.x + box.width])])]
+    .filter(value => value >= 0 && value <= surface)
+    .sort((left, right) => left - right)
+  const ys = [...new Set([top, bottom, ...boxes.flatMap(box => [box.y, box.y + box.height])])]
+    .sort((left, right) => left - right)
+  const nx = xs.length - 1
+  const ny = ys.length - 1
+  if (nx <= 0 || ny <= 0) return 0
+  const heights = Array<number>(nx).fill(0)
+  let largest = 0
+  for (let yi = 0; yi < ny; yi += 1) {
+    for (let xi = 0; xi < nx; xi += 1) {
+      const x = (xs[xi]! + xs[xi + 1]!) / 2
+      const y = (ys[yi]! + ys[yi + 1]!) / 2
+      const inside = boxes.some(box => x > box.x + 0.25 && x < box.x + box.width - 0.25
+        && y > box.y + 0.25 && y < box.y + box.height - 0.25)
+      heights[xi] = inside ? 0 : heights[xi]! + (ys[yi + 1]! - ys[yi]!)
+    }
+    const stack: Array<{ height: number; start: number }> = []
+    for (let xi = 0; xi <= nx; xi += 1) {
+      const height = xi < nx ? heights[xi]! : 0
+      let start = xi
+      while (stack.length > 0 && stack[stack.length - 1]!.height >= height) {
+        const topBar = stack.pop()!
+        const width = xs[xi]! - xs[topBar.start]!
+        largest = Math.max(largest, width * topBar.height)
+        start = topBar.start
+      }
+      if (stack.length === 0 || stack[stack.length - 1]!.height < height) stack.push({ height, start })
+    }
+  }
+  return largest
+}
+
+/**
+ * Try the leftmost and rightmost fitting x at the lowest y for every card, and
+ * keep the finished layout with the smallest largest hole. The branch search is
+ * bounded: ten cards give at most 512 layouts. A tie keeps the more leftward
+ * layout, which is the packer's stated tie-break.
+ */
+function packSkySearch(items: readonly SkyItem[], widths: readonly number[], heights: readonly number[], surface: number): SkyPlacement[] {
+  interface State {
+    readonly placements: readonly SkyPlacement[]
+    readonly boxes: readonly SkyBox[]
+    readonly lefts: number
+    readonly hole: number
+  }
+  let states: State[] = [{ placements: [], boxes: [], lefts: 0, hole: 0 }]
+  const beam = 10000
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]!
+    const width = widths[index]!
+    const height = heights[index]!
+    const paper = paperOf(item)
+    const offset = paper?.offset ?? 0
+    const reserved = height + offset
+    const next: State[] = []
+    for (const state of states) {
+      const ys = [0, ...state.boxes.map(box => box.y + box.height + SKY_GUTTER)].sort((left, right) => left - right)
+      let placedAtSomeY = false
+      for (const at of ys) {
+        const xs = new Set<number>([0, surface - width])
+        for (const box of state.boxes) {
+          xs.add(box.x)
+          xs.add(box.x + box.width + SKY_GUTTER)
+          xs.add(box.x - width - SKY_GUTTER)
+          xs.add(box.x + box.width - width)
+        }
+        const fitting = [...xs]
+          .filter(left => left >= 0 && left + width <= surface)
+          .filter(left => clearOf({ x: left, y: at, width, height: reserved }, state.boxes))
+          .filter((value, atIndex, all) => all.indexOf(value) === atIndex)
+          .sort((left, right) => left - right)
+        if (fitting.length === 0) continue
+        placedAtSomeY = true
+        const leftmost = fitting[0]!
+        for (const x of fitting) {
+          const placements = [...state.placements, {
+            key: item.key,
+            x,
+            y: at + offset,
+            width,
+            height,
+            tilt: paper?.tilt ?? 0,
+            offset,
+          }]
+          const boxes = [...state.boxes, { x, y: at, width, height: reserved }]
+          next.push({
+            placements,
+            boxes,
+            lefts: state.lefts + (x === leftmost ? 1 : 0),
+            hole: largestHoleArea(placements, surface),
+          })
+        }
+        break
+      }
+      if (placedAtSomeY) continue
+      const y = state.boxes.length === 0 ? 0 : Math.max(...state.boxes.map(box => box.y + box.height + SKY_GUTTER))
+      const placements = [...state.placements, { key: item.key, x: 0, y: y + offset, width, height, tilt: paper?.tilt ?? 0, offset }]
+      next.push({
+        placements,
+        boxes: [...state.boxes, { x: 0, y, width, height: reserved }],
+        lefts: state.lefts + 1,
+        hole: largestHoleArea(placements, surface),
+      })
+    }
+    // The first card is the window and stays at the left edge; it is the page's
+    // point of entry, not a card the packer may scatter to the right.
+    const filtered = index === 0 ? next.filter(state => state.placements[0]?.x === 0) : next
+    states = (filtered.length === 0 ? next : filtered)
+      .sort((left, right) => left.hole - right.hole || right.lefts - left.lefts)
+      .slice(0, beam)
+  }
+  states.sort((left, right) => left.hole - right.hole || right.lefts - left.lefts)
+  return states[0] === undefined ? [] : [...states[0].placements]
 }
 
 /** Whether two placements are the same, so the effect can stop re-rendering. */
@@ -530,7 +622,7 @@ function Skyline(props: { readonly items: readonly SkyItem[] }): ReactNode {
     if (surface === null || width === 0) return
     const heights = measureCards(surface, props.items)
     if (heights.every(height => height === 0)) return
-    const placements = packSky(props.items, widths, heights, width)
+    const placements = packSkySearch(props.items, widths, heights, width)
     const bottom = placements.length === 0
       ? 0
       : Math.max(...placements.map(one => one.y + one.height))

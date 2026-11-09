@@ -305,23 +305,26 @@ fits, ties to the left, with a 20 px gutter. Rows do not line up and the right
 edge stays ragged. The packer is measured: every card height comes from the
 rendered card, so a growing output pushes only the cards below it. Holes are
 allowed, but the largest enclosed hole is measured and is smaller than the
-smallest card on the page; the union of card boxes has no overlap and no card
-touches the dock. Below about 640 px the same packer becomes one column. The
+smallest card on the page; only the bottom edge may stay open, and a bottom
+notch is allowed only when no card can fit it. The union of card boxes has no
+overlap. Below about 640 px the same packer becomes one column. The
 chain card is wide enough for every node (measured by `scrollWidth` against
 `clientWidth`) and its nodes never overflow.
 
 Notes and board cards are paper: a tilt of -1.6° to +1.6° and a 0-12 px vertical
 offset derived from a hash of the card's ref, so a reload restores the same
 arrangement. The window, chain, session and environment cards stay straight.
-Hovering a paper card straightens it and lifts it by 2 px with a 150 ms
+Hovering a paper card straightens it and lifts it by 5 px with a 150 ms
 transform and shadow transition, with no layout shift; `prefers-reduced-motion`
 removes the tilt, the transition and the lift. A board card is an index card;
 a note keeps its paper tint and soft shadow.
 
 A live window's output is rendered as Markdown and clamped with `展开全文`
-(expanding removes the clamp); a chain's nodes carry a ref, a state and a
-handoff mark; board and note cards put content first and metadata in a small
-footer. A floating bottom dock filters 全部 / 窗口 / 看板 / 笔记 / 环境 / 日程;
+(expanding removes the clamp); a single newline is a soft break, joining lines
+with a space only between Latin words and with no space between CJK characters,
+while blank lines remain paragraphs and list or heading structure is preserved.
+A chain's nodes carry a ref, a state and a handoff mark; board and note cards
+put content first and metadata in a small footer. A floating bottom dock filters 全部 / 窗口 / 看板 / 笔记 / 环境 / 日程;
 search and settings are the two top-right icons and open sheets. The empty
 state is one sentence and a hint, with no dock and no zero-valued cards. All
 colours, borders and elevation come from `--dsw-*` tokens, so DSH's light and
