@@ -218,8 +218,6 @@ var NAMESPACE = "arborUi";
 var en = {
   expandStream: "Show more",
   collapseStream: "Show less",
-  heroLiveOne: "{window} is working. The board holds {board} things.",
-  heroFirstOne: "{window} is working. The board holds {board} things.",
   heroIdleOne: "1 session is quiet; {ended} windows have finished.",
   chainSummaryOne: "{count} window \xB7 {window} {state}",
   dateLocale: "en-US",
@@ -230,18 +228,30 @@ var en = {
   filterEnv: "Environment",
   filterSchedules: "Schedules",
   heroLive: "{window} is working. The board holds {board} things.",
+  heroLiveBoardOne: "{window} is working. The board holds {board} thing.",
   heroFirst: "{window} is working. The board holds {board} things.",
   heroIdle: "{sessions} sessions are quiet; {ended} windows have finished.",
+  heroIdleEndedOne: "{sessions} sessions are quiet; {ended} window has finished.",
+  heroIdleBothOne: "1 session is quiet; {ended} window has finished.",
   heroIdleWait: "{waiting} sessions are waiting for you; {ended} windows have finished.",
+  heroIdleWaitEndedOne: "{waiting} sessions are waiting for you; {ended} window has finished.",
   heroIdleWaitOne: "1 session is waiting for you; {ended} windows have finished.",
+  heroIdleWaitBothOne: "1 session is waiting for you; {ended} window has finished.",
   heroLiveWait: "{window} is working. The board holds {board} things, and {waiting} other sessions are waiting for you.",
+  heroLiveWaitBoardOne: "{window} is working. The board holds {board} thing, and {waiting} other sessions are waiting for you.",
+  heroLiveWaitWaitingOne: "{window} is working. The board holds {board} things, and {waiting} other session is waiting for you.",
+  heroLiveWaitBothOne: "{window} is working. The board holds {board} thing, and {waiting} other session is waiting for you.",
   heroLiveNoBoardWait: "{window} is working; the board is empty, and {waiting} other sessions are waiting for you.",
+  heroLiveNoBoardWaitOne: "{window} is working; the board is empty, and {waiting} other session is waiting for you.",
   heroEmpty: "No arbor window yet.",
   heroEmptyHint: "Pick Arbor in any session and send a message; this page will light up.",
   sessionHeroLive: "{window} is carrying on from {previous}, with {board} things still on the board.",
+  sessionHeroLiveBoardOne: "{window} is carrying on from {previous}, with {board} thing still on the board.",
   sessionHeroFirst: "{window} is working, with {board} things on the board.",
+  sessionHeroFirstBoardOne: "{window} is working, with {board} thing on the board.",
   sessionHeroIdle: "{window} is waiting for your next message.",
   sessionHeroEnded: "All {count} windows are finished; the chain ends at {window}.",
+  sessionHeroEndedOne: "1 window is finished; the chain ends at {window}.",
   sessionHeroEmpty: "This session has no window yet.",
   sessionHeroEmptyHint: "Send the first message and arbor will open its first window.",
   cardChain: "Window chain",
@@ -300,6 +310,7 @@ var en = {
   chipWindows: "{count} windows",
   chipWindowOne: "1 window",
   chipIdle: "Idle \xB7 {count} windows",
+  chipIdleOne: "Idle \xB7 1 window",
   chipLive: "Live",
   panelIntro: "What arbor is actually doing in this session, read from arbor itself.",
   notArbor: "This session does not run on arbor.",
@@ -357,14 +368,18 @@ var en = {
   boardTargets: "Targets",
   notesActive: "Active set",
   notesCount: "{count} notes \xB7 {tokens} / {budget} tokens",
+  notesCountOne: "1 note \xB7 {tokens} / {budget} tokens",
   notesEpoch: "Epoch {epoch}",
   notesEmpty: "The active set is empty.",
   envCounts: "{skills} skills \xB7 {servers} MCP servers \xB7 {services} services",
   envBuiltin: "built-in",
   envFunctions: "functions",
   envSkills: "Skills",
+  envSkillOne: "Skill",
   envMcp: "MCP servers",
+  envMcpOne: "MCP server",
   envServices: "Services",
+  envServiceOne: "Service",
   envState: "state",
   envPath: "path",
   envEmpty: "The environment holds no item.",
@@ -401,6 +416,7 @@ var en = {
   searchButton: "Search",
   searchEmpty: "Nothing matched.",
   searchTotal: "{count} hits",
+  searchTotalOne: "1 hit",
   searchJournal: "Journal",
   searchNotes: "Notes",
   searchBoard: "Board",
@@ -416,8 +432,6 @@ var en = {
 var zh = {
   expandStream: "\u5C55\u5F00\u5168\u6587",
   collapseStream: "\u6536\u8D77",
-  heroLiveOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
-  heroFirstOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
   heroIdleOne: "1 \u4E2A\u4F1A\u8BDD\u5B89\u9759\u7740\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
   chainSummaryOne: "{count} \u4E2A\u7A97\u53E3 \xB7 {window} {state}",
   dateLocale: "zh-CN",
@@ -428,18 +442,30 @@ var zh = {
   filterEnv: "\u73AF\u5883",
   filterSchedules: "\u65E5\u7A0B",
   heroLive: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
+  heroLiveBoardOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
   heroFirst: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
   heroIdle: "{sessions} \u4E2A\u4F1A\u8BDD\u5B89\u9759\u7740\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
+  heroIdleEndedOne: "{sessions} \u4E2A\u4F1A\u8BDD\u5B89\u9759\u7740\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
+  heroIdleBothOne: "1 \u4E2A\u4F1A\u8BDD\u5B89\u9759\u7740\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
   heroIdleWait: "{waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
+  heroIdleWaitEndedOne: "{waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
   heroIdleWaitOne: "1 \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
+  heroIdleWaitBothOne: "1 \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\uFF0C{ended} \u4E2A\u7A97\u53E3\u5DF2\u7ECF\u6536\u5DE5\u3002",
   heroLiveWait: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
+  heroLiveWaitBoardOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
+  heroLiveWaitWaitingOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
+  heroLiveWaitBothOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
   heroLiveNoBoardWait: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u7A7A\u7740\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
+  heroLiveNoBoardWaitOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u7A7A\u7740\uFF1B\u53E6\u5916 {waiting} \u4E2A\u4F1A\u8BDD\u5728\u7B49\u4F60\u3002",
   heroEmpty: "\u8FD8\u6CA1\u6709 Arbor \u7A97\u53E3\u3002",
   heroEmptyHint: "\u5728\u4EFB\u610F\u4F1A\u8BDD\u91CC\u9009\u62E9 Arbor\uFF0C\u53D1\u4E00\u6761\u6D88\u606F\uFF0C\u8FD9\u91CC\u5C31\u4F1A\u4EAE\u8D77\u6765\u3002",
   sessionHeroLive: "{window} \u6B63\u5728\u63A5\u7740 {previous} \u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
+  sessionHeroLiveBoardOne: "{window} \u6B63\u5728\u63A5\u7740 {previous} \u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
   sessionHeroFirst: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
+  sessionHeroFirstBoardOne: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u4E0A\u8FD8\u6709 {board} \u4EF6\u4E8B\u3002",
   sessionHeroIdle: "{window} \u7A7A\u7740\uFF0C\u7B49\u4F60\u53D1\u4E0B\u4E00\u53E5\u8BDD\u3002",
   sessionHeroEnded: "\u8FD9\u4E2A\u4F1A\u8BDD\u7684 {count} \u4E2A\u7A97\u53E3\u90FD\u6536\u5DE5\u4E86\uFF0C\u6700\u540E\u505C\u5728 {window}\u3002",
+  sessionHeroEndedOne: "\u8FD9\u4E2A\u4F1A\u8BDD\u7684 1 \u4E2A\u7A97\u53E3\u6536\u5DE5\u4E86\uFF0C\u6700\u540E\u505C\u5728 {window}\u3002",
   sessionHeroEmpty: "\u8FD9\u4E2A\u4F1A\u8BDD\u8FD8\u6CA1\u6709\u7A97\u53E3\u3002",
   sessionHeroEmptyHint: "\u53D1\u7B2C\u4E00\u6761\u6D88\u606F\uFF0Carbor \u4F1A\u4E3A\u5B83\u5F00\u7B2C\u4E00\u4E2A\u7A97\u53E3\u3002",
   cardChain: "\u7A97\u53E3\u94FE",
@@ -498,6 +524,7 @@ var zh = {
   chipWindows: "{count} \u4E2A\u7A97\u53E3",
   chipWindowOne: "1 \u4E2A\u7A97\u53E3",
   chipIdle: "\u7A7A\u95F2 \xB7 {count} \u4E2A\u7A97\u53E3",
+  chipIdleOne: "\u7A7A\u95F2 \xB7 1 \u4E2A\u7A97\u53E3",
   chipLive: "\u8FD0\u884C\u4E2D",
   panelIntro: "\u8FD9\u4E2A\u4F1A\u8BDD\u91CC arbor \u771F\u5B9E\u5728\u505A\u4EC0\u4E48\uFF0C\u5168\u90E8\u8BFB\u81EA arbor \u672C\u8EAB\u3002",
   notArbor: "\u8FD9\u4E2A\u4F1A\u8BDD\u4E0D\u662F arbor \u4F1A\u8BDD\u3002",
@@ -555,14 +582,18 @@ var zh = {
   boardTargets: "\u76EE\u6807",
   notesActive: "\u6D3B\u8DC3\u96C6",
   notesCount: "{count} \u6761 \xB7 {tokens} / {budget} \u4EE4\u724C",
+  notesCountOne: "1 \u6761 \xB7 {tokens} / {budget} \u4EE4\u724C",
   notesEpoch: "\u7B2C {epoch} \u4EE3",
   notesEmpty: "\u6D3B\u8DC3\u96C6\u4E3A\u7A7A\u3002",
   envCounts: "{skills} \u4E2A\u6280\u80FD \xB7 {servers} \u4E2A MCP \u670D\u52A1 \xB7 {services} \u4E2A\u670D\u52A1",
   envBuiltin: "\u5185\u7F6E",
   envFunctions: "\u51FD\u6570",
   envSkills: "\u6280\u80FD",
+  envSkillOne: "\u6280\u80FD",
   envMcp: "MCP \u670D\u52A1",
+  envMcpOne: "MCP \u670D\u52A1",
   envServices: "\u670D\u52A1",
+  envServiceOne: "\u670D\u52A1",
   envState: "\u72B6\u6001",
   envPath: "\u8DEF\u5F84",
   envEmpty: "\u73AF\u5883\u91CC\u6CA1\u6709\u6761\u76EE\u3002",
@@ -599,6 +630,7 @@ var zh = {
   searchButton: "\u641C\u7D22",
   searchEmpty: "\u6CA1\u6709\u547D\u4E2D\u3002",
   searchTotal: "{count} \u6761\u547D\u4E2D",
+  searchTotalOne: "1 \u6761\u547D\u4E2D",
   searchJournal: "\u65E5\u5FD7",
   searchNotes: "\u7B14\u8BB0",
   searchBoard: "\u770B\u677F",
@@ -659,14 +691,22 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-hero-hint{display:block;margin-top:10px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-hero-links{display:flex;gap:10px;margin-top:6px}.arbor-page .arbor-hero-links .arbor-card-link{margin-left:0;align-self:flex-start}
 .arbor-page .arbor-overview{display:flex;flex:1;flex-direction:column;gap:4px;min-height:0}
-.arbor-page .arbor-surface{display:grid;grid-template-columns:repeat(var(--arbor-cols,12),minmax(0,1fr));flex:1;grid-auto-rows:auto;grid-auto-flow:row;gap:13px;align-items:stretch;align-content:start;padding-bottom:160px}
+.arbor-page .arbor-sky{position:relative;width:100%;flex:none;min-height:0}
+.arbor-page .arbor-sky-cell{position:absolute;min-width:0;z-index:1;transform-origin:50% 50%;transition:transform 150ms ease}
+.arbor-page .arbor-sky-cell>.arbor-card{width:100%}
+.arbor-page .arbor-sky-cell[data-paper="true"]{transform:rotate(var(--arbor-tilt,0deg))}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover{transform:rotate(0deg) translateY(-2px);z-index:4}
+.arbor-page .arbor-sky-cell[data-paper="true"]>.arbor-card{transition:box-shadow 150ms ease}
+.arbor-page .arbor-sky-cell[data-paper="true"]:hover>.arbor-card{box-shadow:0 14px 30px #00000024}
+.arbor-page .arbor-index-card{background:var(--dsw-alias-bg-layer-1,#fff);border-top:3px solid color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 55%,transparent);border-radius:7px;box-shadow:0 7px 18px #00000012}
+.arbor-page .arbor-note-card{border-radius:8px;box-shadow:0 8px 20px #00000014}
 .arbor-page .arbor-card{min-width:0;display:flex;flex-direction:column;gap:7px;padding:15px 17px 12px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008);color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-card-head{display:flex;align-items:center;gap:8px;min-width:0}
 .arbor-page .arbor-card-kicker{flex:1;min-width:0;font-size:10px;line-height:14px;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#81858c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .arbor-page .arbor-card-aside{flex:none;display:inline-flex;align-items:center;gap:6px}
 .arbor-page .arbor-card-session{font-size:10px;color:var(--dsw-alias-label-tertiary,#81858c);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .arbor-page .arbor-card-title{font-size:16px;line-height:1.5;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);overflow-wrap:anywhere}
-.arbor-page .arbor-card-project{font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arbor-page .arbor-card-project{font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-card-meta{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-card-foot{margin-top:auto;display:flex;align-items:baseline;gap:3px 7px;flex-wrap:wrap;padding-top:9px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a);font-size:10px;line-height:1.5;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-card-foot-line{flex-basis:100%;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -695,6 +735,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-stream-label{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-md-wrap{max-height:260px;overflow:hidden;position:relative}
 .arbor-page .arbor-md-wrap.is-clamped{mask-image:linear-gradient(180deg,#000 72%,transparent 100%)}
+.arbor-page .arbor-md-wrap.is-expanded{max-height:none;overflow:visible}
 .arbor-page .arbor-md{font-size:12.5px;line-height:1.7;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-md-p{margin:0 0 8px}
 .arbor-page .arbor-md-p:last-child{margin-bottom:0}
@@ -717,7 +758,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-node-ref{font-family:var(--arbor-font-numeric);font-size:15px;line-height:19px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
 .arbor-page .arbor-node-state{font-size:9px;line-height:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-node-running .arbor-node-state{color:var(--dsw-alias-state-success-primary,#22c55e)}
-.arbor-page .arbor-node-doing{font-size:10.5px;line-height:1.45;color:var(--dsw-alias-label-secondary,#61666b);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.arbor-page .arbor-node-doing{font-size:10.5px;line-height:1.45;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-connector{width:52px;flex:none;height:72px;display:flex;align-items:center;justify-content:center;position:relative}
 .arbor-page .arbor-connector-line{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--dsw-alias-border-l2,#0000001a)}
 .arbor-page .arbor-connector-label{position:relative;z-index:1;padding:0 4px;background:var(--dsw-alias-bg-layer-1,#fff);font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c);white-space:nowrap}
@@ -725,8 +766,8 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-handoffs{display:flex;flex-direction:column;gap:3px;padding-top:7px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a)}
 .arbor-page .arbor-handoff-row{display:flex;gap:8px;align-items:baseline;min-width:0;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-handoff-ref{flex:none;font-size:9.5px;color:var(--dsw-alias-label-tertiary,#81858c);letter-spacing:.04em}
-.arbor-page .arbor-handoff-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.arbor-page .arbor-note-sum{font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary,#61666b);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.arbor-page .arbor-handoff-text{min-width:0;overflow-wrap:anywhere}
+.arbor-page .arbor-note-sum{font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-tags{display:flex;flex-wrap:wrap;gap:4px}
 .arbor-page .arbor-tag{display:inline-flex;align-items:center;height:19px;padding:0 6px;border-radius:6px;font-size:9.5px;line-height:19px;white-space:nowrap;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-tag-ok{color:var(--dsw-alias-state-success-primary,#22c55e);background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 12%,transparent)}
@@ -739,9 +780,9 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-env-group{padding-top:6px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a);display:flex;flex-direction:column;gap:1px}
 .arbor-page .arbor-env-group-title{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c);margin-bottom:2px}
 .arbor-page .arbor-env-row{display:flex;align-items:baseline;gap:7px;min-width:0;font-size:11.5px;line-height:1.6}
-.arbor-page .arbor-env-name{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary,#0f1115)}
-.arbor-page .arbor-env-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--dsw-alias-label-tertiary,#81858c)}
-.arbor-page .arbor-env-functions{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary,#61666b);font-size:10.5px}
+.arbor-page .arbor-env-name{flex:none;max-width:55%;overflow-wrap:anywhere;color:var(--dsw-alias-label-primary,#0f1115)}
+.arbor-page .arbor-env-path{flex:1;min-width:0;overflow-wrap:anywhere;font-size:10px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-env-functions{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--dsw-alias-label-secondary,#61666b);font-size:10.5px}
 .arbor-page .arbor-env-revision{font-size:10px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-schedule-next{font-size:12.5px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-workspace-rows{display:flex;flex-direction:column;gap:7px;min-width:0}
@@ -796,14 +837,26 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-hit-kind{font-size:9.5px;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-hit-window{font-size:9.5px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-hit-sum{font-size:11.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#61666b);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@container (max-width:460px){
+.arbor-page .arbor-node{min-width:90px;max-width:130px;padding:8px 9px}
+.arbor-page .arbor-connector{width:28px}
+}
 @container (max-width:360px){
 .arbor-page .arbor-node{min-width:76px;max-width:120px;padding:7px 8px}
 .arbor-page .arbor-connector{width:20px}
 .arbor-page .arbor-node-ref{font-size:13px;line-height:17px}
-.arbor-page .arbor-node-doing{display:none}
 .arbor-page .arbor-node-handoff{font-size:8px;padding:0 4px}
 }
+@container (max-width:260px){
+.arbor-page .arbor-node{min-width:70px;max-width:100px;padding:6px 7px}
+.arbor-page .arbor-connector{width:16px}
+.arbor-page .arbor-node-handoff{display:none}
+}
 @keyframes arbor-pulse{0%,100%{opacity:.45;transform:scale(.86)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){
+.arbor-page .arbor-sky-cell{transform:none!important;transition:none!important}
+.arbor-page .arbor-sky-cell>.arbor-card{transition:none!important}
+}
 @media (max-width:620px){
 .arbor-page{padding:18px 14px 24px}
 .arbor-page .arbor-hero-title{font-size:23px}
@@ -1018,256 +1071,187 @@ function MarkdownText(props) {
   }
   return (0, import_react.createElement)("div", { className: "arbor-md" }, ...blocks);
 }
-function trackCount(width) {
-  if (width >= 1e3) return 12;
-  if (width >= 720) return 8;
-  if (width >= 500) return 6;
-  if (width >= 340) return 4;
-  return 1;
+var SKY_GUTTER = 20;
+var SKY_NARROW = 640;
+function hashOf(value) {
+  let hash = 2166136261;
+  for (let at = 0; at < value.length; at += 1) {
+    hash ^= value.charCodeAt(at);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
-function clamp(value, low, high) {
-  return Math.min(high, Math.max(low, value));
-}
-function spanRule(kind, cols, weight) {
-  if (cols <= 1) return { pref: 1, min: 1, max: 1 };
-  const scaled = (units) => Math.max(1, Math.round(units * cols / 12));
-  let pref;
-  let min;
-  let max;
-  switch (kind) {
-    case "window":
-      pref = scaled(7);
-      min = scaled(5);
-      max = scaled(8);
-      if (cols <= 4) {
-        pref = cols;
-        min = cols;
-        max = cols;
-      }
-      break;
-    case "chain":
-      pref = scaled(weight ?? 4);
-      min = Math.max(2, scaled(3));
-      max = scaled(8);
-      break;
-    case "workspace":
-      pref = scaled(5);
-      min = Math.max(2, scaled(4));
-      max = scaled(6);
-      break;
-    case "session":
-      pref = scaled(4);
-      min = cols >= 12 ? 4 : Math.max(2, scaled(3));
-      max = scaled(5);
-      break;
-    case "env":
-      pref = scaled(4);
-      min = Math.max(2, scaled(3));
-      max = scaled(5);
-      break;
-    case "board":
-    case "note":
-    case "schedule":
-      pref = scaled(3);
-      min = Math.max(2, scaled(2));
-      max = scaled(4);
-      break;
-    default:
-      pref = cols;
-      min = cols;
-      max = cols;
-  }
-  min = clamp(min, 1, cols);
-  max = clamp(max, 1, cols);
-  if (max < min) max = min;
-  pref = clamp(pref, min, max);
-  return { pref, min, max };
-}
-function chainWeight(nodes) {
-  return Math.min(3 + Math.max(1, nodes), 7);
-}
-function fitRun(indices, rules, heights, cols, stretch) {
-  const mins = indices.map((index) => rules[index].min);
-  const maxs = indices.map((index) => stretch ? cols : rules[index].max);
-  const sumMin = mins.reduce((sum, value) => sum + value, 0);
-  const sumMax = maxs.reduce((sum, value) => sum + value, 0);
-  if (cols < sumMin || cols > sumMax) return void 0;
-  const spans = indices.map((index) => rules[index].pref);
-  let total = spans.reduce((sum, value) => sum + value, 0);
-  while (total < cols) {
-    let pick = -1;
-    for (let at = 0; at < indices.length; at += 1) {
-      if (spans[at] >= maxs[at]) continue;
-      if (pick < 0) {
-        pick = at;
-        continue;
-      }
-      const height = heights[indices[at]] ?? 0;
-      const chosen = heights[indices[pick]] ?? 0;
-      if (spans[at] < spans[pick] || spans[at] === spans[pick] && height > chosen) pick = at;
-    }
-    if (pick < 0) return void 0;
-    spans[pick] = spans[pick] + 1;
-    total += 1;
-  }
-  while (total > cols) {
-    let pick = -1;
-    for (let at = 0; at < indices.length; at += 1) {
-      if (spans[at] <= mins[at]) continue;
-      if (pick < 0) {
-        pick = at;
-        continue;
-      }
-      const height = heights[indices[at]] ?? 0;
-      const chosen = heights[indices[pick]] ?? 0;
-      if (spans[at] > spans[pick] || spans[at] === spans[pick] && height > chosen) pick = at;
-    }
-    if (pick < 0) return void 0;
-    spans[pick] = spans[pick] - 1;
-    total -= 1;
-  }
-  return spans;
-}
-function planBands(rules, heights, cols, initial) {
-  const remaining = initial === void 0 ? rules.map((_, index) => index) : [...initial];
-  const total = remaining.length;
-  if (total === 0) return [];
-  const maxCards = cols >= 10 ? 4 : cols >= 6 ? 3 : cols >= 3 ? 2 : 1;
-  const best = new Array(total + 1);
-  best[total] = { cost: 0, count: 0, spans: [] };
-  for (let at2 = total - 1; at2 >= 0; at2 -= 1) {
-    for (let count = 1; count <= maxCards && at2 + count <= total; count += 1) {
-      const indices = remaining.slice(at2, at2 + count);
-      const last = at2 + count === total;
-      const tailPair = total - (at2 + count) === 2;
-      const spans = fitRun(indices, rules, heights, cols, last || tailPair);
-      if (spans === void 0) continue;
-      const rest = best[at2 + count];
-      if (rest === void 0) continue;
-      const measured = indices.map((index) => heights[index] ?? 0);
-      const spread = Math.max(...measured) - Math.min(...measured);
-      const deviation = spans.reduce((sum, span, index) => sum + Math.abs(span - rules[indices[index]].pref), 0);
-      const lonely = count === 1 && total > 1 ? 90 : 0;
-      const cost = rest.cost + spread + deviation * 14 + lonely;
-      const current = best[at2];
-      if (current === void 0 || cost < current.cost) best[at2] = { cost, count, spans };
-    }
-  }
-  if (best[0] === void 0) {
-    return [{ columns: [{ span: cols, cards: [remaining[0]] }] }, ...planBands(rules, heights, cols, remaining.slice(1))];
-  }
-  const bands = [];
-  let at = 0;
-  while (at < total) {
-    const choice = best[at];
-    const indices = remaining.slice(at, at + choice.count);
-    bands.push({
-      columns: indices.map((index, column) => ({ span: choice.spans[column], cards: [index] }))
-    });
-    at += choice.count;
-  }
-  return bands;
-}
-function featureBand(items, rules, heights, cols) {
-  if (cols < 8 || items[0]?.kind !== "window") return void 0;
-  const wide = rules[0].pref;
-  const narrow = cols - wide;
-  if (narrow < 2) return void 0;
-  const windowHeight = heights[0] ?? 0;
-  const support = items.map((item, index) => ({ item, index })).filter((entry) => entry.index > 0 && entry.item.kind !== "window" && entry.item.kind !== "empty" && entry.item.kind !== "loading").slice(0, 3).map((entry) => entry.index);
-  let best;
-  for (let count = 2; count <= support.length; count += 1) {
-    const cards = support.slice(0, count);
-    const total = cards.reduce((sum, index) => sum + (heights[index] ?? 0), 0) + (count - 1) * 13;
-    const cost = Math.abs(total - windowHeight);
-    if (best === void 0 || cost < best.cost) best = { cards, total, cost };
-  }
-  if (best === void 0 || windowHeight < 260 || Math.abs(best.total - windowHeight) > 220) return void 0;
+function paperOf(item) {
+  if (item.kind !== "note" && item.kind !== "board") return void 0;
+  const hash = hashOf(item.key);
   return {
-    band: {
-      columns: [
-        { span: wide, cards: [0] },
-        { span: narrow, cards: best.cards }
-      ]
-    },
-    used: [0, ...best.cards]
+    tilt: Math.round((-1.6 + hash % 3201 / 1e3) * 100) / 100,
+    offset: (hash >>> 12) % 13
   };
 }
-function planMosaic(items, rules, heights, cols) {
-  const feature = featureBand(items, rules, heights, cols);
-  if (feature === void 0) return planBands(rules, heights, cols);
-  const used = new Set(feature.used);
-  const remaining = rules.map((_, index) => index).filter((index) => !used.has(index));
-  return [feature.band, ...planBands(rules, heights, cols, remaining)];
+function cardScale(surface) {
+  return Math.max(0.55, Math.min(1.2, surface / 1100));
 }
-function Masonry(props) {
+function cardWidth(item, surface) {
+  if (item.kind === "empty" || item.kind === "loading") return surface;
+  if (surface < SKY_NARROW) return surface;
+  const scale = cardScale(surface);
+  const base = (() => {
+    switch (item.kind) {
+      case "window":
+        return 560;
+      case "chain":
+        return (item.nodes ?? 1) * 150 + 50;
+      case "session":
+      case "workspace":
+        return 360;
+      case "env":
+        return 320;
+      case "board":
+        return 280;
+      case "note": {
+        const length = item.text?.length ?? 0;
+        return 240 + Math.min(40, length);
+      }
+      case "schedule":
+        return 240;
+      default:
+        return 240;
+    }
+  })();
+  return Math.min(surface, Math.max(140, Math.round(base * scale)));
+}
+function clearOf(box, placed) {
+  return placed.every((other) => box.x >= other.x + other.width + SKY_GUTTER || box.x + box.width + SKY_GUTTER <= other.x || box.y >= other.y + other.height + SKY_GUTTER || box.y + box.height + SKY_GUTTER <= other.y);
+}
+function packSky(items, widths, heights, surface) {
+  const placements = [];
+  const placed = [];
+  const narrow = surface < SKY_NARROW;
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const width = widths[index];
+    const height = heights[index];
+    const paper = paperOf(item);
+    const offset = paper?.offset ?? 0;
+    const reserved = height + offset;
+    let x = 0;
+    let y = 0;
+    if (narrow) {
+      x = 0;
+      y = placed.length === 0 ? 0 : Math.max(...placed.map((box2) => box2.y + box2.height + SKY_GUTTER));
+    } else {
+      const ys = /* @__PURE__ */ new Set([0]);
+      const xs = /* @__PURE__ */ new Set([0]);
+      for (const box2 of placed) {
+        ys.add(box2.y + box2.height + SKY_GUTTER);
+        xs.add(box2.x + box2.width + SKY_GUTTER);
+      }
+      let found;
+      for (const at of [...ys].sort((left, right) => left - right)) {
+        for (const left of [...xs].sort((one, two) => one - two)) {
+          if (left + width > surface) continue;
+          if (!clearOf({ x: left, y: at, width, height: reserved }, placed)) continue;
+          found = { x: left, y: at };
+          break;
+        }
+        if (found !== void 0) break;
+      }
+      if (found === void 0) {
+        x = 0;
+        y = placed.length === 0 ? 0 : Math.max(...placed.map((box2) => box2.y + box2.height + SKY_GUTTER));
+      } else {
+        x = found.x;
+        y = found.y;
+      }
+    }
+    const box = { x, y, width, height: reserved };
+    placed.push(box);
+    placements.push({
+      key: item.key,
+      x,
+      y: y + offset,
+      width,
+      height,
+      tilt: paper?.tilt ?? 0,
+      offset
+    });
+  }
+  return placements;
+}
+function measureCards(surface, items) {
+  const cells = /* @__PURE__ */ new Map();
+  for (const element of Array.from(surface.querySelectorAll("[data-sky-key]"))) {
+    const key = element.dataset["skyKey"];
+    if (key !== void 0) cells.set(key, element);
+  }
+  return items.map((item) => {
+    const cell = cells.get(item.key);
+    if (cell === void 0) return 0;
+    const card = cell.querySelector(".arbor-card") ?? cell;
+    return card.offsetHeight;
+  });
+}
+function samePlacements(left, right) {
+  if (left.length !== right.length) return false;
+  return left.every((one, at) => {
+    const other = right[at];
+    return other !== void 0 && one.key === other.key && Math.abs(one.x - other.x) < 0.5 && Math.abs(one.y - other.y) < 0.5 && Math.abs(one.width - other.width) < 0.5 && Math.abs(one.height - other.height) < 0.5;
+  });
+}
+function Skyline(props) {
   const ref = (0, import_react.useRef)(null);
-  const lastWidth = (0, import_react.useRef)(0);
-  const lastLayout = (0, import_react.useRef)(0);
-  const featureActive = (0, import_react.useRef)(false);
-  const windowHeight = (0, import_react.useRef)(0);
-  const signature = props.items.map((item) => `${item.key}:${item.kind}:${item.weight ?? ""}`).join("|");
-  const layout = () => {
+  const [width, setWidth] = (0, import_react.useState)(0);
+  const [layout, setLayout] = (0, import_react.useState)(void 0);
+  const signature = props.items.map((item) => `${item.key}:${item.kind}:${item.nodes ?? ""}:${item.text?.length ?? 0}`).join("|");
+  const key = `${width}:${signature}`;
+  const active = layout !== void 0 && layout.key === key;
+  const widths = props.items.map((item) => cardWidth(item, width === 0 ? 1100 : width));
+  (0, import_react.useLayoutEffect)(() => {
     const surface = ref.current;
     if (surface === null) return;
-    const cards = Array.from(surface.children);
-    if (cards.length !== props.items.length) return;
-    const cols = trackCount(surface.clientWidth);
-    const rules = props.items.map((item) => spanRule(item.kind, cols, item.weight));
-    surface.style.setProperty("--arbor-cols", String(cols));
-    for (let at = 0; at < cards.length; at += 1) {
-      const card = cards[at];
-      card.style.gridColumn = "";
-      card.style.gridRow = "";
-      card.style.alignSelf = "start";
-      card.style.gridColumn = `span ${rules[at].pref}`;
-    }
-    const heights = cards.map((card) => card.getBoundingClientRect().height);
-    const bands = planMosaic(props.items, rules, heights, cols);
-    let row = 1;
-    for (const band of bands) {
-      const rows = Math.max(...band.columns.map((column) => column.cards.length));
-      let start = 1;
-      for (const column of band.columns) {
-        for (let at = 0; at < column.cards.length; at += 1) {
-          const card = cards[column.cards[at]];
-          const rowSpan = at === column.cards.length - 1 ? rows - (column.cards.length - 1) : 1;
-          card.style.gridColumn = `${start} / span ${column.span}`;
-          card.style.gridRow = `${row + at} / span ${rowSpan}`;
-          card.style.alignSelf = "";
-        }
-        start += column.span;
-      }
-      row += rows;
-    }
-    featureActive.current = bands[0]?.columns.some((column) => column.cards.length > 1) === true;
-    windowHeight.current = props.items[0]?.kind === "window" ? heights[0] ?? 0 : 0;
-    lastWidth.current = surface.clientWidth;
-    lastLayout.current = performance.now();
-  };
-  (0, import_react.useLayoutEffect)(layout, [signature]);
-  (0, import_react.useEffect)(() => {
-    const surface = ref.current;
-    if (surface === null || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      if (performance.now() - lastLayout.current < 120) return;
-      if (surface.clientWidth !== lastWidth.current) {
-        layout();
-        return;
-      }
-      if (props.items[0]?.kind !== "window") return;
-      const first = surface.children[0];
-      if (!(first instanceof HTMLElement)) return;
-      const height = first.getBoundingClientRect().height;
-      if (featureActive.current ? height < 240 : Math.abs(height - windowHeight.current) > 80) layout();
-    });
+    const measure = () => {
+      setWidth(surface.clientWidth);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
     observer.observe(surface);
-    for (const card of Array.from(surface.children)) observer.observe(card);
     return () => {
       observer.disconnect();
     };
-  }, [signature]);
-  return (0, import_react.createElement)("div", { className: "arbor-surface", ref }, ...props.items.map((item) => item.node));
+  }, []);
+  (0, import_react.useLayoutEffect)(() => {
+    const surface = ref.current;
+    if (surface === null || width === 0) return;
+    const heights = measureCards(surface, props.items);
+    if (heights.every((height) => height === 0)) return;
+    const placements = packSky(props.items, widths, heights, width);
+    const bottom = placements.length === 0 ? 0 : Math.max(...placements.map((one) => one.y + one.height));
+    const next = { key, placements, height: bottom + SKY_GUTTER };
+    setLayout((current) => current !== void 0 && current.key === key && samePlacements(current.placements, placements) ? current : next);
+  });
+  return (0, import_react.createElement)("div", {
+    className: "arbor-sky",
+    ref,
+    style: { height: active ? layout.height : 0 }
+  }, ...props.items.map((item, index) => {
+    const placement = active ? layout.placements.find((one) => one.key === item.key) : void 0;
+    const paper = paperOf(item);
+    const style = placement === void 0 ? { left: 0, top: 0, width: widths[index], visibility: "hidden" } : {
+      left: placement.x,
+      top: placement.y,
+      width: placement.width,
+      "--arbor-tilt": `${String(placement.tilt)}deg`
+    };
+    return (0, import_react.createElement)("div", {
+      className: `arbor-sky-cell${paper === void 0 ? "" : " is-paper"}${item.kind === "board" ? " is-board" : ""}`,
+      key: item.key,
+      style,
+      "data-sky-key": item.key,
+      "data-paper": paper === void 0 ? void 0 : "true"
+    }, item.node);
+  }));
 }
 function IconButton(props) {
   return (0, import_react.createElement)("button", {
@@ -1374,7 +1358,7 @@ function Stream(props) {
   const text = props.stream?.text ?? "";
   const send = props.stream?.send ?? "";
   const [expanded, setExpanded] = (0, import_react.useState)(false);
-  const long = text.length > 360 || send.length > 360;
+  const long = text.length > 160 || send.length > 160;
   return (0, import_react.createElement)(
     "div",
     { className: "arbor-stream-block", "data-arbor-stream": true },
@@ -1386,7 +1370,7 @@ function Stream(props) {
     ),
     text === "" ? (0, import_react.createElement)("div", { className: "arbor-stream-empty", "data-arbor-text": "body" }, props.t("streamEmpty")) : (0, import_react.createElement)(
       "div",
-      { className: `arbor-md-wrap${long && !expanded ? " is-clamped" : ""}`, "data-arbor-text": "body" },
+      { className: `arbor-md-wrap${long && !expanded ? " is-clamped" : ""}${expanded ? " is-expanded" : ""}`, "data-arbor-text": "body" },
       (0, import_react.createElement)(MarkdownText, { text })
     ),
     send === "" ? null : (0, import_react.createElement)(
@@ -1395,7 +1379,7 @@ function Stream(props) {
       (0, import_react.createElement)("div", { className: "arbor-stream-label arbor-label" }, props.t("streamSend")),
       (0, import_react.createElement)(
         "div",
-        { className: `arbor-md-wrap${long && !expanded ? " is-clamped" : ""}`, "data-arbor-text": "body" },
+        { className: `arbor-md-wrap${long && !expanded ? " is-clamped" : ""}${expanded ? " is-expanded" : ""}`, "data-arbor-text": "body" },
         (0, import_react.createElement)(MarkdownText, { text: send })
       )
     ),
@@ -1547,7 +1531,7 @@ function BoardCard(props) {
   const state = streaming ? "running" : line.state;
   return (0, import_react.createElement)(
     Card,
-    { className: "arbor-board-card" },
+    { className: "arbor-board-card arbor-index-card" },
     (0, import_react.createElement)(CardHead, { kicker: t("filterBoard"), aside: (0, import_react.createElement)("span", { className: "arbor-card-session arbor-label" }, boardStateLabel(t, state)) }),
     (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "body" }, line.doing),
     line.openWork === void 0 || line.openWork.length === 0 ? null : (0, import_react.createElement)(
@@ -1592,9 +1576,9 @@ function EnvCard(props) {
     (0, import_react.createElement)(
       "div",
       { className: "arbor-env-counts" },
-      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(skills.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t("envSkills")}`)),
-      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(servers.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t("envMcp")}`)),
-      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(services.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t("envServices")}`))
+      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(skills.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t(skills.length === 1 ? "envSkillOne" : "envSkills")}`)),
+      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(servers.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t(servers.length === 1 ? "envMcpOne" : "envMcp")}`)),
+      (0, import_react.createElement)("span", { className: "arbor-env-count" }, (0, import_react.createElement)("span", { className: "arbor-env-big arbor-num" }, String(services.length)), (0, import_react.createElement)("span", { className: "arbor-label" }, ` ${t(services.length === 1 ? "envServiceOne" : "envServices")}`))
     ),
     skills.length === 0 ? null : (0, import_react.createElement)(
       "div",
@@ -1655,7 +1639,7 @@ function ScheduleCard(props) {
 function WorkspaceCard(props) {
   const { workspace, t } = props;
   const projectPath = workspace.project?.path;
-  const showCwd = workspace.cwd !== void 0 && workspace.cwd !== projectPath;
+  const showCwd = workspace.project !== void 0 && workspace.cwd !== void 0 && workspace.cwd !== projectPath;
   const hasFooter = workspace.pointers.length > 0 || workspace.checkouts.length > 0 || workspace.keeps.length > 0 || workspace.openWork.length > 0;
   return (0, import_react.createElement)(
     Card,
@@ -1868,7 +1852,7 @@ function SearchBlock(props) {
     result === void 0 ? null : result.total === 0 ? (0, import_react.createElement)("div", { className: "arbor-search-empty" }, t("searchEmpty")) : (0, import_react.createElement)(
       "div",
       { className: "arbor-search-results" },
-      (0, import_react.createElement)("div", { className: "arbor-search-total arbor-num" }, t("searchTotal", { count: result.total })),
+      (0, import_react.createElement)("div", { className: "arbor-search-total arbor-num" }, t(result.total === 1 ? "searchTotalOne" : "searchTotal", { count: result.total })),
       (0, import_react.createElement)(SearchGroup, {
         label: t("searchJournal"),
         rows: result.journal.map((hit) => (0, import_react.createElement)(
@@ -1970,10 +1954,18 @@ function Overview(props) {
   const ended = facts.windows.filter((window2) => window2.state === "ended").length;
   const waiting = sessions.filter((session) => session.windows.length > 0 && !session.windows.some((window2) => shownState(window2, snapshot.streams[window2.ref]) === "running") && session.windows.at(-1)?.state === "idle").length;
   const show = (section) => filter === "all" || filter === section;
-  const heroContent = sessions.length === 0 ? [(0, import_react.createElement)("span", { key: "empty" }, t("heroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "empty-hint", "data-arbor-text": "body" }, t("heroEmptyHint"))] : latest === void 0 ? waiting > 0 ? hero(t(waiting === 1 ? "heroIdleWaitOne" : "heroIdleWait"), { waiting: String(waiting), ended: String(ended) }) : hero(t(sessions.length === 1 ? "heroIdleOne" : "heroIdle"), { sessions: String(sessions.length), ended: String(ended) }) : hero(t(facts.board.length === 0 ? waiting > 0 ? "heroLiveNoBoardWait" : "heroLiveNoBoard" : waiting > 0 ? "heroLiveWait" : "heroLive"), {
-    window: latest.ref,
-    board: String(facts.board.length),
-    waiting: String(waiting)
+  const boardCount = facts.board.length;
+  const boardOne = boardCount === 1;
+  const waitingOne = waiting === 1;
+  const endedOne = ended === 1;
+  const sessionsOne = sessions.length === 1;
+  const heroKey = latest === void 0 ? waiting > 0 ? waitingOne ? endedOne ? "heroIdleWaitBothOne" : "heroIdleWaitOne" : endedOne ? "heroIdleWaitEndedOne" : "heroIdleWait" : sessionsOne ? endedOne ? "heroIdleBothOne" : "heroIdleOne" : endedOne ? "heroIdleEndedOne" : "heroIdle" : boardCount === 0 ? waiting > 0 ? waitingOne ? "heroLiveNoBoardWaitOne" : "heroLiveNoBoardWait" : "heroLiveNoBoard" : waiting > 0 ? boardOne ? waitingOne ? "heroLiveWaitBothOne" : "heroLiveWaitBoardOne" : waitingOne ? "heroLiveWaitWaitingOne" : "heroLiveWait" : boardOne ? "heroLiveBoardOne" : "heroLive";
+  const heroContent = sessions.length === 0 ? [(0, import_react.createElement)("span", { key: "empty" }, t("heroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "empty-hint", "data-arbor-text": "body" }, t("heroEmptyHint"))] : hero(t(heroKey), {
+    window: latest?.ref ?? "",
+    board: String(boardCount),
+    waiting: String(waiting),
+    ended: String(ended),
+    sessions: String(sessions.length)
   });
   const cards = [];
   if (sessions.length > 0) {
@@ -1991,15 +1983,12 @@ function Overview(props) {
         });
       }
     }
-    if (show("env")) {
-      cards.push({ key: "env", kind: "env", node: (0, import_react.createElement)(EnvCard, { env: facts.env, t }) });
-    }
     if (show("windows")) {
       for (const session of sessions) {
         cards.push({
           key: `chain-${session.sessionId}`,
           kind: "chain",
-          weight: chainWeight(session.windows.length),
+          nodes: session.windows.length,
           node: (0, import_react.createElement)(ChainCard, { session, windows: session.windows, streams: snapshot.streams, t })
         });
       }
@@ -2030,11 +2019,19 @@ function Overview(props) {
     }
     if (show("notes")) {
       for (const note of facts.notes.items) {
-        cards.push({ key: `note-${note.ref}`, kind: "note", node: (0, import_react.createElement)(NoteCard, { note, t }) });
+        cards.push({
+          key: `note-${note.ref}`,
+          kind: "note",
+          text: `${note.title} ${note.summary}`,
+          node: (0, import_react.createElement)(NoteCard, { note, t })
+        });
       }
       if (facts.notes.items.length === 0 && filter === "notes") {
         cards.push({ key: "empty-notes", kind: "empty", node: (0, import_react.createElement)(EmptyCard, { title: t("emptyNotes"), hint: t("emptyNotesHint") }) });
       }
+    }
+    if (show("env")) {
+      cards.push({ key: "env", kind: "env", node: (0, import_react.createElement)(EnvCard, { env: facts.env, t }) });
     }
     if (show("schedules")) {
       for (const schedule of facts.schedules) {
@@ -2063,7 +2060,7 @@ function Overview(props) {
       ),
       (0, import_react.createElement)("h1", { className: "arbor-hero-title", "data-arbor-text": "display" }, ...heroContent)
     ),
-    (0, import_react.createElement)(Masonry, { items: cards }),
+    (0, import_react.createElement)(Skyline, { items: cards }),
     sessions.length === 0 ? null : (0, import_react.createElement)(Dock, { filter, setFilter, t })
   );
 }
@@ -2085,7 +2082,7 @@ function SessionView(props) {
           (0, import_react.createElement)(TopActions, { t, onSearch, onSettings })
         )
       ),
-      (0, import_react.createElement)(Masonry, {
+      (0, import_react.createElement)(Skyline, {
         items: [{
           key: "loading",
           kind: "loading",
@@ -2102,7 +2099,8 @@ function SessionView(props) {
   const windows = facts.windows;
   const now = liveWindowOf(windows) ?? windows.at(-1);
   const nowState = now === void 0 ? void 0 : shownState(now, snapshot.streams[now.ref]);
-  const heroContent = windows.length === 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "hint", "data-arbor-text": "body" }, t("sessionHeroEmptyHint"))] : now === void 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty"))] : nowState === "running" ? now.continuationOf === void 0 ? hero(t("sessionHeroFirst"), { window: now.ref, board: String(facts.board.length) }) : hero(t("sessionHeroLive"), { window: now.ref, previous: now.continuationOf, board: String(facts.board.length) }) : nowState === "idle" ? hero(t("sessionHeroIdle"), { window: now.ref }) : hero(t("sessionHeroEnded"), { count: String(windows.length), window: now.ref });
+  const boardOne = facts.board.length === 1;
+  const heroContent = windows.length === 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "hint", "data-arbor-text": "body" }, t("sessionHeroEmptyHint"))] : now === void 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty"))] : nowState === "running" ? now.continuationOf === void 0 ? hero(t(boardOne ? "sessionHeroFirstBoardOne" : "sessionHeroFirst"), { window: now.ref, board: String(facts.board.length) }) : hero(t(boardOne ? "sessionHeroLiveBoardOne" : "sessionHeroLive"), { window: now.ref, previous: now.continuationOf, board: String(facts.board.length) }) : nowState === "idle" ? hero(t("sessionHeroIdle"), { window: now.ref }) : hero(t(windows.length === 1 ? "sessionHeroEndedOne" : "sessionHeroEnded"), { count: String(windows.length), window: now.ref });
   const cards = [];
   if (windows.length === 0) {
     cards.push({ key: "empty", kind: "empty", node: (0, import_react.createElement)(EmptyCard, { title: t("emptyWindows"), hint: t("sessionHeroEmptyHint") }) });
@@ -2114,13 +2112,13 @@ function SessionView(props) {
         node: (0, import_react.createElement)(WindowCard, { window: now, session, stream: snapshot.streams[now.ref], t })
       });
     }
-    cards.push({ key: "workspace", kind: "workspace", node: (0, import_react.createElement)(WorkspaceCard, { workspace: facts.workspace, t }) });
     cards.push({
       key: "chain",
       kind: "chain",
-      weight: chainWeight(windows.length),
+      nodes: windows.length,
       node: (0, import_react.createElement)(ChainCard, { session, windows, streams: snapshot.streams, t })
     });
+    cards.push({ key: "workspace", kind: "workspace", node: (0, import_react.createElement)(WorkspaceCard, { workspace: facts.workspace, t }) });
     for (const line of facts.board) {
       cards.push({
         key: `board-${line.window}`,
@@ -2129,7 +2127,12 @@ function SessionView(props) {
       });
     }
     for (const note of facts.notes.items) {
-      cards.push({ key: `note-${note.ref}`, kind: "note", node: (0, import_react.createElement)(NoteCard, { note, t }) });
+      cards.push({
+        key: `note-${note.ref}`,
+        kind: "note",
+        text: `${note.title} ${note.summary}`,
+        node: (0, import_react.createElement)(NoteCard, { note, t })
+      });
     }
   }
   return (0, import_react.createElement)(
@@ -2153,7 +2156,7 @@ function SessionView(props) {
         } }, t("openInDsh"), " \u2192")
       )
     ),
-    (0, import_react.createElement)(Masonry, { items: cards })
+    (0, import_react.createElement)(Skyline, { items: cards })
   );
 }
 function ArborPage(props) {
@@ -2249,7 +2252,7 @@ function ArborPage(props) {
           }, "\xD7")
         ))
       ),
-      facts === void 0 ? (0, import_react.createElement)(Masonry, {
+      facts === void 0 ? (0, import_react.createElement)(Skyline, {
         items: [{
           key: "loading",
           kind: "loading",

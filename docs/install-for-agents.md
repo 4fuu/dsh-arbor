@@ -290,29 +290,42 @@ back to the host's own state.
 
 The shape is editorial rather than a dashboard. The date line and one muted
 sentence say the state; only the window refs and counts in that sentence take
-full contrast and the numeric role. The surface below is a measured mosaic on a
-column grid: 12 tracks on a wide surface, then 8, 6, 4 and 1 as it narrows. Each
-card kind asks for a span: a live window is large, a chain follows its node
-count, the session card is medium, and board, note and schedule cards stay
-small. A feature band puts a tall window beside a narrow column of two or three
-cards stacked in the same grid rows (the environment and the chain on the
-overview; the workspace and the chain on a session tab), so the window's height
-is shared instead of leaving a void. The remaining cards pack into full-width
-bands: each band's spans sum to the track count, its row height is the tallest
-measured card, and a small dynamic program over contiguous runs chooses the
-bands, including the two-card tail that would otherwise become a full-width
-banner. The layout reads each card's natural height before placing it; content
-growth only grows a row. The result is checked by measuring the empty rectangles
-inside the packed area: no hole may be larger than the 13 px gutter, and the
-right edge of every band is the same line. A live window's output is rendered as
-Markdown and clamped with `展开全文`; a chain's nodes carry only a ref, a state
-and a handoff mark and shrink inside a narrow card; board and note cards put the
-content first and metadata in a small footer. A floating bottom dock filters
-全部 / 窗口 / 看板 / 笔记 / 环境 / 日程; search and settings are the two
-top-right icons and open sheets. The empty state is one sentence and a hint,
-with no dock and no zero-valued cards. All colours, borders and elevation come
-from `--dsw-*` tokens, so DSH's light and dark appearance both work without the
-page choosing a theme.
+full contrast and the numeric role. The surface below is a measured skyline
+scatter, deliberately ragged rather than a grid. Each card kind has a width:
+a live window about 560 px, a chain about 150 px per node plus padding, a
+session about 360 px, the environment about 320 px, the board about 280 px,
+a note 240-280 px (longer text gets the wider end), and a schedule about 240 px.
+The widths scale with the surface, but a chain is never made narrower than its
+nodes need. Height is always the card's own content; nothing is stretched to a
+neighbour.
+
+Cards are placed in importance order — live windows, chain, session, board,
+notes, environment, schedules — at the lowest skyline point where the width
+fits, ties to the left, with a 20 px gutter. Rows do not line up and the right
+edge stays ragged. The packer is measured: every card height comes from the
+rendered card, so a growing output pushes only the cards below it. Holes are
+allowed, but the largest enclosed hole is measured and is smaller than the
+smallest card on the page; the union of card boxes has no overlap and no card
+touches the dock. Below about 640 px the same packer becomes one column. The
+chain card is wide enough for every node (measured by `scrollWidth` against
+`clientWidth`) and its nodes never overflow.
+
+Notes and board cards are paper: a tilt of -1.6° to +1.6° and a 0-12 px vertical
+offset derived from a hash of the card's ref, so a reload restores the same
+arrangement. The window, chain, session and environment cards stay straight.
+Hovering a paper card straightens it and lifts it by 2 px with a 150 ms
+transform and shadow transition, with no layout shift; `prefers-reduced-motion`
+removes the tilt, the transition and the lift. A board card is an index card;
+a note keeps its paper tint and soft shadow.
+
+A live window's output is rendered as Markdown and clamped with `展开全文`
+(expanding removes the clamp); a chain's nodes carry a ref, a state and a
+handoff mark; board and note cards put content first and metadata in a small
+footer. A floating bottom dock filters 全部 / 窗口 / 看板 / 笔记 / 环境 / 日程;
+search and settings are the two top-right icons and open sheets. The empty
+state is one sentence and a hint, with no dock and no zero-valued cards. All
+colours, borders and elevation come from `--dsw-*` tokens, so DSH's light and
+dark appearance both work without the page choosing a theme.
 
 What the page shows comes from arbor, not from a browser guess:
 
