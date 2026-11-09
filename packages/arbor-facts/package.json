@@ -29,6 +29,7 @@
     "access": "public"
   },
   "files": [
-    "src"
+    "src",
+    "LICENSE"
   ]
 }

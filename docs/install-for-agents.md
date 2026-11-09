@@ -438,8 +438,8 @@ npm release, but the packages are still `private: true` and version `0.0.0`:
 - the runtime packages carry `publishConfig.access: "public"` (the scope is
   `@4fu`), but no `npm publish` has run;
 - the bundle's dependencies are `workspace:*`, and its siblings are `0.0.0`, so
-  a release still needs a version for every package, the workspace specs
-  rewritten to those versions, and per-package `LICENSE` files in the tarballs;
+  a release still needs a version for every package and the workspace specs
+  rewritten to those versions; every package now ships its MIT `LICENSE`;
 - the fonts plugin is a separate repository and package, with its own checks and
   the SIL OFL text for its vendored fonts.
 

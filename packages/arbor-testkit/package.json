@@ -43,6 +43,7 @@
     "node": ">=24.9.0"
   },
   "files": [
-    "src"
+    "src",
+    "LICENSE"
   ]
 }
