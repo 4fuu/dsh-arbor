@@ -37,15 +37,26 @@ export interface FactsHost {
   readonly arborHost: ArborHostService
 }
 
-/** Parse one host-owned event body, or an empty object when it has none. */
+/**
+ * Parse one host-owned event body, or an empty object when it has none.
+ *
+ * A `tool_call` body is the tool name and its JSON arguments as one string
+ * (`end {"handoff":…}`), so the first object in it is what a reader parses.
+ */
 function body(event: Event): Record<string, unknown> {
   if (event.body === null) return {}
-  try {
-    const parsed: unknown = JSON.parse(event.body)
-    return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : {}
-  } catch {
-    return {}
+  const decode = (text: string): Record<string, unknown> | undefined => {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : undefined
+    } catch {
+      return undefined
+    }
   }
+  const whole = decode(event.body)
+  if (whole !== undefined) return whole
+  const start = event.body.indexOf('{')
+  return start < 0 ? {} : (decode(event.body.slice(start)) ?? {})
 }
 
 /** A string field of a host-owned event body. */

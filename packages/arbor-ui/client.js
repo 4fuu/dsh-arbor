@@ -1118,6 +1118,16 @@ function SettingsBlock(props) {
   const judgeLabel = (mode) => mode === "off" ? t("settingsJudgeOff") : mode === "shadow" ? t("settingsJudgeShadow") : t("settingsJudgeOn");
   const window = settings.window ?? {};
   const notes = settings.notes ?? {};
+  const windowLine = [
+    window.idleSeconds === void 0 ? "" : `${t("settingsIdle")} ${t("seconds", { value: window.idleSeconds })}`,
+    window.contextTokens === void 0 ? "" : `${t("settingsContext")} ${compact(window.contextTokens)}`,
+    window.reserveTokens === void 0 ? "" : `${t("settingsReserve")} ${compact(window.reserveTokens)}`,
+    window.protectionSeconds === void 0 ? "" : `${t("settingsProtection")} ${t("seconds", { value: window.protectionSeconds })}`
+  ].filter(Boolean).join(" \xB7 ");
+  const notesLine = [
+    notes.activeCount === void 0 ? "" : `${t("settingsNotesCount")} ${notes.activeCount}`,
+    notes.activeTokenBudget === void 0 ? "" : `${t("settingsNotesTokens")} ${compact(notes.activeTokenBudget)}`
+  ].filter(Boolean).join(" \xB7 ");
   return (0, import_react.createElement)(
     "div",
     { className: "arbor-stack" },
@@ -1155,31 +1165,15 @@ function SettingsBlock(props) {
         ))
       )
     ),
-    (0, import_react.createElement)(
+    windowLine === "" ? null : (0, import_react.createElement)(
       KV,
       { label: t("settingsWindow") },
-      (0, import_react.createElement)(
-        "span",
-        { className: "arbor-num" },
-        [
-          window.idleSeconds === void 0 ? "" : `${t("settingsIdle")} ${t("seconds", { value: window.idleSeconds })}`,
-          window.contextTokens === void 0 ? "" : `${t("settingsContext")} ${compact(window.contextTokens)}`,
-          window.reserveTokens === void 0 ? "" : `${t("settingsReserve")} ${compact(window.reserveTokens)}`,
-          window.protectionSeconds === void 0 ? "" : `${t("settingsProtection")} ${t("seconds", { value: window.protectionSeconds })}`
-        ].filter(Boolean).join(" \xB7 ")
-      )
+      (0, import_react.createElement)("span", { className: "arbor-num" }, windowLine)
     ),
-    (0, import_react.createElement)(
+    notesLine === "" ? null : (0, import_react.createElement)(
       KV,
       { label: t("settingsNotes") },
-      (0, import_react.createElement)(
-        "span",
-        { className: "arbor-num" },
-        [
-          notes.activeCount === void 0 ? "" : `${t("settingsNotesCount")} ${notes.activeCount}`,
-          notes.activeTokenBudget === void 0 ? "" : `${t("settingsNotesTokens")} ${compact(notes.activeTokenBudget)}`
-        ].filter(Boolean).join(" \xB7 ")
-      )
+      (0, import_react.createElement)("span", { className: "arbor-num" }, notesLine)
     ),
     settings.secrets === void 0 || settings.secrets.length === 0 ? null : (0, import_react.createElement)(
       KV,

@@ -403,6 +403,16 @@ function SettingsBlock(props: { readonly settings: ArborSettingsFacts; readonly 
   const judgeLabel = (mode: string): string => mode === 'off' ? t('settingsJudgeOff') : mode === 'shadow' ? t('settingsJudgeShadow') : t('settingsJudgeOn')
   const window = settings.window ?? {}
   const notes = settings.notes ?? {}
+  const windowLine = [
+    window.idleSeconds === undefined ? '' : `${t('settingsIdle')} ${t('seconds', { value: window.idleSeconds })}`,
+    window.contextTokens === undefined ? '' : `${t('settingsContext')} ${compact(window.contextTokens)}`,
+    window.reserveTokens === undefined ? '' : `${t('settingsReserve')} ${compact(window.reserveTokens)}`,
+    window.protectionSeconds === undefined ? '' : `${t('settingsProtection')} ${t('seconds', { value: window.protectionSeconds })}`,
+  ].filter(Boolean).join(' · ')
+  const notesLine = [
+    notes.activeCount === undefined ? '' : `${t('settingsNotesCount')} ${notes.activeCount}`,
+    notes.activeTokenBudget === undefined ? '' : `${t('settingsNotesTokens')} ${compact(notes.activeTokenBudget)}`,
+  ].filter(Boolean).join(' · ')
   return createElement('div', { className: 'arbor-stack' },
     createElement('div', { className: 'arbor-muted' }, t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment')),
     settings.identity === undefined ? null : createElement(KV, { label: t('settingsIdentity') },
@@ -417,20 +427,10 @@ function SettingsBlock(props: { readonly settings: ArborSettingsFacts; readonly 
       createElement('span', { className: 'arbor-judge' },
         judge.map(([kind, mode]) => createElement(Badge, { key: kind, tone: mode === 'off' ? 'plain' : mode === 'shadow' ? 'warn' : 'ok' },
           `${kind} ${judgeLabel(mode)}`)))),
-    createElement(KV, { label: t('settingsWindow') },
-      createElement('span', { className: 'arbor-num' },
-        [
-          window.idleSeconds === undefined ? '' : `${t('settingsIdle')} ${t('seconds', { value: window.idleSeconds })}`,
-          window.contextTokens === undefined ? '' : `${t('settingsContext')} ${compact(window.contextTokens)}`,
-          window.reserveTokens === undefined ? '' : `${t('settingsReserve')} ${compact(window.reserveTokens)}`,
-          window.protectionSeconds === undefined ? '' : `${t('settingsProtection')} ${t('seconds', { value: window.protectionSeconds })}`,
-        ].filter(Boolean).join(' · '))),
-    createElement(KV, { label: t('settingsNotes') },
-      createElement('span', { className: 'arbor-num' },
-        [
-          notes.activeCount === undefined ? '' : `${t('settingsNotesCount')} ${notes.activeCount}`,
-          notes.activeTokenBudget === undefined ? '' : `${t('settingsNotesTokens')} ${compact(notes.activeTokenBudget)}`,
-        ].filter(Boolean).join(' · '))),
+    windowLine === '' ? null : createElement(KV, { label: t('settingsWindow') },
+      createElement('span', { className: 'arbor-num' }, windowLine)),
+    notesLine === '' ? null : createElement(KV, { label: t('settingsNotes') },
+      createElement('span', { className: 'arbor-num' }, notesLine)),
     settings.secrets === undefined || settings.secrets.length === 0 ? null : createElement(KV, { label: t('settingsSecrets'), mono: true },
       settings.secrets.join(' · ')),
     createElement('div', { className: 'arbor-hint' }, t('settingsDsh')))
