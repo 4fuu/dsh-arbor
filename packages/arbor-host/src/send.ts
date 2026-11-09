@@ -65,6 +65,8 @@ export class DshSendExecutor implements EffectExecutor {
 
   private readonly journal: Journal
   private readonly agents: AgentRegistry
+  /** Messages waiting for the tool result that must precede them on the log. */
+  private readonly pending: Array<() => void> = []
 
   constructor(options: DshSendExecutorOptions) {
     this.journal = options.journal
@@ -100,28 +102,41 @@ export class DshSendExecutor implements EffectExecutor {
         },
       }
     }
-    // The send executor runs inside the window's tool call, before the driver
-    // has appended the call's `tool/result`. DSH — and every provider history it
-    // builds from this log — requires a tool call to be followed immediately by
-    // its result, so the assistant message must be written one turn of the
-    // event loop later, after the result is on the log. A zero-delay timer is
-    // still inside the turn, so the user reads the send beside the call, and
-    // the next request has a valid tool/result pair.
+    // The send runs inside the window's tool call, before the driver has
+    // appended the call's `tool/result`. DSH requires the result immediately
+    // after the call, so the assistant message waits in this queue until the
+    // driver has appended every result of the step; it then lands before the
+    // step closes. Delaying with a timer is not enough: the message must belong
+    // to an open turn and step, and a timer can fire after the turn ended and
+    // corrupts the stored log.
     const session = agent.session
     const position = positionOf(session)
     const message = createAssistantMessage({
       content: [{ type: 'text', text }],
       source: attributionOf(agent),
     })
-    setTimeout(() => {
-      try {
-        session.append('assistant/message', { ...position, message, stream: [] }, { surfaceOp: 'append' })
-      } catch {
-        // The session went away before the message could land; the effect
-        // result already recorded the send and there is nothing else to do.
-      }
-    }, 0)
+    this.pending.push(() => {
+      session.append('assistant/message', { ...position, message, stream: [] }, { surfaceOp: 'append' })
+    })
     return { ok: true }
+  }
+
+  /**
+   * Write every delivered send after the tool results that precede it.
+   *
+   * The driver calls this once per step, after all of the step's tool calls
+   * have their results on the log. A message whose step has already closed is
+   * dropped rather than allowed to make the stored log invalid.
+   */
+  flush(): void {
+    for (const append of this.pending.splice(0)) {
+      try {
+        append()
+      } catch {
+        // The turn closed before the driver flushed; the effect result already
+        // records the delivery and the log must stay valid.
+      }
+    }
   }
 
   /**

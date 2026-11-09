@@ -281,6 +281,13 @@ the window-chain summary as secondary lines. The UI text is Chinese with an
 English dictionary registered in the `arborUi` locale namespace, so DSH's
 language switch switches the page.
 
+One display exception is deliberate. Arbor learns that a run is active from its
+usage event, which arrives after the first text, so a window can be `idle` in
+`Arbor.live()` while `Arbor.stream` is already delivering deltas. The card and
+the hero show that window as running only while a delta is current; the
+underlying arbor state is never rewritten. When the deltas stop, the page falls
+back to the host's own state.
+
 The shape is editorial rather than a dashboard. The date line and one muted
 sentence say the state; only the window refs and counts in that sentence take
 full contrast and the numeric role. The surface below is a measured masonry of
@@ -305,6 +312,12 @@ What the page shows comes from arbor, not from a browser guess:
 - `/env`: `Environment.list()` plus the journal's `service_state` events;
 - schedules: `Arbor.schedules()`;
 - settings: `Environment.settings()`, falling back to the deployment's seed.
+
+The `send` executor writes a delivered send's assistant message after the
+step's tool results, not between a tool call and its result: DSH rejects a log
+whose `tool_use` is not followed by `tool_result`, and the driver flushes the
+executor at the end of each step. A window's live output is the stream, not a
+reconstruction from that message.
 
 The page also says where DSH's own settings card does not apply: the Agent-loop
 plugin page configures ordinary sessions, while an arbor window runs under the

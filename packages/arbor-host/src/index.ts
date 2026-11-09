@@ -251,6 +251,8 @@ interface HostState {
   readonly workspaceBackend: WorkspaceBackend
   /** The DSH project bridge over the shared folder. */
   readonly projects: DshProjectBridge
+  /** The send executor, so the driver can flush its messages after a step's results. */
+  readonly sendExecutor: DshSendExecutor
 }
 
 /** The one Arbor host per DSH process, and the storage it runs on. */
@@ -402,6 +404,7 @@ export class ArborHostService extends Service {
       cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? arborWorkspace.sharedFolder,
       seedSettings: settings,
     })
+    const sendExecutor = new DshSendExecutor({ journal, agents: ctx.agents })
     host = new Arbor({
       journal,
       notes,
@@ -435,7 +438,7 @@ export class ArborHostService extends Service {
         ),
       ],
       settings,
-      executors: [new DshSendExecutor({ journal, agents: ctx.agents })],
+      executors: [sendExecutor],
     })
     this.state = {
       root,
@@ -449,6 +452,7 @@ export class ArborHostService extends Service {
       sharedFolder: arborWorkspace.sharedFolder,
       workspaceBackend: arborWorkspace.backend,
       projects,
+      sendExecutor,
     }
     // Plan mode's projection is registered here rather than only in the plan
     // row, because the <harness> section reads it once per step. Registration
@@ -802,6 +806,11 @@ export class ArborHostService extends Service {
   /** The backend every window of this process runs through. */
   get backend(): DshBackend {
     return this.requireState().backend
+  }
+
+  /** Write the sends a step delivered, after all its tool results are on the log. */
+  flushSends(): void {
+    this.requireState().sendExecutor.flush()
   }
 
   /** The directory the journal and the note store live in. */

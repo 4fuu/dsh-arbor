@@ -73,6 +73,27 @@ function useChannel<F extends ArborFacts | ArborHostFacts>(channel: FactsChannel
   return useSyncExternalStore(channel.subscribe, channel.getSnapshot)
 }
 
+type WindowStreamView = FactsSnapshot<ArborFacts | ArborHostFacts>['streams'][string]
+
+/**
+ * What the status should say right now. Arbor's own `state` can still be
+ * `idle` for the first moments of a new run — the host learns a run is active
+ * from the usage event, which arrives after the first text — while arbor's
+ * `Arbor.stream` is already delivering the model's output. A window that is
+ * writing is shown as running; the underlying arbor state is unchanged.
+ */
+function shownState(window: ArborWindowFacts, stream: WindowStreamView | undefined): ArborWindowFacts['state'] {
+  return window.live && stream?.streaming === true ? 'running' : window.state
+}
+
+/** The chain's windows with the live stream's current state applied. */
+function shownWindows(windows: readonly ArborWindowFacts[], streams: Readonly<Record<string, WindowStreamView>>): ArborWindowFacts[] {
+  return windows.map(window => {
+    const state = shownState(window, streams[window.ref])
+    return state === window.state ? window : { ...window, state }
+  })
+}
+
 /** The status label for one window state. */
 function stateLabel(t: Translate, window: ArborWindowFacts): string {
   if (window.state === 'running') return t('statusRunning')
@@ -446,12 +467,13 @@ function LiveWindowCard(props: {
   readonly t: Translate
 }): ReactNode {
   const { window, session, stream, t } = props
-  return createElement(Card, { className: `arbor-window-card arbor-window-${window.state}`, attrs: { 'data-arbor-window': window.ref } },
+  const state = shownState(window, stream)
+  return createElement(Card, { className: `arbor-window-card arbor-window-${state}`, attrs: { 'data-arbor-window': window.ref } },
     createElement(CardHead, {
       kicker: `${t('filterWindows')} · ${window.ref}`,
-      aside: createElement(StateChip, { state: window.state, t }),
+      aside: createElement(StateChip, { state, t }),
     }),
-    createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? t('live')),
+    createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? (session === undefined ? t('live') : sessionTitle(session))),
     window.live ? createElement(Stream, { stream, t }) : null,
     createElement(CardFoot, null,
       session === undefined ? null : createElement('span', { className: 'arbor-card-session' }, sessionTitle(session)),
@@ -462,16 +484,18 @@ function LiveWindowCard(props: {
 /** The current window of a session tab, even when it has ended. */
 function WindowCard(props: {
   readonly window: ArborWindowFacts
+  readonly session: ArborHostSessionFacts | undefined
   readonly stream: FactsSnapshot<ArborFacts | ArborHostFacts>['streams'][string] | undefined
   readonly t: Translate
 }): ReactNode {
-  const { window, stream, t } = props
-  return createElement(Card, { className: `arbor-window-card arbor-window-${window.state}`, attrs: { 'data-arbor-window': window.ref } },
+  const { window, session, stream, t } = props
+  const state = shownState(window, stream)
+  return createElement(Card, { className: `arbor-window-card arbor-window-${state}`, attrs: { 'data-arbor-window': window.ref } },
     createElement(CardHead, {
       kicker: `${t('filterWindows')} · ${window.ref}`,
-      aside: createElement(StateChip, { state: window.state, t }),
+      aside: createElement(StateChip, { state, t }),
     }),
-    createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? t('live')),
+    createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? (session === undefined ? t('live') : sessionTitle(session))),
     window.live ? createElement(Stream, { stream, t }) : null,
     createElement(CardFoot, null,
       createElement('span', { className: 'arbor-num' }, window.used === undefined ? '—' : `${compact(window.used)} / ${compact(window.limit)}`),
@@ -483,10 +507,12 @@ function WindowCard(props: {
 function ChainCard(props: {
   readonly session: ArborHostSessionFacts | undefined
   readonly windows: readonly ArborWindowFacts[]
+  readonly streams: Readonly<Record<string, WindowStreamView>>
   readonly t: Translate
 }): ReactNode {
   const { session, windows, t } = props
   if (windows.length === 0) return null
+  const shown = shownWindows(windows, props.streams)
   const handoffs = windows.filter(window => window.handoff !== undefined && (
     window.handoff.topics !== undefined || window.handoff.progress !== undefined ||
     window.handoff.pending !== undefined || window.handoff.agreements !== undefined))
@@ -497,8 +523,8 @@ function ChainCard(props: {
     }),
     createElement('div', { className: 'arbor-chain-scroll' },
       createElement('div', { className: 'arbor-chain' },
-        windows.flatMap((window, index) => {
-          const next = windows[index + 1]
+        shown.flatMap((window, index) => {
+          const next = shown[index + 1]
           const link = next?.continuationOf === window.ref && window.endReason === 'host_restart'
             ? t('chainRestart')
             : undefined
@@ -523,17 +549,19 @@ function ChainCard(props: {
         createElement('span', { className: 'arbor-handoff-text', 'data-arbor-text': 'body' },
           [...(window.handoff?.topics ?? []), ...(window.handoff?.progress ?? []), ...(window.handoff?.pending ?? [])].join(' · '))))),
     createElement(CardFoot, null,
-      createElement('span', { className: 'arbor-num' }, chainSummary(t, windows))))
+      createElement('span', { className: 'arbor-num' }, chainSummary(t, shown))))
 }
 
 /** One session, as the card that opens its own tab. */
 function SessionCard(props: {
   readonly session: ArborHostSessionFacts
+  readonly streams: Readonly<Record<string, WindowStreamView>>
   readonly t: Translate
   readonly onOpen: (sessionId: string) => void
 }): ReactNode {
   const { session, t, onOpen } = props
-  const last = liveWindowOf(session.windows) ?? session.windows.at(-1)
+  const shown = shownWindows(session.windows, props.streams)
+  const last = liveWindowOf(shown) ?? shown.at(-1)
   return createElement(Card, { className: 'arbor-session-card', attrs: { 'data-arbor-session': session.sessionId } },
     createElement(CardHead, {
       kicker: t('cardSession'),
@@ -542,7 +570,7 @@ function SessionCard(props: {
     createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, sessionTitle(session)),
     createElement('div', { className: 'arbor-card-project', 'data-arbor-text': 'code' }, projectLabel(session)),
     createElement(CardFoot, null,
-      createElement('span', { className: 'arbor-num' }, chainSummary(t, session.windows)),
+      createElement('span', { className: 'arbor-num' }, chainSummary(t, shown)),
       createElement('button', {
         type: 'button',
         className: 'arbor-card-link arbor-label',
@@ -551,10 +579,11 @@ function SessionCard(props: {
 }
 
 /** A board line as a sticky note: what it is doing first. */
-function BoardCard(props: { readonly line: ArborBoardFacts; readonly t: Translate }): ReactNode {
-  const { line, t } = props
+function BoardCard(props: { readonly line: ArborBoardFacts; readonly streaming: boolean; readonly t: Translate }): ReactNode {
+  const { line, streaming, t } = props
+  const state = streaming ? 'running' : line.state
   return createElement(Card, { className: 'arbor-board-card' },
-    createElement(CardHead, { kicker: t('filterBoard'), aside: createElement('span', { className: 'arbor-card-session arbor-label' }, boardStateLabel(t, line.state)) }),
+    createElement(CardHead, { kicker: t('filterBoard'), aside: createElement('span', { className: 'arbor-card-session arbor-label' }, boardStateLabel(t, state)) }),
     createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'body' }, line.doing),
     line.openWork === undefined || line.openWork.length === 0
       ? null
@@ -562,7 +591,7 @@ function BoardCard(props: { readonly line: ArborBoardFacts; readonly t: Translat
         line.openWork.map(item => createElement('span', { className: 'arbor-tag arbor-tag-warn', key: item }, item))),
     createElement(CardFoot, null,
       createElement('span', { className: 'arbor-num' }, line.window),
-      createElement('span', null, ' · ', boardStateLabel(t, line.state)),
+      createElement('span', null, ' · ', boardStateLabel(t, state)),
       createElement('span', { className: 'arbor-num' }, ` · ${compact(line.usage.used)} / ${compact(line.usage.limit)}`)))
 }
 
@@ -878,30 +907,31 @@ function Overview(props: {
 }): ReactNode {
   const { facts, snapshot, t, filter, setFilter, onSearch, onSettings, onOpenSession } = props
   const live = facts.windows.filter(window => window.live)
+  const active = facts.windows.filter(window => shownState(window, snapshot.streams[window.ref]) === 'running')
   const sessions = facts.sessions
-  const latest = live.at(-1)
+  const latest = active.at(-1)
   const ended = facts.windows.filter(window => window.state === 'ended').length
-  // A session waits only when it has a window and none of them is live, and its
-  // last window is idle rather than ended. A blank session has no label and is
-  // not in `sessions` at all, so it can never inflate this count.
+  // An idle window is still live — arbor keeps it open for the next turn — so
+  // "live" cannot decide the sentence. A session waits when it has a window,
+  // none of its windows is running, and its last window is idle. A blank
+  // session has no label and is not in `sessions` at all, so it never counts.
   const waiting = sessions.filter(session => session.windows.length > 0 &&
-    !session.windows.some(window => window.live) && session.windows.at(-1)?.state === 'idle').length
+    !session.windows.some(window => shownState(window, snapshot.streams[window.ref]) === 'running') &&
+    session.windows.at(-1)?.state === 'idle').length
   const show = (section: Filter): boolean => filter === 'all' || filter === section
   const heroContent: ReactNode[] = sessions.length === 0
     ? [createElement('span', { key: 'empty' }, t('heroEmpty')), createElement('span', { className: 'arbor-hero-hint', key: 'empty-hint', 'data-arbor-text': 'body' }, t('heroEmptyHint'))]
-    : live.length === 0
+    : latest === undefined
       ? waiting > 0
         ? hero(t(waiting === 1 ? 'heroIdleWaitOne' : 'heroIdleWait'), { waiting: String(waiting), ended: String(ended) })
         : hero(t(sessions.length === 1 ? 'heroIdleOne' : 'heroIdle'), { sessions: String(sessions.length), ended: String(ended) })
-      : latest === undefined
-        ? [createElement('span', { key: 'empty' }, t('heroEmpty'))]
-        : hero(t(facts.board.length === 0
-          ? waiting > 0 ? 'heroLiveNoBoardWait' : 'heroLiveNoBoard'
-          : waiting > 0 ? 'heroLiveWait' : 'heroLive'), {
-          window: latest.ref,
-          board: String(facts.board.length),
-          waiting: String(waiting),
-        })
+      : hero(t(facts.board.length === 0
+        ? waiting > 0 ? 'heroLiveNoBoardWait' : 'heroLiveNoBoard'
+        : waiting > 0 ? 'heroLiveWait' : 'heroLive'), {
+        window: latest.ref,
+        board: String(facts.board.length),
+        waiting: String(waiting),
+      })
   const cards: ReactNode[] = []
   if (sessions.length > 0) {
     if (show('windows')) {
@@ -915,15 +945,15 @@ function Overview(props: {
         }))
       }
       for (const session of sessions) {
-        cards.push(createElement(ChainCard, { key: `chain-${session.sessionId}`, session, windows: session.windows, t }))
+        cards.push(createElement(ChainCard, { key: `chain-${session.sessionId}`, session, windows: session.windows, streams: snapshot.streams, t }))
       }
       if (live.length === 0 && filter === 'windows') cards.push(createElement(EmptyCard, { key: 'empty-windows', title: t('emptyWindows'), hint: t('emptyWindowsHint') }))
     }
     if (show('all') || filter === 'windows') {
-      for (const session of sessions) cards.push(createElement(SessionCard, { key: `session-${session.sessionId}`, session, t, onOpen: onOpenSession }))
+      for (const session of sessions) cards.push(createElement(SessionCard, { key: `session-${session.sessionId}`, session, streams: snapshot.streams, t, onOpen: onOpenSession }))
     }
     if (show('board')) {
-      for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, t }))
+      for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }))
       if (facts.board.length === 0 && filter === 'board') cards.push(createElement(EmptyCard, { key: 'empty-board', title: t('emptyBoard'), hint: t('emptyBoardHint') }))
     }
     if (show('notes')) {
@@ -973,25 +1003,26 @@ function SessionView(props: {
   }
   const windows = facts.windows
   const now = liveWindowOf(windows) ?? windows.at(-1)
+  const nowState = now === undefined ? undefined : shownState(now, snapshot.streams[now.ref])
   const heroContent: ReactNode[] = windows.length === 0
     ? [createElement('span', { key: 'none' }, t('sessionHeroEmpty')), createElement('span', { className: 'arbor-hero-hint', key: 'hint', 'data-arbor-text': 'body' }, t('sessionHeroEmptyHint'))]
     : now === undefined
       ? [createElement('span', { key: 'none' }, t('sessionHeroEmpty'))]
-      : now.state === 'running'
+      : nowState === 'running'
         ? now.continuationOf === undefined
           ? hero(t('sessionHeroFirst'), { window: now.ref, board: String(facts.board.length) })
           : hero(t('sessionHeroLive'), { window: now.ref, previous: now.continuationOf, board: String(facts.board.length) })
-        : now.state === 'idle'
+        : nowState === 'idle'
           ? hero(t('sessionHeroIdle'), { window: now.ref })
           : hero(t('sessionHeroEnded'), { count: String(windows.length), window: now.ref })
   const cards: ReactNode[] = []
   if (windows.length === 0) {
     cards.push(createElement(EmptyCard, { key: 'empty', title: t('emptyWindows'), hint: t('sessionHeroEmptyHint') }))
   } else {
-    cards.push(createElement(ChainCard, { key: 'chain', session, windows, t }))
-    if (now !== undefined) cards.push(createElement(WindowCard, { key: `window-${now.ref}`, window: now, stream: snapshot.streams[now.ref], t }))
+    cards.push(createElement(ChainCard, { key: 'chain', session, windows, streams: snapshot.streams, t }))
+    if (now !== undefined) cards.push(createElement(WindowCard, { key: `window-${now.ref}`, window: now, session, stream: snapshot.streams[now.ref], t }))
     cards.push(createElement(WorkspaceCard, { key: 'workspace', workspace: facts.workspace, t }))
-    for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, t }))
+    for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }))
     for (const note of facts.notes.items) cards.push(createElement(NoteCard, { key: `note-${note.ref}`, note, t }))
   }
   return createElement('div', { className: 'arbor-overview', 'data-arbor-page': true, 'data-arbor-session-view': sessionId },

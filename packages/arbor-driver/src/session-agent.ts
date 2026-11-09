@@ -86,6 +86,8 @@ export interface ArborWindowBridge {
   runToolCall(call: ToolCallBlock, position: { turn: number; step: number }): Promise<ToolResult>
   /** Publish one window event to the arbor window. */
   publish(window: WindowRef, event: WindowEvent): void
+  /** Write a step's sends after its tool results have been appended. */
+  flushSends(): void
   /** The turn's work settled: the window's run ends and it goes idle. */
   finishRun(window: WindowRef): void
   /** Release the session's hold on its window. */
@@ -529,12 +531,18 @@ export class ArborSessionAgent implements Agent {
     if (attempt.finish.kind === 'max-tokens') return { kind: 'max-tokens' }
     const toolCalls = message.content.filter(block => block.type === 'tool-call')
     if (toolCalls.length === 0) return { kind: 'completed' }
-    for (const block of toolCalls) {
-      if (block.type !== 'tool-call') continue
-      const result = await this.bridge.runToolCall(block, { turn, step })
-      const call = { name: block.name, args: safeParseArgs(block.arguments), callId: block.id }
-      this.bridge.publish(window, { kind: 'tool_call', call })
-      this.bridge.publish(window, { kind: 'tool_result', call, result })
+    try {
+      for (const block of toolCalls) {
+        if (block.type !== 'tool-call') continue
+        const result = await this.bridge.runToolCall(block, { turn, step })
+        const call = { name: block.name, args: safeParseArgs(block.arguments), callId: block.id }
+        this.bridge.publish(window, { kind: 'tool_call', call })
+        this.bridge.publish(window, { kind: 'tool_result', call, result })
+      }
+    } finally {
+      // Every tool result of this step is on the log now; a send's assistant
+      // message belongs after them and before the step closes.
+      this.bridge.flushSends()
     }
     return null
   }

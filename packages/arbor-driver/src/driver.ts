@@ -316,6 +316,7 @@ class SessionArbor {
         return result
       },
       publish: (window, event) => { this.hostService.backend.publish(window, event) },
+      flushSends: () => { this.hostService.flushSends() },
       finishRun: window => { this.hostService.backend.finishRun(window) },
       close: async () => {
         // The window is the host's, not this session's: it stays open for the

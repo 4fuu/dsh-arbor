@@ -50,9 +50,9 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-hero-num{font-family:var(--arbor-font-numeric);font-weight:600;font-size:1.18em;line-height:.95;letter-spacing:-.01em;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
 .arbor-page .arbor-hero-name{font-weight:400;color:inherit}.arbor-page .arbor-hero-title .arbor-hero-name{color:inherit}
 .arbor-page .arbor-hero-hint{display:block;margin-top:10px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-tertiary,#81858c)}
-.arbor-page .arbor-hero-links{display:flex;gap:10px;margin-top:6px}.arbor-hero-links .arbor-card-link{margin-left:0}
+.arbor-page .arbor-hero-links{display:flex;gap:10px;margin-top:6px}.arbor-page .arbor-hero-links .arbor-card-link{margin-left:0;align-self:flex-start}
 .arbor-page .arbor-overview{display:flex;flex:1;flex-direction:column;gap:4px;min-height:0}
-.arbor-page .arbor-surface{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;grid-auto-rows:1px;grid-auto-flow:dense;gap:13px;align-items:start;align-content:start;padding-bottom:122px}
+.arbor-page .arbor-surface{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;grid-auto-rows:1px;grid-auto-flow:dense;gap:13px;align-items:start;align-content:start;padding-bottom:160px}
 .arbor-page .arbor-card{grid-column:auto;min-width:0;display:flex;flex-direction:column;gap:7px;padding:15px 17px 12px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008);color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-card-head{display:flex;align-items:center;gap:8px;min-width:0}
 .arbor-page .arbor-card-kicker{flex:1;min-width:0;font-size:10px;line-height:14px;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#81858c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -66,7 +66,7 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-card-link{margin-left:auto;padding:0;border:none;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap}
 .arbor-page .arbor-card-link:hover{color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-window-card{grid-column:span 2}
-.arbor-page .arbor-chain-card{grid-column:auto}
+.arbor-page .arbor-chain-card{grid-column:span 2}
 .arbor-page .arbor-session-card{grid-column:auto}
 .arbor-page .arbor-board-card{grid-column:auto;background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 7%,var(--dsw-alias-bg-layer-1,#fff));border-color:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 16%,var(--dsw-alias-border-l1,#0000000a))}
 .arbor-page .arbor-note-card{grid-column:auto;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 9%,var(--dsw-alias-bg-layer-1,#fff));border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 20%,var(--dsw-alias-border-l1,#0000000a))}
@@ -154,7 +154,7 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .arbor-page .arbor-label{letter-spacing:.02em}
 .arbor-page .arbor-num{font-variant-numeric:tabular-nums}
-.arbor-page .arbor-dock{position:sticky;bottom:18px;z-index:8;margin:10px auto 0;width:fit-content;max-width:calc(100% - 24px);padding:5px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1,#fff));box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(24px) saturate(150%))}
+.arbor-page .arbor-dock{position:sticky;bottom:18px;z-index:8;margin:10px auto 0;width:fit-content;max-width:calc(100% - 24px);padding:5px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);isolation:isolate}
 .arbor-page .arbor-dock-pills{display:flex;gap:2px;align-items:center;overflow-x:auto;scrollbar-width:none}
 .arbor-page .arbor-dock-pills::-webkit-scrollbar{display:none}
 .arbor-page .arbor-pill{height:30px;padding:0 13px;border:none;border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
@@ -198,7 +198,7 @@ export const CSS = `.arbor-page{
 @keyframes arbor-pulse{0%,100%{opacity:.45;transform:scale(.86)}50%{opacity:1;transform:scale(1)}}
 @media (max-width:900px){
 .arbor-page .arbor-surface{grid-template-columns:minmax(0,1fr)}
-.arbor-page .arbor-window-card, .arbor-page .arbor-empty-card, .arbor-page .arbor-loading-card{grid-column:auto}
+.arbor-page .arbor-window-card, .arbor-page .arbor-chain-card, .arbor-page .arbor-empty-card, .arbor-page .arbor-loading-card{grid-column:auto}
 }
 @media (max-width:620px){
 .arbor-page{padding:18px 14px 24px}

@@ -657,9 +657,9 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-hero-num{font-family:var(--arbor-font-numeric);font-weight:600;font-size:1.18em;line-height:.95;letter-spacing:-.01em;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
 .arbor-page .arbor-hero-name{font-weight:400;color:inherit}.arbor-page .arbor-hero-title .arbor-hero-name{color:inherit}
 .arbor-page .arbor-hero-hint{display:block;margin-top:10px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-tertiary,#81858c)}
-.arbor-page .arbor-hero-links{display:flex;gap:10px;margin-top:6px}.arbor-hero-links .arbor-card-link{margin-left:0}
+.arbor-page .arbor-hero-links{display:flex;gap:10px;margin-top:6px}.arbor-page .arbor-hero-links .arbor-card-link{margin-left:0;align-self:flex-start}
 .arbor-page .arbor-overview{display:flex;flex:1;flex-direction:column;gap:4px;min-height:0}
-.arbor-page .arbor-surface{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;grid-auto-rows:1px;grid-auto-flow:dense;gap:13px;align-items:start;align-content:start;padding-bottom:122px}
+.arbor-page .arbor-surface{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;grid-auto-rows:1px;grid-auto-flow:dense;gap:13px;align-items:start;align-content:start;padding-bottom:160px}
 .arbor-page .arbor-card{grid-column:auto;min-width:0;display:flex;flex-direction:column;gap:7px;padding:15px 17px 12px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008);color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-card-head{display:flex;align-items:center;gap:8px;min-width:0}
 .arbor-page .arbor-card-kicker{flex:1;min-width:0;font-size:10px;line-height:14px;letter-spacing:.06em;color:var(--dsw-alias-label-tertiary,#81858c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -673,7 +673,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-card-link{margin-left:auto;padding:0;border:none;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap}
 .arbor-page .arbor-card-link:hover{color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-window-card{grid-column:span 2}
-.arbor-page .arbor-chain-card{grid-column:auto}
+.arbor-page .arbor-chain-card{grid-column:span 2}
 .arbor-page .arbor-session-card{grid-column:auto}
 .arbor-page .arbor-board-card{grid-column:auto;background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 7%,var(--dsw-alias-bg-layer-1,#fff));border-color:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4176e6) 16%,var(--dsw-alias-border-l1,#0000000a))}
 .arbor-page .arbor-note-card{grid-column:auto;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 9%,var(--dsw-alias-bg-layer-1,#fff));border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 20%,var(--dsw-alias-border-l1,#0000000a))}
@@ -761,7 +761,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .arbor-page .arbor-label{letter-spacing:.02em}
 .arbor-page .arbor-num{font-variant-numeric:tabular-nums}
-.arbor-page .arbor-dock{position:sticky;bottom:18px;z-index:8;margin:10px auto 0;width:fit-content;max-width:calc(100% - 24px);padding:5px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1,#fff));box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);backdrop-filter:var(--dsw-menu-backdrop-filter,blur(24px) saturate(150%))}
+.arbor-page .arbor-dock{position:sticky;bottom:18px;z-index:8;margin:10px auto 0;width:fit-content;max-width:calc(100% - 24px);padding:5px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);isolation:isolate}
 .arbor-page .arbor-dock-pills{display:flex;gap:2px;align-items:center;overflow-x:auto;scrollbar-width:none}
 .arbor-page .arbor-dock-pills::-webkit-scrollbar{display:none}
 .arbor-page .arbor-pill{height:30px;padding:0 13px;border:none;border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
@@ -805,7 +805,7 @@ var CSS = `.arbor-page{
 @keyframes arbor-pulse{0%,100%{opacity:.45;transform:scale(.86)}50%{opacity:1;transform:scale(1)}}
 @media (max-width:900px){
 .arbor-page .arbor-surface{grid-template-columns:minmax(0,1fr)}
-.arbor-page .arbor-window-card, .arbor-page .arbor-empty-card, .arbor-page .arbor-loading-card{grid-column:auto}
+.arbor-page .arbor-window-card, .arbor-page .arbor-chain-card, .arbor-page .arbor-empty-card, .arbor-page .arbor-loading-card{grid-column:auto}
 }
 @media (max-width:620px){
 .arbor-page{padding:18px 14px 24px}
@@ -841,6 +841,15 @@ function useChannel(channel) {
     };
   }, [channel]);
   return (0, import_react.useSyncExternalStore)(channel.subscribe, channel.getSnapshot);
+}
+function shownState(window2, stream) {
+  return window2.live && stream?.streaming === true ? "running" : window2.state;
+}
+function shownWindows(windows, streams) {
+  return windows.map((window2) => {
+    const state = shownState(window2, streams[window2.ref]);
+    return state === window2.state ? window2 : { ...window2, state };
+  });
 }
 function stateLabel(t, window2) {
   if (window2.state === "running") return t("statusRunning");
@@ -1181,14 +1190,15 @@ function Stream(props) {
 }
 function LiveWindowCard(props) {
   const { window: window2, session, stream, t } = props;
+  const state = shownState(window2, stream);
   return (0, import_react.createElement)(
     Card,
-    { className: `arbor-window-card arbor-window-${window2.state}`, attrs: { "data-arbor-window": window2.ref } },
+    { className: `arbor-window-card arbor-window-${state}`, attrs: { "data-arbor-window": window2.ref } },
     (0, import_react.createElement)(CardHead, {
       kicker: `${t("filterWindows")} \xB7 ${window2.ref}`,
-      aside: (0, import_react.createElement)(StateChip, { state: window2.state, t })
+      aside: (0, import_react.createElement)(StateChip, { state, t })
     }),
-    (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? t("live")),
+    (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? (session === void 0 ? t("live") : sessionTitle(session))),
     window2.live ? (0, import_react.createElement)(Stream, { stream, t }) : null,
     (0, import_react.createElement)(
       CardFoot,
@@ -1200,15 +1210,16 @@ function LiveWindowCard(props) {
   );
 }
 function WindowCard(props) {
-  const { window: window2, stream, t } = props;
+  const { window: window2, session, stream, t } = props;
+  const state = shownState(window2, stream);
   return (0, import_react.createElement)(
     Card,
-    { className: `arbor-window-card arbor-window-${window2.state}`, attrs: { "data-arbor-window": window2.ref } },
+    { className: `arbor-window-card arbor-window-${state}`, attrs: { "data-arbor-window": window2.ref } },
     (0, import_react.createElement)(CardHead, {
       kicker: `${t("filterWindows")} \xB7 ${window2.ref}`,
-      aside: (0, import_react.createElement)(StateChip, { state: window2.state, t })
+      aside: (0, import_react.createElement)(StateChip, { state, t })
     }),
-    (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? t("live")),
+    (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? (session === void 0 ? t("live") : sessionTitle(session))),
     window2.live ? (0, import_react.createElement)(Stream, { stream, t }) : null,
     (0, import_react.createElement)(
       CardFoot,
@@ -1222,6 +1233,7 @@ function WindowCard(props) {
 function ChainCard(props) {
   const { session, windows, t } = props;
   if (windows.length === 0) return null;
+  const shown = shownWindows(windows, props.streams);
   const handoffs = windows.filter((window2) => window2.handoff !== void 0 && (window2.handoff.topics !== void 0 || window2.handoff.progress !== void 0 || window2.handoff.pending !== void 0 || window2.handoff.agreements !== void 0));
   return (0, import_react.createElement)(
     Card,
@@ -1236,8 +1248,8 @@ function ChainCard(props) {
       (0, import_react.createElement)(
         "div",
         { className: "arbor-chain" },
-        windows.flatMap((window2, index) => {
-          const next = windows[index + 1];
+        shown.flatMap((window2, index) => {
+          const next = shown[index + 1];
           const link = next?.continuationOf === window2.ref && window2.endReason === "host_restart" ? t("chainRestart") : void 0;
           const node = (0, import_react.createElement)(
             "div",
@@ -1278,13 +1290,14 @@ function ChainCard(props) {
     (0, import_react.createElement)(
       CardFoot,
       null,
-      (0, import_react.createElement)("span", { className: "arbor-num" }, chainSummary(t, windows))
+      (0, import_react.createElement)("span", { className: "arbor-num" }, chainSummary(t, shown))
     )
   );
 }
 function SessionCard(props) {
   const { session, t, onOpen } = props;
-  const last = liveWindowOf(session.windows) ?? session.windows.at(-1);
+  const shown = shownWindows(session.windows, props.streams);
+  const last = liveWindowOf(shown) ?? shown.at(-1);
   return (0, import_react.createElement)(
     Card,
     { className: "arbor-session-card", attrs: { "data-arbor-session": session.sessionId } },
@@ -1297,7 +1310,7 @@ function SessionCard(props) {
     (0, import_react.createElement)(
       CardFoot,
       null,
-      (0, import_react.createElement)("span", { className: "arbor-num" }, chainSummary(t, session.windows)),
+      (0, import_react.createElement)("span", { className: "arbor-num" }, chainSummary(t, shown)),
       (0, import_react.createElement)("button", {
         type: "button",
         className: "arbor-card-link arbor-label",
@@ -1309,11 +1322,12 @@ function SessionCard(props) {
   );
 }
 function BoardCard(props) {
-  const { line, t } = props;
+  const { line, streaming, t } = props;
+  const state = streaming ? "running" : line.state;
   return (0, import_react.createElement)(
     Card,
     { className: "arbor-board-card" },
-    (0, import_react.createElement)(CardHead, { kicker: t("filterBoard"), aside: (0, import_react.createElement)("span", { className: "arbor-card-session arbor-label" }, boardStateLabel(t, line.state)) }),
+    (0, import_react.createElement)(CardHead, { kicker: t("filterBoard"), aside: (0, import_react.createElement)("span", { className: "arbor-card-session arbor-label" }, boardStateLabel(t, state)) }),
     (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "body" }, line.doing),
     line.openWork === void 0 || line.openWork.length === 0 ? null : (0, import_react.createElement)(
       "div",
@@ -1324,7 +1338,7 @@ function BoardCard(props) {
       CardFoot,
       null,
       (0, import_react.createElement)("span", { className: "arbor-num" }, line.window),
-      (0, import_react.createElement)("span", null, " \xB7 ", boardStateLabel(t, line.state)),
+      (0, import_react.createElement)("span", null, " \xB7 ", boardStateLabel(t, state)),
       (0, import_react.createElement)("span", { className: "arbor-num" }, ` \xB7 ${compact(line.usage.used)} / ${compact(line.usage.limit)}`)
     )
   );
@@ -1729,12 +1743,13 @@ function Dock(props) {
 function Overview(props) {
   const { facts, snapshot, t, filter, setFilter, onSearch, onSettings, onOpenSession } = props;
   const live = facts.windows.filter((window2) => window2.live);
+  const active = facts.windows.filter((window2) => shownState(window2, snapshot.streams[window2.ref]) === "running");
   const sessions = facts.sessions;
-  const latest = live.at(-1);
+  const latest = active.at(-1);
   const ended = facts.windows.filter((window2) => window2.state === "ended").length;
-  const waiting = sessions.filter((session) => session.windows.length > 0 && !session.windows.some((window2) => window2.live) && session.windows.at(-1)?.state === "idle").length;
+  const waiting = sessions.filter((session) => session.windows.length > 0 && !session.windows.some((window2) => shownState(window2, snapshot.streams[window2.ref]) === "running") && session.windows.at(-1)?.state === "idle").length;
   const show = (section) => filter === "all" || filter === section;
-  const heroContent = sessions.length === 0 ? [(0, import_react.createElement)("span", { key: "empty" }, t("heroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "empty-hint", "data-arbor-text": "body" }, t("heroEmptyHint"))] : live.length === 0 ? waiting > 0 ? hero(t(waiting === 1 ? "heroIdleWaitOne" : "heroIdleWait"), { waiting: String(waiting), ended: String(ended) }) : hero(t(sessions.length === 1 ? "heroIdleOne" : "heroIdle"), { sessions: String(sessions.length), ended: String(ended) }) : latest === void 0 ? [(0, import_react.createElement)("span", { key: "empty" }, t("heroEmpty"))] : hero(t(facts.board.length === 0 ? waiting > 0 ? "heroLiveNoBoardWait" : "heroLiveNoBoard" : waiting > 0 ? "heroLiveWait" : "heroLive"), {
+  const heroContent = sessions.length === 0 ? [(0, import_react.createElement)("span", { key: "empty" }, t("heroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "empty-hint", "data-arbor-text": "body" }, t("heroEmptyHint"))] : latest === void 0 ? waiting > 0 ? hero(t(waiting === 1 ? "heroIdleWaitOne" : "heroIdleWait"), { waiting: String(waiting), ended: String(ended) }) : hero(t(sessions.length === 1 ? "heroIdleOne" : "heroIdle"), { sessions: String(sessions.length), ended: String(ended) }) : hero(t(facts.board.length === 0 ? waiting > 0 ? "heroLiveNoBoardWait" : "heroLiveNoBoard" : waiting > 0 ? "heroLiveWait" : "heroLive"), {
     window: latest.ref,
     board: String(facts.board.length),
     waiting: String(waiting)
@@ -1752,15 +1767,15 @@ function Overview(props) {
         }));
       }
       for (const session of sessions) {
-        cards.push((0, import_react.createElement)(ChainCard, { key: `chain-${session.sessionId}`, session, windows: session.windows, t }));
+        cards.push((0, import_react.createElement)(ChainCard, { key: `chain-${session.sessionId}`, session, windows: session.windows, streams: snapshot.streams, t }));
       }
       if (live.length === 0 && filter === "windows") cards.push((0, import_react.createElement)(EmptyCard, { key: "empty-windows", title: t("emptyWindows"), hint: t("emptyWindowsHint") }));
     }
     if (show("all") || filter === "windows") {
-      for (const session of sessions) cards.push((0, import_react.createElement)(SessionCard, { key: `session-${session.sessionId}`, session, t, onOpen: onOpenSession }));
+      for (const session of sessions) cards.push((0, import_react.createElement)(SessionCard, { key: `session-${session.sessionId}`, session, streams: snapshot.streams, t, onOpen: onOpenSession }));
     }
     if (show("board")) {
-      for (const line of facts.board) cards.push((0, import_react.createElement)(BoardCard, { key: `board-${line.window}`, line, t }));
+      for (const line of facts.board) cards.push((0, import_react.createElement)(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }));
       if (facts.board.length === 0 && filter === "board") cards.push((0, import_react.createElement)(EmptyCard, { key: "empty-board", title: t("emptyBoard"), hint: t("emptyBoardHint") }));
     }
     if (show("notes")) {
@@ -1823,15 +1838,16 @@ function SessionView(props) {
   }
   const windows = facts.windows;
   const now = liveWindowOf(windows) ?? windows.at(-1);
-  const heroContent = windows.length === 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "hint", "data-arbor-text": "body" }, t("sessionHeroEmptyHint"))] : now === void 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty"))] : now.state === "running" ? now.continuationOf === void 0 ? hero(t("sessionHeroFirst"), { window: now.ref, board: String(facts.board.length) }) : hero(t("sessionHeroLive"), { window: now.ref, previous: now.continuationOf, board: String(facts.board.length) }) : now.state === "idle" ? hero(t("sessionHeroIdle"), { window: now.ref }) : hero(t("sessionHeroEnded"), { count: String(windows.length), window: now.ref });
+  const nowState = now === void 0 ? void 0 : shownState(now, snapshot.streams[now.ref]);
+  const heroContent = windows.length === 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty")), (0, import_react.createElement)("span", { className: "arbor-hero-hint", key: "hint", "data-arbor-text": "body" }, t("sessionHeroEmptyHint"))] : now === void 0 ? [(0, import_react.createElement)("span", { key: "none" }, t("sessionHeroEmpty"))] : nowState === "running" ? now.continuationOf === void 0 ? hero(t("sessionHeroFirst"), { window: now.ref, board: String(facts.board.length) }) : hero(t("sessionHeroLive"), { window: now.ref, previous: now.continuationOf, board: String(facts.board.length) }) : nowState === "idle" ? hero(t("sessionHeroIdle"), { window: now.ref }) : hero(t("sessionHeroEnded"), { count: String(windows.length), window: now.ref });
   const cards = [];
   if (windows.length === 0) {
     cards.push((0, import_react.createElement)(EmptyCard, { key: "empty", title: t("emptyWindows"), hint: t("sessionHeroEmptyHint") }));
   } else {
-    cards.push((0, import_react.createElement)(ChainCard, { key: "chain", session, windows, t }));
-    if (now !== void 0) cards.push((0, import_react.createElement)(WindowCard, { key: `window-${now.ref}`, window: now, stream: snapshot.streams[now.ref], t }));
+    cards.push((0, import_react.createElement)(ChainCard, { key: "chain", session, windows, streams: snapshot.streams, t }));
+    if (now !== void 0) cards.push((0, import_react.createElement)(WindowCard, { key: `window-${now.ref}`, window: now, session, stream: snapshot.streams[now.ref], t }));
     cards.push((0, import_react.createElement)(WorkspaceCard, { key: "workspace", workspace: facts.workspace, t }));
-    for (const line of facts.board) cards.push((0, import_react.createElement)(BoardCard, { key: `board-${line.window}`, line, t }));
+    for (const line of facts.board) cards.push((0, import_react.createElement)(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }));
     for (const note of facts.notes.items) cards.push((0, import_react.createElement)(NoteCard, { key: `note-${note.ref}`, note, t }));
   }
   return (0, import_react.createElement)(
