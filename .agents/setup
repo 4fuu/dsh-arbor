@@ -34,8 +34,15 @@ if ! "$BIN_DIR/ovnfs" version 2>/dev/null | grep -q "$OVNFS_VERSION"; then
 fi
 "$BIN_DIR/ovnfs" version
 
+# The pnpm that package.json pins, installed with npm into ~/.local. Not
+# corepack: its pnpm shim crashes on Node 26 (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING).
+PNPM_VERSION="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+step "pnpm $PNPM_VERSION"
+if [ "$("$BIN_DIR/pnpm" --version 2>/dev/null)" != "$PNPM_VERSION" ]; then
+  npm install --global --prefix "$HOME/.local" --silent "pnpm@$PNPM_VERSION"
+fi
+
 step "pnpm install"
-corepack enable >/dev/null 2>&1 || true
-pnpm install --frozen-lockfile
+"$BIN_DIR/pnpm" install --frozen-lockfile
 
 step "done"
