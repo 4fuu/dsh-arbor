@@ -51,8 +51,11 @@ upgrade whose pinned proofs fail.
 
 - Every `@deepseek-ai/dsh*` dependency in the root manifest, `packages/*` and
   `proofs/` is an exact version, never `^` or `~`.
-- `pnpm check:pin` checks those manifests and `DSH_PINNED_VERSION` in
-  `packages/arbor-prompt/src/sections.ts` against `0.2.2-rc.1`.
+- Every package under `packages/` declares `engines.dsh: 0.2.2-rc.1`, the
+  runtime requirement DSH reads before it loads a plugin or bundle.
+- `pnpm check:pin` checks those manifests, every `engines.dsh`, and
+  `DSH_PINNED_VERSION` in `packages/arbor-prompt/src/sections.ts` against
+  `0.2.2-rc.1`.
 - `proofs/12-official-sections.ts` and `proofs/18-picker-pin.ts` check the
   behavior behind the version, not only the number.
 - CI runs the pin check, the type check and the proof suite. The live-model job

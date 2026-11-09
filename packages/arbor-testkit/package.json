@@ -40,7 +40,8 @@
     "directory": "packages/arbor-testkit"
   },
   "engines": {
-    "node": ">=24.9.0"
+    "node": ">=24.9.0",
+    "dsh": "0.2.2-rc.1"
   },
   "files": [
     "src",

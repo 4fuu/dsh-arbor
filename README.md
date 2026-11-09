@@ -131,7 +131,8 @@ the SDK path the proofs use, or a remote `agent-preset/select` on a blank.
 DSH is pinned to **`dsh-v0.2.2-rc.1`** (npm
 `@deepseek-ai/dsh@0.2.2-rc.1`, commit `66491b05e3` of
 `deepseek-ai/deepseek-harness`). Every `@deepseek-ai/dsh*` dependency is an
-exact version, and `pnpm check:pin` checks the manifests and the prompt
+exact version, every package under `packages/` declares
+`engines.dsh: 0.2.2-rc.1`, and `pnpm check:pin` checks both plus the prompt
 bridge's `DSH_PINNED_VERSION`.
 
 A different DSH version is unsupported. The bundle depends on DSH's row names,

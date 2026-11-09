@@ -10,7 +10,7 @@
  */
 
 import { readdir, readFile } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
+import { join, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PIN = '0.2.2-rc.1'
@@ -49,6 +49,11 @@ for (const file of await manifests()) {
       seen.add(name)
     }
   }
+  // DSH reads `engines.dsh` as the plugin runtime requirement. Every package
+  // under packages/ is loaded by DSH; the proof harness is not a plugin.
+  if (file.includes(`${sep}packages${sep}`) && manifest.engines?.dsh !== PIN) {
+    failures.push(`${file}: engines.dsh is ${String(manifest.engines?.dsh)}, expected ${PIN}`)
+  }
 }
 
 const sections = await readFile(join(ROOT, 'packages', 'arbor-prompt', 'src', 'sections.ts'), 'utf8')
@@ -59,5 +64,5 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${failure}`)
   process.exitCode = 1
 } else {
-  console.log(`PASS dsh pin: ${seen.size} DSH packages and DSH_PINNED_VERSION are ${PIN}`)
+  console.log(`PASS dsh pin: ${seen.size} DSH packages, every engines.dsh and DSH_PINNED_VERSION are ${PIN}`)
 }

@@ -66,8 +66,9 @@ pnpm check:pin       # every DSH dependency and DSH_PINNED_VERSION is 0.2.2-rc.1
 pnpm check           # tsc --noEmit over every package and proof
 ```
 
-The pin check reads every manifest under `packages/` and `proofs/` and the
-`DSH_PINNED_VERSION` constant in `packages/arbor-prompt/src/sections.ts`. A
+The pin check reads every manifest under `packages/` and `proofs/`, every
+`engines.dsh` declaration, and the `DSH_PINNED_VERSION` constant in
+`packages/arbor-prompt/src/sections.ts`. A
 different DSH version is unsupported; see [versions.md](versions.md) for what
 can break.
 
@@ -434,7 +435,8 @@ The current package metadata is prepared for a public repository and a future
 npm release, but the packages are still `private: true` and version `0.0.0`:
 
 - every package carries `license: MIT`, a repository URL with its package
-  directory, `engines.node >=24.9.0`, and an explicit `files` list;
+  directory, `engines.node >=24.9.0`, `engines.dsh: 0.2.2-rc.1`, and an
+  explicit `files` list;
 - the runtime packages carry `publishConfig.access: "public"` (the scope is
   `@4fu`), but no `npm publish` has run;
 - the bundle's dependencies are `workspace:*`, and its siblings are `0.0.0`, so
