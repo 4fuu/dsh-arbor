@@ -296,33 +296,365 @@ function MarkdownText(props: { readonly text: string }): ReactNode {
 }
 
 /**
- * A measured masonry surface: the cards keep their column spans and pack by
- * their real height, so a short card takes the gap a taller neighbour leaves.
+ * A measured editorial mosaic: cards declare a kind (and, for a chain, a
+ * weight that follows its node count), the surface picks a 12/8/6/4/1 track
+ * ladder from its own width, and the planner packs cards into full-width bands.
+ * A feature band stacks a narrow column beside a tall window and lets the grid
+ * share their rows; the other bands take their row height from the tallest
+ * measured card. Every band sums to the track count, so the right edge is one
+ * line and no card leaves a hole wider than the gutter. The DOM order stays the
+ * reading order.
  */
-function Masonry(props: { readonly children?: ReactNode }): ReactNode {
+
+/** What a card is, for its span rule and its band. */
+type MosaicKind = 'window' | 'chain' | 'session' | 'workspace' | 'board' | 'note' | 'env' | 'schedule' | 'empty' | 'loading'
+
+/** One card on the mosaic. `weight` is the chain's preferred width in 12ths. */
+interface MosaicItem {
+  readonly key: string
+  readonly kind: MosaicKind
+  readonly weight?: number
+  readonly node: ReactNode
+}
+
+/** A card's preferred, smallest and largest column span at one track count. */
+interface SpanRule {
+  readonly pref: number
+  readonly min: number
+  readonly max: number
+}
+
+/** The track count the surface uses at one content width. */
+function trackCount(width: number): number {
+  if (width >= 1000) return 12
+  if (width >= 720) return 8
+  if (width >= 500) return 6
+  if (width >= 340) return 4
+  return 1
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value))
+}
+
+/**
+ * The span a card kind asks for at one track count. The 12-track values are the
+ * editorial intent; the smaller ladders keep the same proportion, with a floor
+ * of two tracks for the small cards so a note never narrows to a sliver.
+ */
+function spanRule(kind: MosaicKind, cols: number, weight?: number): SpanRule {
+  if (cols <= 1) return { pref: 1, min: 1, max: 1 }
+  const scaled = (units: number): number => Math.max(1, Math.round(units * cols / 12))
+  let pref: number
+  let min: number
+  let max: number
+  switch (kind) {
+    case 'window':
+      pref = scaled(7)
+      min = scaled(5)
+      max = scaled(8)
+      if (cols <= 4) { pref = cols; min = cols; max = cols }
+      break
+    case 'chain':
+      pref = scaled(weight ?? 4)
+      min = Math.max(2, scaled(3))
+      max = scaled(8)
+      break
+    case 'workspace':
+      pref = scaled(5)
+      min = Math.max(2, scaled(4))
+      max = scaled(6)
+      break
+    case 'session':
+      pref = scaled(4)
+      min = cols >= 12 ? 4 : Math.max(2, scaled(3))
+      max = scaled(5)
+      break
+    case 'env':
+      pref = scaled(4)
+      min = Math.max(2, scaled(3))
+      max = scaled(5)
+      break
+    case 'board':
+    case 'note':
+    case 'schedule':
+      pref = scaled(3)
+      min = Math.max(2, scaled(2))
+      max = scaled(4)
+      break
+    default:
+      pref = cols
+      min = cols
+      max = cols
+  }
+  min = clamp(min, 1, cols)
+  max = clamp(max, 1, cols)
+  if (max < min) max = min
+  pref = clamp(pref, min, max)
+  return { pref, min, max }
+}
+
+/** The chain's preferred width in 12ths, from its node count. */
+function chainWeight(nodes: number): number {
+  return Math.min(3 + Math.max(1, nodes), 7)
+}
+
+/** One planned column: its width and the cards stacked in it, top to bottom. */
+interface MosaicColumn {
+  readonly span: number
+  readonly cards: readonly number[]
+}
+
+/** One planned band: columns whose spans sum to the track count. */
+interface MosaicBand {
+  readonly columns: readonly MosaicColumn[]
+}
+
+/**
+ * Fit one chosen run of cards to the track count, closest to their preferred
+ * spans. The narrowest card grows first, so width is shared rather than dumped
+ * into one banner, and the widest shrinks first. `stretch` lets a band that
+ * would otherwise leave a hole take the remaining tracks; the last band is
+ * always allowed to stretch, because nothing follows it to fill the gap.
+ */
+function fitRun(
+  indices: readonly number[],
+  rules: readonly SpanRule[],
+  heights: readonly number[],
+  cols: number,
+  stretch: boolean,
+): number[] | undefined {
+  const mins = indices.map(index => rules[index]!.min)
+  const maxs = indices.map(index => stretch ? cols : rules[index]!.max)
+  const sumMin = mins.reduce((sum, value) => sum + value, 0)
+  const sumMax = maxs.reduce((sum, value) => sum + value, 0)
+  if (cols < sumMin || cols > sumMax) return undefined
+  const spans = indices.map(index => rules[index]!.pref)
+  let total = spans.reduce((sum, value) => sum + value, 0)
+  while (total < cols) {
+    let pick = -1
+    for (let at = 0; at < indices.length; at += 1) {
+      if (spans[at]! >= maxs[at]!) continue
+      if (pick < 0) { pick = at; continue }
+      const height = heights[indices[at]!] ?? 0
+      const chosen = heights[indices[pick]!] ?? 0
+      if (spans[at]! < spans[pick]! || (spans[at] === spans[pick] && height > chosen)) pick = at
+    }
+    if (pick < 0) return undefined
+    spans[pick] = spans[pick]! + 1
+    total += 1
+  }
+  while (total > cols) {
+    let pick = -1
+    for (let at = 0; at < indices.length; at += 1) {
+      if (spans[at]! <= mins[at]!) continue
+      if (pick < 0) { pick = at; continue }
+      const height = heights[indices[at]!] ?? 0
+      const chosen = heights[indices[pick]!] ?? 0
+      if (spans[at]! > spans[pick]! || (spans[at] === spans[pick] && height > chosen)) pick = at
+    }
+    if (pick < 0) return undefined
+    spans[pick] = spans[pick]! - 1
+    total -= 1
+  }
+  return spans
+}
+
+/**
+ * Pack the remaining cards into full-width single-row bands. The plan is a
+ * dynamic program over contiguous runs, not a greedy pick: a band that looks
+ * cheap now but leaves a lonely card at the end loses to one that pays a small
+ * height spread and ends every row cleanly. A band is never left open: the
+ * last one, and one that leaves exactly two trailing cards, stretch to the
+ * track count, and a lone card takes the full width.
+ */
+function planBands(
+  rules: readonly SpanRule[],
+  heights: readonly number[],
+  cols: number,
+  initial?: readonly number[],
+): MosaicBand[] {
+  const remaining = initial === undefined ? rules.map((_, index) => index) : [...initial]
+  const total = remaining.length
+  if (total === 0) return []
+  const maxCards = cols >= 10 ? 4 : cols >= 6 ? 3 : cols >= 3 ? 2 : 1
+  interface Choice {
+    readonly cost: number
+    readonly count: number
+    readonly spans: readonly number[]
+  }
+  const best: Array<Choice | undefined> = new Array(total + 1)
+  best[total] = { cost: 0, count: 0, spans: [] }
+  for (let at = total - 1; at >= 0; at -= 1) {
+    for (let count = 1; count <= maxCards && at + count <= total; count += 1) {
+      const indices = remaining.slice(at, at + count)
+      const last = at + count === total
+      const tailPair = total - (at + count) === 2
+      const spans = fitRun(indices, rules, heights, cols, last || tailPair)
+      if (spans === undefined) continue
+      const rest = best[at + count]
+      if (rest === undefined) continue
+      const measured = indices.map(index => heights[index] ?? 0)
+      const spread = Math.max(...measured) - Math.min(...measured)
+      const deviation = spans.reduce((sum, span, index) => sum + Math.abs(span - rules[indices[index]!]!.pref), 0)
+      const lonely = count === 1 && total > 1 ? 90 : 0
+      const cost = rest.cost + spread + deviation * 14 + lonely
+      const current = best[at]
+      if (current === undefined || cost < current.cost) best[at] = { cost, count, spans }
+    }
+  }
+  if (best[0] === undefined) {
+    // No run fits. A full-width single card is the only truthful fallback.
+    return [{ columns: [{ span: cols, cards: [remaining[0]!] }] }, ...planBands(rules, heights, cols, remaining.slice(1))]
+  }
+  const bands: MosaicBand[] = []
+  let at = 0
+  while (at < total) {
+    const choice = best[at]!
+    const indices = remaining.slice(at, at + choice.count)
+    bands.push({
+      columns: indices.map((index, column) => ({ span: choice.spans[column]!, cards: [index] })),
+    })
+    at += choice.count
+  }
+  return bands
+}
+
+/**
+ * The feature band: a tall window beside a narrow column of two or three
+ * smaller cards stacked in the same rows. The stack is chosen by measured
+ * height so the window and the column end together; the window's row span and
+ * the row heights are then resolved by the grid itself, with no wrapper and no
+ * hole. A short window or a wildly mismatched stack stays a plain band, and a
+ * second window never enters the stack.
+ */
+function featureBand(
+  items: readonly MosaicItem[],
+  rules: readonly SpanRule[],
+  heights: readonly number[],
+  cols: number,
+): { readonly band: MosaicBand; readonly used: readonly number[] } | undefined {
+  if (cols < 8 || items[0]?.kind !== 'window') return undefined
+  const wide = rules[0]!.pref
+  const narrow = cols - wide
+  if (narrow < 2) return undefined
+  const windowHeight = heights[0] ?? 0
+  const support = items
+    .map((item, index) => ({ item, index }))
+    .filter(entry => entry.index > 0 && entry.item.kind !== 'window' && entry.item.kind !== 'empty' && entry.item.kind !== 'loading')
+    .slice(0, 3)
+    .map(entry => entry.index)
+  let best: { cards: number[]; total: number; cost: number } | undefined
+  for (let count = 2; count <= support.length; count += 1) {
+    const cards = support.slice(0, count)
+    const total = cards.reduce((sum, index) => sum + (heights[index] ?? 0), 0) + (count - 1) * 13
+    const cost = Math.abs(total - windowHeight)
+    if (best === undefined || cost < best.cost) best = { cards, total, cost }
+  }
+  // A short window beside a tall stack would only make the window empty, and a
+  // tall window beside a short stack only makes the stack empty. A plain band
+  // is more truthful than either; the stack is for a window with real output.
+  if (best === undefined || windowHeight < 260 || Math.abs(best.total - windowHeight) > 220) return undefined
+  return {
+    band: {
+      columns: [
+        { span: wide, cards: [0] },
+        { span: narrow, cards: best.cards },
+      ],
+    },
+    used: [0, ...best.cards],
+  }
+}
+
+/** The whole plan: one feature band when a window leads, then flat bands. */
+function planMosaic(
+  items: readonly MosaicItem[],
+  rules: readonly SpanRule[],
+  heights: readonly number[],
+  cols: number,
+): MosaicBand[] {
+  const feature = featureBand(items, rules, heights, cols)
+  if (feature === undefined) return planBands(rules, heights, cols)
+  const used = new Set(feature.used)
+  const remaining = rules.map((_, index) => index).filter(index => !used.has(index))
+  return [feature.band, ...planBands(rules, heights, cols, remaining)]
+}
+
+/**
+ * The measured mosaic surface. It lays out synchronously before paint: each
+ * card first takes its preferred span so its natural height is measured, the
+ * planner packs full-width bands, and each card is then placed at its column
+ * start and row. A width change re-plans; content growth only grows the row.
+ */
+function Masonry(props: { readonly items: readonly MosaicItem[] }): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
+  const lastWidth = useRef(0)
+  const lastLayout = useRef(0)
+  const featureActive = useRef(false)
+  const windowHeight = useRef(0)
+  const signature = props.items.map(item => `${item.key}:${item.kind}:${item.weight ?? ''}`).join('|')
+
+  const layout = (): void => {
     const surface = ref.current
     if (surface === null) return
-    const items = Array.from(surface.children) as HTMLElement[]
-    const measure = (): void => {
-      const style = getComputedStyle(surface)
-      const gap = Number.parseFloat(style.rowGap) || 13
-      for (const item of items) {
-        item.style.gridRowEnd = 'auto'
-        const height = item.getBoundingClientRect().height
-        const span = Math.max(1, Math.ceil((height + gap) / (1 + gap)))
-        item.style.gridRowEnd = `span ${span}`
-      }
+    const cards = Array.from(surface.children) as HTMLElement[]
+    if (cards.length !== props.items.length) return
+    const cols = trackCount(surface.clientWidth)
+    const rules = props.items.map(item => spanRule(item.kind, cols, item.weight))
+    surface.style.setProperty('--arbor-cols', String(cols))
+    for (let at = 0; at < cards.length; at += 1) {
+      const card = cards[at]!
+      card.style.gridColumn = ''
+      card.style.gridRow = ''
+      card.style.alignSelf = 'start'
+      card.style.gridColumn = `span ${rules[at]!.pref}`
     }
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
+    // Read every card after its width is set: the heights decide the bands.
+    const heights = cards.map(card => card.getBoundingClientRect().height)
+    const bands = planMosaic(props.items, rules, heights, cols)
+    let row = 1
+    for (const band of bands) {
+      const rows = Math.max(...band.columns.map(column => column.cards.length))
+      let start = 1
+      for (const column of band.columns) {
+        for (let at = 0; at < column.cards.length; at += 1) {
+          const card = cards[column.cards[at]!]!
+          const rowSpan = at === column.cards.length - 1 ? rows - (column.cards.length - 1) : 1
+          card.style.gridColumn = `${start} / span ${column.span}`
+          card.style.gridRow = `${row + at} / span ${rowSpan}`
+          card.style.alignSelf = ''
+        }
+        start += column.span
+      }
+      row += rows
+    }
+    featureActive.current = bands[0]?.columns.some(column => column.cards.length > 1) === true
+    windowHeight.current = props.items[0]?.kind === 'window' ? (heights[0] ?? 0) : 0
+    lastWidth.current = surface.clientWidth
+    lastLayout.current = performance.now()
+  }
+
+  useLayoutEffect(layout, [signature])
+  useEffect(() => {
+    const surface = ref.current
+    if (surface === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (performance.now() - lastLayout.current < 120) return
+      if (surface.clientWidth !== lastWidth.current) { layout(); return }
+      // A window opens short and then receives its stream. Once its output has
+      // made it tall, re-plan so the feature band can share that height; after
+      // that, content growth only grows the row.
+      if (props.items[0]?.kind !== 'window') return
+      const first = surface.children[0]
+      if (!(first instanceof HTMLElement)) return
+      const height = first.getBoundingClientRect().height
+      if (featureActive.current ? height < 240 : Math.abs(height - windowHeight.current) > 80) layout()
+    })
     observer.observe(surface)
-    for (const item of items) observer.observe(item)
+    for (const card of Array.from(surface.children)) observer.observe(card)
     return () => { observer.disconnect() }
-  }, [props.children])
-  return createElement('div', { className: 'arbor-surface', ref }, props.children)
+  }, [signature])
+  return createElement('div', { className: 'arbor-surface', ref }, ...props.items.map(item => item.node))
 }
 
 /** One icon button in the top-right actions. */
@@ -932,38 +1264,80 @@ function Overview(props: {
         board: String(facts.board.length),
         waiting: String(waiting),
       })
-  const cards: ReactNode[] = []
+  const cards: MosaicItem[] = []
   if (sessions.length > 0) {
     if (show('windows')) {
       for (const window of live) {
-        cards.push(createElement(LiveWindowCard, {
+        cards.push({
           key: `live-${window.ref}`,
-          window,
-          session: sessions.find(session => session.windows.some(one => one.ref === window.ref)),
-          stream: snapshot.streams[window.ref],
-          t,
-        }))
+          kind: 'window',
+          node: createElement(LiveWindowCard, {
+            window,
+            session: sessions.find(session => session.windows.some(one => one.ref === window.ref)),
+            stream: snapshot.streams[window.ref],
+            t,
+          }),
+        })
       }
+    }
+    // The env is the window's tall neighbour: its names and counts sit beside
+    // a live window instead of stretching a short card to a tall row.
+    if (show('env')) {
+      cards.push({ key: 'env', kind: 'env', node: createElement(EnvCard, { env: facts.env, t }) })
+    }
+    if (show('windows')) {
       for (const session of sessions) {
-        cards.push(createElement(ChainCard, { key: `chain-${session.sessionId}`, session, windows: session.windows, streams: snapshot.streams, t }))
+        cards.push({
+          key: `chain-${session.sessionId}`,
+          kind: 'chain',
+          weight: chainWeight(session.windows.length),
+          node: createElement(ChainCard, { session, windows: session.windows, streams: snapshot.streams, t }),
+        })
       }
-      if (live.length === 0 && filter === 'windows') cards.push(createElement(EmptyCard, { key: 'empty-windows', title: t('emptyWindows'), hint: t('emptyWindowsHint') }))
+      if (live.length === 0 && filter === 'windows') {
+        cards.push({ key: 'empty-windows', kind: 'empty', node: createElement(EmptyCard, { title: t('emptyWindows'), hint: t('emptyWindowsHint') }) })
+      }
     }
     if (show('all') || filter === 'windows') {
-      for (const session of sessions) cards.push(createElement(SessionCard, { key: `session-${session.sessionId}`, session, streams: snapshot.streams, t, onOpen: onOpenSession }))
+      for (const session of sessions) {
+        cards.push({
+          key: `session-${session.sessionId}`,
+          kind: 'session',
+          node: createElement(SessionCard, { session, streams: snapshot.streams, t, onOpen: onOpenSession }),
+        })
+      }
     }
     if (show('board')) {
-      for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }))
-      if (facts.board.length === 0 && filter === 'board') cards.push(createElement(EmptyCard, { key: 'empty-board', title: t('emptyBoard'), hint: t('emptyBoardHint') }))
+      for (const line of facts.board) {
+        cards.push({
+          key: `board-${line.window}`,
+          kind: 'board',
+          node: createElement(BoardCard, { line, streaming: snapshot.streams[line.window]?.streaming === true, t }),
+        })
+      }
+      if (facts.board.length === 0 && filter === 'board') {
+        cards.push({ key: 'empty-board', kind: 'empty', node: createElement(EmptyCard, { title: t('emptyBoard'), hint: t('emptyBoardHint') }) })
+      }
     }
     if (show('notes')) {
-      for (const note of facts.notes.items) cards.push(createElement(NoteCard, { key: `note-${note.ref}`, note, t }))
-      if (facts.notes.items.length === 0 && filter === 'notes') cards.push(createElement(EmptyCard, { key: 'empty-notes', title: t('emptyNotes'), hint: t('emptyNotesHint') }))
+      for (const note of facts.notes.items) {
+        cards.push({ key: `note-${note.ref}`, kind: 'note', node: createElement(NoteCard, { note, t }) })
+      }
+      if (facts.notes.items.length === 0 && filter === 'notes') {
+        cards.push({ key: 'empty-notes', kind: 'empty', node: createElement(EmptyCard, { title: t('emptyNotes'), hint: t('emptyNotesHint') }) })
+      }
     }
-    if (show('env')) cards.push(createElement(EnvCard, { key: 'env', env: facts.env, t }))
     if (show('schedules')) {
-      for (const schedule of facts.schedules) cards.push(createElement(ScheduleCard, { key: `schedule-${schedule.ref}`, schedule, t }))
-      if (facts.schedules.length === 0 && filter === 'schedules') cards.push(createElement(EmptyCard, { key: 'empty-schedules', title: t('emptySchedules'), hint: t('emptySchedulesHint') }))
+      for (const schedule of facts.schedules) {
+        cards.push({
+          key: `schedule-${schedule.ref}`,
+          kind: 'schedule',
+          node: createElement(ScheduleCard, { schedule, t }),
+        })
+      }
+      if (facts.schedules.length === 0 && filter === 'schedules') {
+        cards.push({ key: 'empty-schedules', kind: 'empty', node: createElement(EmptyCard, { title: t('emptySchedules'), hint: t('emptySchedulesHint') }) })
+      }
     }
   }
   return createElement('div', { className: 'arbor-overview' },
@@ -972,7 +1346,7 @@ function Overview(props: {
         createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, facts.at)),
         createElement(TopActions, { t, onSearch, onSettings })),
       createElement('h1', { className: 'arbor-hero-title', 'data-arbor-text': 'display' }, ...heroContent)),
-    createElement(Masonry, null, ...cards),
+    createElement(Masonry, { items: cards }),
     sessions.length === 0 ? null : createElement(Dock, { filter, setFilter, t }))
 }
 
@@ -994,12 +1368,17 @@ function SessionView(props: {
         createElement('div', { className: 'arbor-hero-top' },
           createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, Date.now())),
           createElement(TopActions, { t, onSearch, onSettings }))),
-      createElement(Masonry, null,
-        createElement(Card, { className: 'arbor-loading-card' },
-          createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, t('loading')),
-          snapshot.status === 'error' && snapshot.error !== undefined
-            ? createElement('div', { className: 'arbor-error' }, t('error', { message: snapshot.error }))
-            : null)))
+      createElement(Masonry, {
+        items: [{
+          key: 'loading',
+          kind: 'loading',
+          node: createElement(Card, { className: 'arbor-loading-card' },
+            createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, t('loading')),
+            snapshot.status === 'error' && snapshot.error !== undefined
+              ? createElement('div', { className: 'arbor-error' }, t('error', { message: snapshot.error }))
+              : null),
+        }],
+      }))
   }
   const windows = facts.windows
   const now = liveWindowOf(windows) ?? windows.at(-1)
@@ -1015,15 +1394,36 @@ function SessionView(props: {
         : nowState === 'idle'
           ? hero(t('sessionHeroIdle'), { window: now.ref })
           : hero(t('sessionHeroEnded'), { count: String(windows.length), window: now.ref })
-  const cards: ReactNode[] = []
+  const cards: MosaicItem[] = []
   if (windows.length === 0) {
-    cards.push(createElement(EmptyCard, { key: 'empty', title: t('emptyWindows'), hint: t('sessionHeroEmptyHint') }))
+    cards.push({ key: 'empty', kind: 'empty', node: createElement(EmptyCard, { title: t('emptyWindows'), hint: t('sessionHeroEmptyHint') }) })
   } else {
-    cards.push(createElement(ChainCard, { key: 'chain', session, windows, streams: snapshot.streams, t }))
-    if (now !== undefined) cards.push(createElement(WindowCard, { key: `window-${now.ref}`, window: now, session, stream: snapshot.streams[now.ref], t }))
-    cards.push(createElement(WorkspaceCard, { key: 'workspace', workspace: facts.workspace, t }))
-    for (const line of facts.board) cards.push(createElement(BoardCard, { key: `board-${line.window}`, line, streaming: snapshot.streams[line.window]?.streaming === true, t }))
-    for (const note of facts.notes.items) cards.push(createElement(NoteCard, { key: `note-${note.ref}`, note, t }))
+    // The current window and the workspace are the tall pair; the chain and
+    // the board follow, and the notes fill the low ground.
+    if (now !== undefined) {
+      cards.push({
+        key: `window-${now.ref}`,
+        kind: 'window',
+        node: createElement(WindowCard, { window: now, session, stream: snapshot.streams[now.ref], t }),
+      })
+    }
+    cards.push({ key: 'workspace', kind: 'workspace', node: createElement(WorkspaceCard, { workspace: facts.workspace, t }) })
+    cards.push({
+      key: 'chain',
+      kind: 'chain',
+      weight: chainWeight(windows.length),
+      node: createElement(ChainCard, { session, windows, streams: snapshot.streams, t }),
+    })
+    for (const line of facts.board) {
+      cards.push({
+        key: `board-${line.window}`,
+        kind: 'board',
+        node: createElement(BoardCard, { line, streaming: snapshot.streams[line.window]?.streaming === true, t }),
+      })
+    }
+    for (const note of facts.notes.items) {
+      cards.push({ key: `note-${note.ref}`, kind: 'note', node: createElement(NoteCard, { note, t }) })
+    }
   }
   return createElement('div', { className: 'arbor-overview', 'data-arbor-page': true, 'data-arbor-session-view': sessionId },
     createElement('header', { className: 'arbor-hero' },
@@ -1033,7 +1433,7 @@ function SessionView(props: {
       createElement('h1', { className: 'arbor-hero-title', 'data-arbor-text': 'display' }, ...heroContent),
       openDshSession === undefined ? null : createElement('div', { className: 'arbor-hero-links' },
         createElement('button', { type: 'button', className: 'arbor-card-link arbor-label', onClick: () => { openDshSession(sessionId) } }, t('openInDsh'), ' →'))),
-    createElement(Masonry, null, ...cards))
+    createElement(Masonry, { items: cards }))
 }
 
 /** The left sidebar's arbor page: a host overview and one tab per opened session. */
@@ -1120,12 +1520,17 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
             onClick: () => { closeSession(sessionId) },
           }, '×')))),
       facts === undefined
-        ? createElement('div', { className: 'arbor-surface' },
-          createElement(Card, { className: 'arbor-loading-card' },
-            createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, t('loading')),
-            host.status === 'error' && host.error !== undefined
-              ? createElement('div', { className: 'arbor-error' }, t('error', { message: host.error }))
-              : null))
+        ? createElement(Masonry, {
+          items: [{
+            key: 'loading',
+            kind: 'loading',
+            node: createElement(Card, { className: 'arbor-loading-card' },
+              createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, t('loading')),
+              host.status === 'error' && host.error !== undefined
+                ? createElement('div', { className: 'arbor-error' }, t('error', { message: host.error }))
+                : null),
+          }],
+        })
         : activeSession === null
           ? createElement(Overview, {
             facts,

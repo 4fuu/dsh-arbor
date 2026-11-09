@@ -290,16 +290,29 @@ back to the host's own state.
 
 The shape is editorial rather than a dashboard. The date line and one muted
 sentence say the state; only the window refs and counts in that sentence take
-full contrast and the numeric role. The surface below is a measured masonry of
-cards: a live window card whose output is rendered as Markdown and clamped with
-`展开全文`, a visual window chain whose nodes carry only a ref, a state and a
-handoff mark, board and note cards with the content first and metadata in a
-small footer, a counts-and-names `/env` card, and schedule cards. A floating
-bottom dock filters 全部 / 窗口 / 看板 / 笔记 / 环境 / 日程; search and
-settings are the two top-right icons and open sheets. The empty state is one
-sentence and a hint, with no dock and no zero-valued cards. All colours, borders
-and elevation come from `--dsw-*` tokens, so DSH's light and dark appearance
-both work without the page choosing a theme.
+full contrast and the numeric role. The surface below is a measured mosaic on a
+column grid: 12 tracks on a wide surface, then 8, 6, 4 and 1 as it narrows. Each
+card kind asks for a span: a live window is large, a chain follows its node
+count, the session card is medium, and board, note and schedule cards stay
+small. A feature band puts a tall window beside a narrow column of two or three
+cards stacked in the same grid rows (the environment and the chain on the
+overview; the workspace and the chain on a session tab), so the window's height
+is shared instead of leaving a void. The remaining cards pack into full-width
+bands: each band's spans sum to the track count, its row height is the tallest
+measured card, and a small dynamic program over contiguous runs chooses the
+bands, including the two-card tail that would otherwise become a full-width
+banner. The layout reads each card's natural height before placing it; content
+growth only grows a row. The result is checked by measuring the empty rectangles
+inside the packed area: no hole may be larger than the 13 px gutter, and the
+right edge of every band is the same line. A live window's output is rendered as
+Markdown and clamped with `展开全文`; a chain's nodes carry only a ref, a state
+and a handoff mark and shrink inside a narrow card; board and note cards put the
+content first and metadata in a small footer. A floating bottom dock filters
+全部 / 窗口 / 看板 / 笔记 / 环境 / 日程; search and settings are the two
+top-right icons and open sheets. The empty state is one sentence and a hint,
+with no dock and no zero-valued cards. All colours, borders and elevation come
+from `--dsw-*` tokens, so DSH's light and dark appearance both work without the
+page choosing a theme.
 
 What the page shows comes from arbor, not from a browser guess:
 
