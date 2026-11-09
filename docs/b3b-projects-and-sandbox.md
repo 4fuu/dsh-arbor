@@ -1,5 +1,12 @@
 # B3b findings: arbor takes over DSH's projects, and the sandbox goes away
 
+> **Historical record.** This page records the B3b decisions and the evidence
+> behind them. It is kept because every finding names the DSH source it rests
+> on. The current install and status are in
+> [install-for-agents.md](install-for-agents.md), and the current version pins
+> are in [versions.md](versions.md). At the time of B3b, arbor was
+> `2026.1107.1`; the current arbor pin is `2026.1109.1`.
+
 B3 mounted arbor's own workspace *over* DSH's sandbox: every file access and
 command of an arbor window ran through `ctx.fs` and `ctx.shell` under the
 session's sandbox policy, and ovnfs was deliberately not offered because its
@@ -16,7 +23,7 @@ the user. **Ordinary DSH sessions — the ones on the embedded official AgentLoo
 — do not change at all:** they keep their sandbox, their cwd and their tools.
 
 Every finding below names the DSH source it rests on. DSH is tag
-`dsh-v0.2.2-rc.1`; arbor is `2026.1107.1`.
+`dsh-v0.2.2-rc.1`; at the time of this record arbor was `2026.1107.1`.
 
 ## The mechanism table
 

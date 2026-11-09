@@ -9,7 +9,8 @@
 
 Every finding below is backed by a proof in `proofs/` (run `pnpm proofs`), and
 every DSH claim names the source location it rests on. DSH is tag
-`dsh-v0.2.2-rc.1` (commit `66491b05e3`); arbor is `2026.1107.0`.
+`dsh-v0.2.2-rc.1` (commit `66491b05e3`); at the time of this record arbor was
+`2026.1107.0`. The current pin is in [versions.md](versions.md).
 
 B3 replaces B1's workspace, whose file tools ran on the host — so DSH's file
 policy did not apply to them at all — with one whose every file access and every

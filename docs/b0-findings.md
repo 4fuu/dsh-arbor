@@ -1,8 +1,14 @@
 # B0 findings: arbor as DSH's agent driver
 
+> **Historical record.** This page records the B0 spike, the first integration
+> stage. It is kept because it names the DSH source locations the later work
+> rests on. The current install and status are in
+> [install-for-agents.md](install-for-agents.md), and the current version pins
+> are in [versions.md](versions.md). At the time of B0, arbor was `2026.1106.1`.
+
 Every finding below is backed by a proof in `proofs/` (run `pnpm proofs`), and
 every DSH claim names the source location it rests on. DSH is tag
-`dsh-v0.2.2-rc.1` (commit `66491b05e3`); arbor is `2026.1106.1`.
+`dsh-v0.2.2-rc.1` (commit `66491b05e3`).
 
 ## 1. Per-preset routing with an embedded AgentLoop — works
 
