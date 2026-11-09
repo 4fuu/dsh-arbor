@@ -29,6 +29,8 @@ export async function tempDir(prefix: string): Promise<string> {
   return directory
 }
 
+const REMOVE_OPTIONS = { recursive: true, force: true, maxRetries: 5, retryDelay: 50 } as const
+
 /**
  * Remove one directory, unmounting the ovnfs checkout mount it holds when
  * arbor chose the real ovnfs backend.
@@ -40,7 +42,9 @@ export async function tempDir(prefix: string): Promise<string> {
  */
 function removeDirectory(directory: string): void {
   try {
-    rmSync(directory, { recursive: true, force: true })
+    // A DSH handle can still be closing under the directory when the proof
+    // reports; the retry interval lets that release settle.
+    rmSync(directory, REMOVE_OPTIONS)
     return
   } catch {
     // A mounted workspace survives the first removal; unmount it below.
@@ -51,7 +55,7 @@ function removeDirectory(directory: string): void {
     if (existsSync(mount)) spawnSync('umount', [mount], { stdio: 'ignore' })
   }
   try {
-    rmSync(directory, { recursive: true, force: true })
+    rmSync(directory, REMOVE_OPTIONS)
   } catch {
     // A directory already gone, or one a test process still holds open, must
     // not hide the proof's own result.
@@ -60,6 +64,10 @@ function removeDirectory(directory: string): void {
 
 /** Remove every directory this process made through {@link tempDir}. */
 export function removeTempDirs(): void {
-  for (const directory of temporaryDirectories) removeDirectory(directory)
+  // Remove children before parents: a proof can put its DSH home inside its
+  // DSH temp root, and removing the parent first would recurse into the child
+  // while a DSH handle is still open there.
+  const directories = [...temporaryDirectories].sort((left, right) => right.length - left.length)
+  for (const directory of directories) removeDirectory(directory)
   temporaryDirectories.clear()
 }

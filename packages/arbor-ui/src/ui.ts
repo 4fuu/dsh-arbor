@@ -353,6 +353,17 @@ const SKY_GUTTER = 20
 /** The width at which the scatter becomes a single column. */
 const SKY_NARROW = 640
 
+/**
+ * The narrowest a chain card may be.
+ *
+ * One node needs about 162 px of card, but the header also carries the kicker
+ * and the session title: the kicker is about 72 px, the gap 8 px and the title
+ * is capped at 170 px, so 250 px of content plus the card's 34 px padding is
+ * the header's bound. Below 300 px the kicker is the part that gets ellipsized
+ * first, which is how a one-node chain came to read "W...".
+ */
+const CHAIN_MIN_WIDTH = 300
+
 /** A deterministic 32-bit hash of a card key. */
 function hashOf(value: string): number {
   let hash = 2166136261
@@ -386,7 +397,7 @@ function cardWidth(item: SkyItem, surface: number): number {
   const base = (() => {
     switch (item.kind) {
       case 'window': return 560
-      case 'chain': return (item.nodes ?? 1) * 150 + 50
+      case 'chain': return Math.max(CHAIN_MIN_WIDTH, (item.nodes ?? 1) * 150 + 50)
       case 'session':
       case 'workspace': return 360
       case 'env': return 320
@@ -399,7 +410,10 @@ function cardWidth(item: SkyItem, surface: number): number {
       default: return 240
     }
   })()
-  return Math.min(surface, Math.max(140, Math.round(base * scale)))
+  // A chain keeps its header width through the scale; every other card may
+  // shrink to the narrowest card the scatter allows.
+  const minimum = item.kind === 'chain' ? CHAIN_MIN_WIDTH : 140
+  return Math.min(surface, Math.max(minimum, Math.round(base * scale)))
 }
 
 /** One card's final position and paper treatment. */
@@ -752,6 +766,18 @@ function StateChip(props: { readonly state: ArborWindowFacts['state']; readonly 
 }
 
 /**
+ * Arbor's refusal wording, without the rule the tag already shows.
+ *
+ * The journal stores the rule, the message and the next action as one text.
+ * Only the leading rule and its separator are presentation's to remove; the
+ * rest of arbor's wording is shown exactly as recorded.
+ */
+function refusalWording(refusal: ArborEndRefusalFacts): string {
+  const prefix = `${refusal.rule} `
+  return refusal.message.startsWith(prefix) ? refusal.message.slice(prefix.length) : refusal.message
+}
+
+/**
  * An `end` arbor refused while the window stayed open.
  *
  * The rule and the wording are arbor's own journal record; the hint names what
@@ -771,7 +797,7 @@ function EndRefusal(props: {
     createElement('div', { className: 'arbor-refusal-head' },
       createElement('span', { className: 'arbor-refusal-title arbor-label', 'data-arbor-text': 'display' }, t('endRefusedTitle')),
       createElement('span', { className: 'arbor-tag arbor-tag-warn arbor-num' }, refusal.rule)),
-    createElement('div', { className: 'arbor-refusal-message', 'data-arbor-text': 'body' }, refusal.message),
+    createElement('div', { className: 'arbor-refusal-message', 'data-arbor-text': 'body' }, refusalWording(refusal)),
     createElement('div', { className: 'arbor-refusal-hint', 'data-arbor-text': 'body' }, t('endRefusedHint')))
 }
 

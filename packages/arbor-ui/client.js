@@ -1100,6 +1100,7 @@ function MarkdownText(props) {
 }
 var SKY_GUTTER = 20;
 var SKY_NARROW = 640;
+var CHAIN_MIN_WIDTH = 300;
 function hashOf(value) {
   let hash = 2166136261;
   for (let at = 0; at < value.length; at += 1) {
@@ -1128,7 +1129,7 @@ function cardWidth(item, surface) {
       case "window":
         return 560;
       case "chain":
-        return (item.nodes ?? 1) * 150 + 50;
+        return Math.max(CHAIN_MIN_WIDTH, (item.nodes ?? 1) * 150 + 50);
       case "session":
       case "workspace":
         return 360;
@@ -1146,7 +1147,8 @@ function cardWidth(item, surface) {
         return 240;
     }
   })();
-  return Math.min(surface, Math.max(140, Math.round(base * scale)));
+  const minimum = item.kind === "chain" ? CHAIN_MIN_WIDTH : 140;
+  return Math.min(surface, Math.max(minimum, Math.round(base * scale)));
 }
 function clearOf(box, placed) {
   return placed.every((other) => box.x >= other.x + other.width + SKY_GUTTER || box.x + box.width + SKY_GUTTER <= other.x || box.y >= other.y + other.height + SKY_GUTTER || box.y + box.height + SKY_GUTTER <= other.y);
@@ -1413,6 +1415,10 @@ function StateChip(props) {
     "data-arbor-text": "display"
   }, props.t(props.state === "running" ? "statusRunning" : props.state === "idle" ? "statusIdle" : props.state === "paused" ? "statusPaused" : "statusEnded"));
 }
+function refusalWording(refusal) {
+  const prefix = `${refusal.rule} `;
+  return refusal.message.startsWith(prefix) ? refusal.message.slice(prefix.length) : refusal.message;
+}
 function EndRefusal(props) {
   const { refusal, t } = props;
   return (0, import_react.createElement)(
@@ -1428,7 +1434,7 @@ function EndRefusal(props) {
       (0, import_react.createElement)("span", { className: "arbor-refusal-title arbor-label", "data-arbor-text": "display" }, t("endRefusedTitle")),
       (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn arbor-num" }, refusal.rule)
     ),
-    (0, import_react.createElement)("div", { className: "arbor-refusal-message", "data-arbor-text": "body" }, refusal.message),
+    (0, import_react.createElement)("div", { className: "arbor-refusal-message", "data-arbor-text": "body" }, refusalWording(refusal)),
     (0, import_react.createElement)("div", { className: "arbor-refusal-hint", "data-arbor-text": "body" }, t("endRefusedHint"))
   );
 }

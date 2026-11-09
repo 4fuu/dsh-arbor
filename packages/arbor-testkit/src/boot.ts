@@ -35,6 +35,24 @@ import {
 /** The dsh installation anchor: the published CLI package's own package.json. */
 export const installAnchor: string = createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json')
 
+/**
+ * The proof process's temp root, once a profile has booted.
+ *
+ * DSH's spill backend creates a `dsh-spill-*` directory under the OS temp
+ * directory when its plugin is constructed, even when the proof never spills
+ * anything. Left there, that empty directory is the one fixture `finishProof`
+ * cannot see. Pointing `TMPDIR` at a registered directory before the boot puts
+ * the spill root, and every other DSH temp directory, inside the proof's own
+ * cleanup.
+ */
+let proofTmpRoot: string | undefined
+
+/** Put DSH's temp-directory users inside a directory `finishProof` removes. */
+async function isolateTmpdir(): Promise<void> {
+  proofTmpRoot ??= await tempDir('dsh-proof-tmp-')
+  process.env['TMPDIR'] = proofTmpRoot
+}
+
 /** The arbor bundle's patch file, as an overlay path. */
 export const arborPatch: string = createRequire(import.meta.url).resolve('@4fu/dsh-arbor-bundle/cordis.patch.yml')
 
@@ -101,6 +119,7 @@ export interface ArborProfileOptions {
  * @returns the settled Loader root context.
  */
 export async function bootArborProfile(options: ArborProfileOptions): Promise<Context> {
+  await isolateTmpdir()
   for (const path of options.overlayPaths) {
     if (!path.endsWith('.patch.yml')) {
       throw new Error(`${options.binName}: overlay path must end in .patch.yml: ${path}`)

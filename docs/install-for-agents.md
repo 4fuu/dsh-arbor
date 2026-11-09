@@ -101,7 +101,10 @@ pnpm proof:backend-session              # 25 the backend session's own state, id
 ```
 
 A proof removes every temporary directory it made when it reports, so a run of
-`pnpm proofs` leaves the system temp directory as it found it.
+`pnpm proofs` leaves the system temp directory as it found it. Before booting a
+profile it points `TMPDIR` at one of those registered directories, so DSH's
+`dsh-spill-*`, `dsh-subprocess-*` and workspace-change directories are removed
+with it too.
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
 bundle's own patch file as its first overlay, so what a proof boots is what an
@@ -298,8 +301,10 @@ ended window. The journal records the refusal (`end.handoff.invalid` for a
 handoff whose fields are not the required string arrays) with the rule and
 arbor's next action, the window stays live and idle, and the note says what the
 reader can do now: send another message in DSH to keep working, or let the model
-call `end` again with the named fields. The note disappears when a later `end`
-succeeds or the window really ends.
+call `end` again with the named fields. The rule appears once, as the note's tag;
+when arbor's text begins with that rule, the note drops the leading rule and
+shows the rest unchanged. The note disappears when a later `end` succeeds or the
+window really ends.
 
 The shape is editorial rather than a dashboard. The date line and one muted
 sentence say the state; only the window refs and counts in that sentence take
@@ -308,9 +313,10 @@ scatter, deliberately ragged rather than a grid. Each card kind has a width:
 a live window about 560 px, a chain about 150 px per node plus padding, a
 session about 360 px, the environment about 320 px, the board about 280 px,
 a note 240-280 px (longer text gets the wider end), and a schedule about 240 px.
-The widths scale with the surface, but a chain is never made narrower than its
-nodes need. Height is always the card's own content; nothing is stretched to a
-neighbour.
+The widths scale with the surface, but a chain is never narrower than 300 px:
+one node needs less, while the kicker and the session title share that header
+and must fit there too. Height is always the card's own content; nothing is
+stretched to a neighbour.
 
 Cards are placed in importance order — live windows, chain, session, board,
 notes, environment, schedules — at the lowest skyline point where the width
@@ -325,7 +331,7 @@ being scrolled; the scroll content reserves the dock's measured height plus its
 18 px bottom offset, so at the end of the scroll no card is under it. Below
 about 640 px the same packer becomes one column. The
 chain card is wide enough for every node (measured by `scrollWidth` against
-`clientWidth`) and its nodes never overflow.
+`clientWidth`) and its header fits at one node; its nodes never overflow.
 
 Notes and board cards are paper: a tilt of -1.6° to +1.6° and a 0-12 px vertical
 offset derived from a hash of the card's ref, so a reload restores the same
