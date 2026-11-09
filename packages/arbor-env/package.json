@@ -15,5 +15,20 @@
     "@4fu/arbor-prompt": "2026.1109.1",
     "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4fuu/dsh-arbor.git",
+    "directory": "packages/arbor-env"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src"
+  ]
 }

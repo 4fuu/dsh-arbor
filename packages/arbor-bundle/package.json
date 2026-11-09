@@ -25,5 +25,17 @@
     "@4fu/dsh-arbor-preset": "workspace:*",
     "@4fu/dsh-arbor-ui": "workspace:*",
     "@4fu/dsh-arbor-ui-workspace": "workspace:*"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4fuu/dsh-arbor.git",
+    "directory": "packages/arbor-bundle"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

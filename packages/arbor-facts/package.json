@@ -15,5 +15,20 @@
     "@4fu/dsh-arbor-host": "workspace:*",
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-session": "0.2.2-rc.1"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4fuu/dsh-arbor.git",
+    "directory": "packages/arbor-facts"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src"
+  ]
 }

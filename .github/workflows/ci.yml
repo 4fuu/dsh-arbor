@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, b1, b2, b3]
+    branches: [main, 'b*']
   pull_request:
 
 jobs:
@@ -19,6 +19,10 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      # DSH is pinned to dsh-v0.2.2-rc.1 (docs/versions.md). Fail before the
+      # suite if a manifest or the prompt table has drifted.
+      - name: Check the DSH pin
+        run: pnpm check:pin
       - name: Check
         run: pnpm check
       - name: Proofs

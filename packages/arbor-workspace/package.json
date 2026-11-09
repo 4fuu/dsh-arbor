@@ -13,5 +13,20 @@
     "@4fu/arbor-interfaces": "2026.1109.1",
     "@deepseek-ai/dsh-session": "0.2.2-rc.1",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.1"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4fuu/dsh-arbor.git",
+    "directory": "packages/arbor-workspace"
+  },
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src"
+  ]
 }

@@ -3,8 +3,14 @@
   "private": true,
   "type": "module",
   "description": "arbor as DeepSeek Harness's agent driver: one arbor host per DSH process, one window per user session, streamed replies on the session log",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/4fuu/dsh-arbor.git"
+  },
   "packageManager": "pnpm@11.28.5",
   "scripts": {
+    "check:pin": "node scripts/check-dsh-pin.mjs",
     "proof:boot": "node --experimental-strip-types --no-warnings proofs/00-boot.ts",
     "proof:routing": "node --experimental-strip-types --no-warnings proofs/01-routing.ts",
     "proof:roundtrip": "node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts",
