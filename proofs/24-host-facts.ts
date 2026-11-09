@@ -2,11 +2,12 @@
  * Proof 24: the whole-host facts are the labeled sessions' own arbor state.
  *
  * One arbor session is driven through a live turn while the page's host stream
- * is open, and a second, ordinary DSH session is driven beside it. The host
- * view must name only the arbor session, must carry DSH's session title and
- * the window the label opened, must push a rebuild and a live delta, and must
- * leave the ordinary session out. The chain is then read through the same
- * `sessionId` label the driver attached, with no window-start map of the
+ * is open, and a second, ordinary DSH session is driven beside it. A related
+ * input delivered while the first window is idle must start its next DSH turn.
+ * The host view must name only the arbor session, must carry DSH's session
+ * title and the window the label opened, must push a rebuild and a live delta,
+ * and must leave the ordinary session out. The chain is then read through the
+ * same `sessionId` label the driver attached, with no window-start map of the
  * browser's own.
  *
  * Run: pnpm proof:host-facts
@@ -23,6 +24,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { installFailLoud, loadEnv } from '@deepseek-ai/dsh-app-boot'
 import type { ArborHostFrame } from '@4fu/dsh-arbor-facts'
+import { sessionTarget } from '@4fu/dsh-arbor-host'
 import {
   SCRIPTED_SELECTION,
   arborHostOf,
@@ -44,6 +46,21 @@ const failures: string[] = []
 const check = (label: string, ok: boolean, detail: string): void => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${label}: ${detail}`)
   if (!ok) failures.push(label)
+}
+
+/** The assistant texts on one session's log. */
+function assistantTexts(agent: any): string[] {
+  const texts: string[] = []
+  for (let seq = 0; seq < agent.session.seq; seq++) {
+    const event = agent.session.eventAt(seq as never)
+    if (event?.type !== 'assistant/message') continue
+    const content = (event.data as { message?: { content?: readonly { type: string; text?: string }[] } })
+      .message?.content ?? []
+    for (const block of content) {
+      if (block.type === 'text' && block.text !== undefined) texts.push(block.text)
+    }
+  }
+  return texts
 }
 
 async function main(): Promise<void> {
@@ -90,6 +107,26 @@ async function main(): Promise<void> {
     const journalKinds = (await host.journal.list({ window: windowRef as never, limit: 200 })).items.map(event => event.kind)
     check('the journal records the run end and its usage', journalKinds.includes('run_ended') && journalKinds.includes('usage'),
       `kinds=${JSON.stringify([...new Set(journalKinds)])}`)
+
+    // A related input delivered while the window is idle is not dropped: the
+    // host sends it through `followUp`, and this backend must start the next
+    // DSH turn for it. A session state copied from the host's idle would drop
+    // it here.
+    scriptedLlm.responses = [{ text: 'the idle window answered' }]
+    await host.host.deliver(windowRef, {
+      kind: 'inserted_task',
+      role: 'input',
+      refs: [],
+      time: Date.now(),
+      content: [{ kind: 'data', fields: { content: 'continue from the idle window' } }],
+    }, { targets: [sessionTarget(sessionId)] })
+    // `waitFor` settles on anything but `undefined`, so a boolean predicate has
+    // to answer `true` or `undefined`: returning bare `false` would end the wait
+    // before the delivered turn has run.
+    const delivered = await waitFor(() => assistantTexts(agent).includes('the idle window answered') || undefined, 10_000)
+      .catch(() => undefined)
+    check('an input delivered to an idle window starts its next turn', delivered === true,
+      `assistant texts: ${JSON.stringify(assistantTexts(agent))}`)
 
     // An `end` arbor refuses keeps the window alive: the facts carry the rule
     // and the window's real state, never an ended one.
