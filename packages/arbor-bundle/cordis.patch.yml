@@ -29,7 +29,14 @@
 #      only the composer chip is gated. On a profile with no browser (headless,
 #      acp, sdk) the inserted package declares no host behavior and does not
 #      activate.
-#   6. Inserts `@4fu/dsh-arbor-ui-workspace`, a `dsh.client` package that filters
+#   6. Inserts `@4fu/dsh-arbor-facts`, which reads what arbor is doing in a
+#      session — the window chain, the board, the workspace, the active notes,
+#      `/env`, schedules and settings — through the arbor host's own API and
+#      serves it to the browser on DSH's exact Fetch registry,
+#      `/api/arbor/facts` (an NDJSON stream) and `/api/arbor/search`. The route
+#      exists only where `connection` is mounted (the web profile); on a
+#      headless profile the row registers no route and changes nothing.
+#   7. Inserts `@4fu/dsh-arbor-ui-workspace`, a `dsh.client` package that filters
 #      DSH's hero project picker: an ordinary session lists nothing from arbor's
 #      shared folder, an arbor session lists those projects plus the directories
 #      the user added outside them, marked external. The seat
@@ -61,6 +68,9 @@
 
     - id: arbor-driver
       name: '@4fu/dsh-arbor-driver/driver'
+
+    - id: arbor-facts
+      name: '@4fu/dsh-arbor-facts'
 
     - id: arbor-preset
       name: '@4fu/dsh-arbor-preset'

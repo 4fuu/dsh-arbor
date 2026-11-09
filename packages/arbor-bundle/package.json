@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@4fu/dsh-arbor-driver": "workspace:*",
+    "@4fu/dsh-arbor-facts": "workspace:*",
     "@4fu/dsh-arbor-host": "workspace:*",
     "@4fu/dsh-arbor-preset": "workspace:*",
     "@4fu/dsh-arbor-ui": "workspace:*",

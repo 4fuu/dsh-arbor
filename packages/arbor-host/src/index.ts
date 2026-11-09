@@ -55,7 +55,7 @@ import { join } from 'node:path'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import type { Journal, NoteStore, Plugin, Settings, Target, WindowRef } from '@4fu/arbor-interfaces'
+import type { Environment, Journal, NoteStore, Plugin, Settings, Target, WindowRef, Workspace } from '@4fu/arbor-interfaces'
 import { MAX_PAGE_LIMIT } from '@4fu/arbor-interfaces'
 import { Arbor } from '@4fu/arbor-core'
 import { SqliteJournal } from '@4fu/arbor-journal-sqlite'
@@ -222,6 +222,10 @@ interface HostState {
   readonly backend: DshBackend
   readonly host: Arbor
   readonly settings: Settings
+  /** Arbor's own workspace over the shared folder. */
+  readonly workspace: Workspace
+  /** The environment every window reads at `/env`. */
+  readonly environment: Environment
   /** The arbor shared folder: the projects' home and ovnfs's source. */
   readonly sharedFolder: string
   /** Which workspace backend arbor settled on, so the host can report it. */
@@ -421,6 +425,8 @@ export class ArborHostService extends Service {
       backend,
       host,
       settings,
+      workspace: arborWorkspace.workspace,
+      environment,
       sharedFolder: arborWorkspace.sharedFolder,
       workspaceBackend: arborWorkspace.backend,
       projects,
@@ -556,6 +562,20 @@ export class ArborHostService extends Service {
     return this.requireState().settings
   }
 
+  /**
+   * Arbor's own workspace over the shared folder: the implementation every
+   * window's files go through, and the one a read-only surface asks for the
+   * chain's checkouts, keeps and open work.
+   */
+  get workspace(): Workspace {
+    return this.requireState().workspace
+  }
+
+  /** The environment every window reads at `/env`, DSH's items mounted beside arbor's. */
+  get environment(): Environment {
+    return this.requireState().environment
+  }
+
   /** The arbor shared folder: the projects' home and ovnfs's source. */
   get sharedFolder(): string {
     return this.requireState().sharedFolder
@@ -617,6 +637,16 @@ export class ArborHostService extends Service {
    * once per session and remembered: a session's stored header never moves, and
    * the live answer takes over the moment the session is back.
    */
+  /**
+   * The directory one session works in, the way the `<workspace>` section reads
+   * it: DSH's `workingDirectory` projection when the session is live, the
+   * stored header otherwise. A read-only surface that names the session's
+   * project asks this rather than re-deriving it.
+   */
+  directoryOf(sessionId: SessionId): Promise<string | undefined> {
+    return this.directoryOfSession(sessionId)
+  }
+
   private async directoryOfSession(sessionId: SessionId): Promise<string | undefined> {
     const session = this.ctx.agents.get(sessionId)?.session
     if (session !== undefined) {
@@ -773,25 +803,58 @@ export class ArborHostService extends Service {
   async windowChainOf(sessionId: SessionId): Promise<WindowRef[]> {
     const target = sessionTarget(sessionId)
     const { journal } = this.requireState()
-    const continued = new Map<WindowRef, WindowRef>()
-    let newest: WindowRef | undefined
+    /** The window each `window_start` names as its predecessor. */
+    const previousOf = new Map<WindowRef, WindowRef>()
+    /** The windows whose own start carries this session's target. */
+    const roots = new Set<WindowRef>()
     for (let offset = 0; ; offset += MAX_PAGE_LIMIT) {
       const page = await journal.list({ kinds: ['window_start'], limit: MAX_PAGE_LIMIT, offset })
       for (const event of page.items) {
         if (event.window === null) continue
-        if (event.targets.includes(target)) newest = event.window
+        if (event.targets.includes(target)) roots.add(event.window)
         const previous = continuedWindow(event.body)
-        if (previous !== undefined) continued.set(previous, event.window)
+        if (previous !== undefined) previousOf.set(event.window, previous)
       }
       if (page.items.length < MAX_PAGE_LIMIT) break
     }
-    const chain: WindowRef[] = []
-    let current = newest
-    while (current !== undefined && chain.length < 1000) {
-      chain.push(current)
-      current = continued.get(current)
+    /** The first window of the chain a window belongs to, or undefined. */
+    const rootOf = (window: WindowRef): WindowRef | undefined => {
+      const seen = new Set<WindowRef>()
+      let current: WindowRef | undefined = window
+      while (current !== undefined && !seen.has(current)) {
+        if (roots.has(current)) return current
+        seen.add(current)
+        current = previousOf.get(current)
+      }
+      return undefined
     }
-    return chain
+    const chainSet = new Set<WindowRef>()
+    for (const window of previousOf.keys()) {
+      if (rootOf(window) !== undefined) chainSet.add(window)
+    }
+    for (const window of roots) chainSet.add(window)
+    // The chain's last window is the one no other window in the chain continues
+    // - a continuation carries its predecessor, never the reverse - so the walk
+    // starts there and follows the links back.
+    const continued = new Set<WindowRef>()
+    for (const window of chainSet) {
+      const previous = previousOf.get(window)
+      if (previous !== undefined && chainSet.has(previous)) continued.add(previous)
+    }
+    const newest = [...chainSet].find(window => !continued.has(window))
+      ?? [...chainSet].at(-1)
+    if (newest === undefined) return []
+    const chain: WindowRef[] = []
+    const seen = new Set<WindowRef>()
+    let current: WindowRef | undefined = newest
+    while (current !== undefined && !seen.has(current) && chain.length < 1000) {
+      seen.add(current)
+      chain.push(current)
+      current = previousOf.get(current)
+    }
+    // The walk collected the newest window first; the method promises the
+    // session's chain oldest first, which is what a relay and a reader want.
+    return chain.reverse()
   }
 
   /**

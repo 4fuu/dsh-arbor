@@ -29,6 +29,9 @@ importers:
       '@4fu/dsh-arbor-driver':
         specifier: workspace:*
         version: link:../arbor-driver
+      '@4fu/dsh-arbor-facts':
+        specifier: workspace:*
+        version: link:../arbor-facts
       '@4fu/dsh-arbor-host':
         specifier: workspace:*
         version: link:../arbor-host
@@ -125,6 +128,24 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(71e9b8099add9aaf7bb42662f07c41a3)
+
+  packages/arbor-facts:
+    dependencies:
+      '@4fu/arbor-core':
+        specifier: 2026.1107.1
+        version: 2026.1107.1
+      '@4fu/arbor-interfaces':
+        specifier: 2026.1107.1
+        version: 2026.1107.1
+      '@4fu/dsh-arbor-host':
+        specifier: workspace:*
+        version: link:../arbor-host
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      '@deepseek-ai/dsh-session':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
 
   packages/arbor-host:
     dependencies:
@@ -391,6 +412,9 @@ importers:
       '@4fu/dsh-arbor-driver':
         specifier: workspace:*
         version: link:../packages/arbor-driver
+      '@4fu/dsh-arbor-facts':
+        specifier: workspace:*
+        version: link:../packages/arbor-facts
       '@4fu/dsh-arbor-host':
         specifier: workspace:*
         version: link:../packages/arbor-host
