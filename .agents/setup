@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb for dsh-arbor: FUSE and the ovnfs binary (so arbor's
+# default workspace runs for real, as in arbor's own CI), then the workspace's
+# dependencies. Idempotent: a warm run downloads nothing.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+step() { printf '\n== %s (%ss)\n' "$1" "$SECONDS"; }
+
+OVNFS_VERSION=0.1.1
+BIN_DIR="$HOME/.local/bin"
+
+step "fuse3"
+if ! command -v fusermount3 >/dev/null 2>&1; then
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fuse3
+fi
+
+step "ovnfs $OVNFS_VERSION"
+if ! "$BIN_DIR/ovnfs" version 2>/dev/null | grep -q "$OVNFS_VERSION"; then
+  work="$(mktemp -d)"
+  base="https://github.com/stencil-hq/ovnfs/releases/download/v$OVNFS_VERSION"
+  tarball="ovnfs_${OVNFS_VERSION}_linux_amd64.tar.gz"
+  (
+    cd "$work"
+    curl -fsSL -O "$base/$tarball" -O "$base/ovnfs_${OVNFS_VERSION}_checksums.txt"
+    grep " $tarball\$" "ovnfs_${OVNFS_VERSION}_checksums.txt" | sha256sum -c -
+    tar -xzf "$tarball" ovnfs
+  )
+  mkdir -p "$BIN_DIR"
+  install -m 0755 "$work/ovnfs" "$BIN_DIR/ovnfs"
+  rm -rf "$work"
+fi
+"$BIN_DIR/ovnfs" version
+
+step "pnpm install"
+corepack enable >/dev/null 2>&1 || true
+pnpm install --frozen-lockfile
+
+step "done"
