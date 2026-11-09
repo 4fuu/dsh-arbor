@@ -151,6 +151,13 @@ async function main(): Promise<void> {
     const nextWindow = afterEnd.windows.find(window => window.ref === continued)
     check('the ended window records its reason', endedWindow?.endReason === 'model_ended',
       `reason=${endedWindow?.endReason ?? 'none'}`)
+    const runEnds = await host.journal.list({ window: windowRef as never, kinds: ['run_ended'], limit: 20 })
+    const finalUsed = runEnds.items.map(event => {
+      try { return (JSON.parse(event.body ?? '{}') as { used?: number }).used } catch { return undefined }
+    }).findLast(value => value !== undefined)
+    check('the ended window keeps its final usage from the journal',
+      endedWindow?.used !== undefined && endedWindow.used === finalUsed,
+      `facts used=${endedWindow?.used ?? 'none'} journal used=${finalUsed ?? 'none'}`)
     check('the ended window records the handoff', endedWindow?.handoff?.present === true && (endedWindow.handoff.refs.length ?? 0) > 0,
       `handoff=${JSON.stringify(endedWindow?.handoff)}`)
     check('the chain links the continuation', endedWindow?.continuedBy === continued && nextWindow?.continuationOf === windowRef,
