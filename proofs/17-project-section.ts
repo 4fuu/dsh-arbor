@@ -164,6 +164,9 @@ async function boot(): Promise<ProofContext> {
 }
 
 async function main(): Promise<void> {
+  // The plain-directory workspace is the one this proof's reach line and delta
+  // assertions describe; keep the orb's ovnfs off PATH (proof 20 is ovnfs).
+  process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
   const home = await freshDshHome('arbor-spike')
   console.log(`DSH_HOME=${home}`)
   loadEnv(NAME)

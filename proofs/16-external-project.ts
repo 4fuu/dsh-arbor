@@ -127,6 +127,9 @@ async function turn(agent: Agent, text = 'say pong'): Promise<void> {
 }
 
 try {
+  // This proof checks the directory workspace's section (workspace.keep), so
+  // keep the orb's ovnfs off PATH; the ovnfs path has proof 20.
+  process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
   const home = await freshDshHome('arbor-spike')
   console.log(`DSH_HOME=${home}`)
   loadEnv(NAME)

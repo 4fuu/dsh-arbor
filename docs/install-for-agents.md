@@ -18,7 +18,8 @@ Pins, and do not change them without being asked:
 
 - DeepSeek Harness `dsh-v0.2.2-rc.1`, installed from npm as
   `@deepseek-ai/dsh@0.2.2-rc.1` and its companion packages.
-- arbor `@4fu/arbor-*` `2026.1107.1`, from npm.
+- arbor `@4fu/arbor-*` `2026.1109.0`, from npm. The arbor error package
+  `@4fu/arbor-errors` is still `2026.1107.0`; it is the only published version.
 - This repository's packages are `@4fu/dsh-arbor-*` and are not published;
   installing means checking out this repository.
 
@@ -26,8 +27,9 @@ Pins, and do not change them without being asked:
 
 - Node.js 24.9 or newer (developed on Node 26). The sources are TypeScript run
   directly through Node's type stripping, so there is no build step.
-- pnpm 11 or newer (`corepack enable` then `corepack prepare pnpm@11.28.5
-  --activate`, or `npm install -g pnpm@11`).
+- pnpm 11.28.5. The repository's `.agents/setup` installs exactly that version
+  with npm into `~/.local/bin`; corepack's pnpm shim does not run under Node 26.
+  To do it by hand: `npm install -g pnpm@11.28.5`.
 - `DEEPSEEK_API_KEY` in the environment only if you want to run the proofs
   against the real model. The default proof run uses a scripted model and needs
   neither a key nor network access.
@@ -37,7 +39,7 @@ Pins, and do not change them without being asked:
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
 cd dsh-arbor
-git checkout b3i
+git checkout b4
 pnpm install
 ```
 
@@ -60,7 +62,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty-six, in order, against the scripted model
+pnpm proofs         # all twenty-eight, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -93,6 +95,8 @@ pnpm proof:hero-create-routing # 19 the hero pick creates the session as arbor
 pnpm proof:ovnfs-project       # 20 the ovnfs project line: where paths start, read in place
 pnpm proof:arbor-workspace-membership  # 21 the session belongs to the workspace the user picked
 pnpm proof:reload-preset                # 22 a cold client restores a blank under its recorded preset
+pnpm proof:facts                        # 23 the panel facts and live stream are arbor's own
+pnpm proof:host-facts                   # 24 the whole host view names only labeled sessions
 ```
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
@@ -232,6 +236,114 @@ One live turn against the real model on that setup: the model's first tool call
 listed the picked project's files by absolute path, read its two files and
 answered from them, using arbor's own `bash`/`read`/`send`.
 
+### 3b. The arbor page in the web client
+
+`@4fu/dsh-arbor-ui` adds one permanent entry to DSH's left navigation, beside
+Plugins and Automation tasks, and one root-scoped page behind it. The entry is a
+`sidebar.panellist` row with `id` `arbor`; the page is a registration in the
+root-scoped `main` slot with `key` `arbor`, so the sidebar selects it by the same
+id. This is the same pair the official plugin manager registers
+(`@deepseek-ai/dsh-client-ui-plugin-manager`, `lib/client.js`, the
+`sidebar.panellist` registration around line 7820 and the `main` registration
+around line 7749) and the same seam the shipped Automation-tasks row uses
+(`@deepseek-ai/dsh-client-ui-schedule`). The official "便签" example is not
+shipped in the npm package tree; the two shipped packages are the reference for
+the seam. The sidebar registers the page component itself as the row's icon and
+passes `label: () => t('panelLabel')`, so DSH owns the row's accessible name and
+the page keeps its own locale namespace.
+
+The page is the whole-host picture. It reads three exact Fetch routes registered
+by `@4fu/dsh-arbor-facts` through `ctx.connection.fetch.register`
+(`@deepseek-ai/dsh-client-connection`, `HostConnectionFetch`), the least
+invasive route from a `dsh.client` bundle to a host service:
+
+- `GET /api/arbor/host` — every labeled arbor session, its window chain, the
+  board, the active notes, `/env`, the schedules and arbor's settings, then each
+  rebuild and each live `Arbor.stream(window, …)` delta as NDJSON;
+- `GET /api/arbor/facts?sessionId=…` — the same read for one session, used by
+  that session's tab;
+- `GET /api/arbor/search?q=…` — arbor's own `Arbor.search`, over its journal,
+  notes and board.
+
+A session is an arbor session because arbor says so: the driver sets
+`TaskInput.label` to the DSH session id, and arbor carries that label onto the
+window, its continuations, the `window_start` event and the per-window prompt
+section. The host view reads the labels, not a `windowStart` map kept in the
+browser. Expanding a session opens its own tab with only that session's current
+state: the live window and its status, the continuation chain with end reasons
+and handoffs, the project and external pointers from `<workspace>`, and what is
+running now. An ordinary DSH session has no such tab; the permanent left entry
+still opens the host view, which simply does not list it.
+
+The page leads a session card with DSH's own session title — the text the
+sidebar shows from the latest `session/title` event — and keeps the project and
+the window-chain summary as secondary lines. The UI text is Chinese with an
+English dictionary registered in the `arborUi` locale namespace, so DSH's
+language switch switches the page.
+
+The shape is editorial rather than a dashboard. The date line and one muted
+sentence say the state; only the window refs and counts in that sentence take
+full contrast and the numeric role. The surface below is a measured masonry of
+cards: a live window card whose output is rendered as Markdown and clamped with
+`展开全文`, a visual window chain whose nodes carry only a ref, a state and a
+handoff mark, board and note cards with the content first and metadata in a
+small footer, a counts-and-names `/env` card, and schedule cards. A floating
+bottom dock filters 全部 / 窗口 / 看板 / 笔记 / 环境 / 日程; search and
+settings are the two top-right icons and open sheets. The empty state is one
+sentence and a hint, with no dock and no zero-valued cards. All colours, borders
+and elevation come from `--dsw-*` tokens, so DSH's light and dark appearance
+both work without the page choosing a theme.
+
+What the page shows comes from arbor, not from a browser guess:
+
+- windows and the chain: `ArborHostService.windowChainOf`, `Arbor.live()` and
+  the journal's `window_start`, `window_end` and `board_line` events;
+- a handoff's four parts: the model's `end` tool call in the journal;
+- workspace: the workspace implementation's project, pointers, checkouts,
+  keeps and open work;
+- notes: `NoteStore.snapshot()`, the active set frozen by its epoch;
+- `/env`: `Environment.list()` plus the journal's `service_state` events;
+- schedules: `Arbor.schedules()`;
+- settings: `Environment.settings()`, falling back to the deployment's seed.
+
+The page also says where DSH's own settings card does not apply: the Agent-loop
+plugin page configures ordinary sessions, while an arbor window runs under the
+model tiers and window limits arbor reports. Proof 23 covers the per-session
+facts and the live stream; proof 24 covers the host view, the session title, the
+label and the absence of an ordinary session.
+
+### 3c. Typography contract
+
+Every text node on the arbor page and on a session tab carries exactly one
+`data-arbor-text` role:
+
+- `body` — reading text: model output, note bodies, board lines, card body and
+  secondary lines, chain handoff summaries, empty-state hints and Settings
+  prose. It uses `--arbor-font-body`.
+- `display` — display text: the hero sentence, card titles, tab labels, dock
+  pills, card kickers, status chips and the empty-state heading. It uses
+  `--arbor-font-display`.
+- `numeric` — window, note and task refs, counts, token figures, dates and
+  times. It uses `--arbor-font-numeric` with `font-variant-numeric:
+  tabular-nums`.
+- `code` — paths, ids, and inline or block code inside Markdown. It uses
+  `--arbor-font-code`.
+
+The four properties are defined on the Arbor root and default to DSH's own
+tokens: body, display and numeric use `--dsw-font-family`; code uses
+`--ds-font-family-code`. With no font plugin installed the page therefore uses
+DSH's fonts exactly.
+
+The root of the overall page and the root of every session tab carry
+`data-arbor-page`. Each `data-arbor-text` node takes its `font-family` from its
+own role property (`var(--arbor-font-body)`, `var(--arbor-font-display)`,
+`var(--arbor-font-numeric)` or `var(--arbor-font-code)`), rather than only
+inheriting the root's face, because a font plugin sets the property on the role
+nodes itself. A font plugin may target `[data-arbor-page]` and
+`[data-arbor-text]` and override only these four custom properties; it must not
+depend on class names or page structure. No font files are vendored by this
+package.
+
 ## 4. Inspect what ran
 
 - `DSH_HOME/arbor/journal.sqlite` is the arbor journal: every window start and
@@ -293,8 +405,11 @@ packages/
   arbor-bundle/     the installable bundle: the patch layer that replaces DSH's
                     agent row and mounts the host, driver, preset and the two
                     client packages
-  arbor-ui/         the browser package that hides the sandbox access-mode
-                    switch for an arbor composer
+  arbor-facts/      the host read face behind the arbor page: session and
+                    whole-host facts, search, and the exact Fetch routes
+  arbor-ui/         the left-sidebar arbor page, its session tabs, its Chinese
+                    and English copy, and the sandbox access-mode gate for an
+                    arbor composer
   arbor-ui-workspace/
                     the browser package that filters DSH's hero project picker
                     per preset
@@ -341,6 +456,17 @@ Works, and is covered by a proof:
   apply.
 - Every tool call a window runs leaves one `tool/call` + `tool/result` pair on
   the session log, arbor's own tools included.
+- The arbor page in the web client: one permanent left entry, the whole-host
+  page across sessions, and one tab per arbor session with its live window,
+  chain, handoff, project, external pointers and running work. Every value is
+  read from arbor's own API and journal; the page updates from arbor's own
+  append/note/environment hooks and `Arbor.stream(window, …)`. Ordinary
+  sessions get no arbor tab and keep their composer, sandbox and header
+  unchanged. The page's session card and tab lead with DSH's session title.
+- Arbor 2026.1109.0's window label, `Delivery.role` (`context` versus `input`)
+  and `send.unowned` refusal are in use: the facts page finds a session's
+  windows by label, and a send from a window that does not own the target is
+  refused with arbor's own rule instead of being delivered.
 - Approvals, DSH's common plugins, and the streaming reply path.
 
 Not finished, and not to be worked around here:

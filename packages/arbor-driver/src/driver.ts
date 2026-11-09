@@ -177,14 +177,14 @@ class SessionArbor {
   }
 
   /** Open the window on first use, through arbor's dispatch. */
-  async ensureWindow(): Promise<WindowRef> {
+  async ensureWindow(request?: string): Promise<WindowRef> {
     const held = this.window
     if (held !== undefined && this.isLive(held)) return held
     // A window this session already has is taken back, not answered by a second
     // one: a restart continues the session's window under a new ref, and an
     // earlier turn's window is still open while it waits out its idle period.
     const existing = await this.hostService.windowFor(this.agent.session.id)
-    const window = existing ?? await this.dispatchWindow()
+    const window = existing ?? await this.dispatchWindow(request)
     this.window = window
     this.hostService.backend.bind(window, this.agent)
     await this.hostService.backend.whenOpen(window)
@@ -192,12 +192,39 @@ class SessionArbor {
     return window
   }
 
+  /**
+   * The user's request, as the window's first board line.
+   *
+   * A window opens before the turn's input reaches the model, so the board's
+   * first title cannot come from the task alone. The user message is already
+   * on the session log when the task dispatches; use its text, one line and
+   * bounded, instead of the driver's internal placeholder. A window with no
+   * user text yet falls back to the same neutral description.
+   */
+  private requestText(): string {
+    for (const event of this.agent.session.snapshotEvents().toReversed()) {
+      if (event.type !== 'user/message') continue
+      const content = (event.data as {
+        readonly content?: readonly { readonly type: string; readonly text?: string }[]
+      }).content ?? []
+      const text = content
+        .filter(block => block.type === 'text')
+        .map(block => block.text ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (text !== '') return text.length > 120 ? `${text.slice(0, 119)}…` : text
+    }
+    return 'DeepSeek Harness session turn'
+  }
+
   /** Dispatch this session's task, which opens the window that takes it. */
-  private async dispatchWindow(): Promise<WindowRef> {
+  private async dispatchWindow(request?: string): Promise<WindowRef> {
     const session = this.agent.session
+    const reason = request === undefined ? this.requestText() : request.replace(/\s+/g, ' ').trim()
     const task: TaskInput = {
       kind: 'batch',
-      reason: 'a DeepSeek Harness session turn',
+      reason: reason.length > 120 ? `${reason.slice(0, 119)}…` : reason,
       targets: [sessionTarget(session.id)],
       // The label is what the host carries onto every window this task opens,
       // its continuations and the journal's record of both. A read-only surface
@@ -249,7 +276,7 @@ class SessionArbor {
   /** The bridge the session agent drives. */
   bridge(): ArborWindowBridge {
     this.bridgeCache ??= {
-      ensureWindow: () => this.ensureWindow(),
+      ensureWindow: request => this.ensureWindow(request),
       systemPrompt: window => this.hostService.backend.systemPrompt(window),
       modelCall: input => this.hostService.backend.modelCall({ ...input, agent: this.agent }),
       runToolCall: async (call, position) => {

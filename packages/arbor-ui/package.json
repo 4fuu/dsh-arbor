@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The dsh-arbor browser package: for arbor sessions it hides DSH's sandbox access-mode control, which is untrue when arbor's tools run on the host; ordinary sessions keep it unchanged",
+  "description": "The dsh-arbor browser package: the permanent left-sidebar arbor page, its per-session tabs and live window streams, and for arbor sessions the sandbox access-mode gate; ordinary sessions keep their controls unchanged",
   "exports": {
     ".": "./src/index.ts",
     "./client": "./client.js",

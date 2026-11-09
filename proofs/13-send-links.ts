@@ -188,6 +188,19 @@ async function main(): Promise<void> {
       logOf(agent).some(entry => entry.type === 'assistant/message'
         && ((entry.data as { message?: { source?: { model?: string } } }).message?.source?.model ?? '').length > 0),
       'the assistant message names a provider and model')
+    // A provider rejects a history whose tool call is not followed by its
+    // result, so the sent message must land after the call's result rather
+    // than between the two. The next turn may already have started when the
+    // zero-delay append runs, which is fine; what matters is the order.
+    const ordered = logOf(agent)
+    const sentAt = ordered.findIndex(entry => {
+      if (entry.type !== 'assistant/message') return false
+      const message = (entry.data as { message?: { content?: readonly { type: string; text?: string }[] } }).message
+      return (message?.content ?? []).some(block => block.type === 'text' && (block.text ?? '').includes('![the diagram]'))
+    })
+    check('the sent message lands after its tool result',
+      sentAt > 0 && ordered.slice(0, sentAt).some(entry => entry.type === 'tool/result'),
+      `before the send: ${ordered.slice(Math.max(0, sentAt - 4), sentAt).map(entry => entry.type).join(',')}`)
 
     // The tool result the window reads back is arbor's own queued line, and the
     // effect's own result event records that the executor carried it out.

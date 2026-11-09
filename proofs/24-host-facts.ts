@@ -77,6 +77,17 @@ async function main(): Promise<void> {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'say the host facts answer' }], source: { kind: 'user' } }))
     const windowRef = await waitFor(() => host.windowFor(sessionId))
     await agent.whenIdle();
+    // The host's own window state moves to idle on the backend's `run_ended`
+    // event, which is not a journal append. The open host stream must hear it
+    // without anyone calling `hostFactsFor()`.
+    const idle = await waitFor(() => frames
+      .filter(frame => frame.type === 'facts')
+      .map(frame => frame.facts)
+      .find(facts => facts.sessions.some(session => session.sessionId === sessionId
+        && session.windows.some(window => window.ref === windowRef && window.state === 'idle'))), 10_000)
+      .catch(() => undefined)
+    check('the host stream hears the run end without a manual rebuild', idle !== undefined,
+      `states=${JSON.stringify(frames.filter(frame => frame.type === 'facts').flatMap(frame => frame.facts.sessions.flatMap(session => session.windows.filter(window => window.ref === windowRef).map(window => `${window.ref}:${window.state}`))))}`)
     const titleSession = agent.session as unknown as { append(type: string, data: unknown): unknown };
     titleSession.append('session/title', { title: 'Proof 24 arbor session' })
 
@@ -98,6 +109,9 @@ async function main(): Promise<void> {
     check("the row leads with DSH's session title", arborRow?.title === 'Proof 24 arbor session', `title=${arborRow?.title ?? 'none'}`)
     check('the row carries the window the label opened', arborRow?.windows.some(window => window.ref === windowRef) === true,
       `windows=${JSON.stringify(arborRow?.windows.map(window => window.ref))}`)
+    check('the board line is the user\'s request, not the driver placeholder',
+      facts.board.find(line => line.window === windowRef)?.doing === 'say the host facts answer',
+      `doing=${JSON.stringify(facts.board.find(line => line.window === windowRef)?.doing)}`)
     check('the host view has one live window', facts.windows.some(window => window.ref === windowRef && window.live),
       `windows=${JSON.stringify(facts.windows.map(window => `${window.ref}:${window.state}`))}`)
     check('the ordinary session added no host window', facts.windows.every(window => window.ref !== undefined && arborRow?.windows.some(one => one.ref === window.ref)),

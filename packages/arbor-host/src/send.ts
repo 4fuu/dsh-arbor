@@ -100,14 +100,27 @@ export class DshSendExecutor implements EffectExecutor {
         },
       }
     }
-    agent.session.append('assistant/message', {
-      ...positionOf(agent.session),
-      message: createAssistantMessage({
-        content: [{ type: 'text', text }],
-        source: attributionOf(agent),
-      }),
-      stream: [],
-    }, { surfaceOp: 'append' })
+    // The send executor runs inside the window's tool call, before the driver
+    // has appended the call's `tool/result`. DSH — and every provider history it
+    // builds from this log — requires a tool call to be followed immediately by
+    // its result, so the assistant message must be written one turn of the
+    // event loop later, after the result is on the log. A zero-delay timer is
+    // still inside the turn, so the user reads the send beside the call, and
+    // the next request has a valid tool/result pair.
+    const session = agent.session
+    const position = positionOf(session)
+    const message = createAssistantMessage({
+      content: [{ type: 'text', text }],
+      source: attributionOf(agent),
+    })
+    setTimeout(() => {
+      try {
+        session.append('assistant/message', { ...position, message, stream: [] }, { surfaceOp: 'append' })
+      } catch {
+        // The session went away before the message could land; the effect
+        // result already recorded the send and there is nothing else to do.
+      }
+    }, 0)
     return { ok: true }
   }
 

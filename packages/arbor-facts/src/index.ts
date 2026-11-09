@@ -127,6 +127,8 @@ interface SessionFacts {
   readonly listeners: Set<(frame: ArborFactsFrame) => void>
   /** The live stream per window, and how to stop it. */
   readonly streams: Map<string, () => void>
+  /** The window-state watchers, so an idle or ended window rebuilds the facts. */
+  readonly states: Map<string, () => void>
 }
 
 /** What the whole-host stream's listeners share. */
@@ -138,6 +140,8 @@ interface HostFacts {
   timer?: ReturnType<typeof setTimeout>
   readonly listeners: Set<(frame: ArborHostFrame) => void>
   readonly streams: Map<string, () => void>
+  /** The window-state watchers, so an idle or ended window rebuilds the facts. */
+  readonly states: Map<string, () => void>
 }
 
 /**
@@ -160,6 +164,7 @@ export class ArborFactsService extends Service {
     dirty: true,
     listeners: new Set(),
     streams: new Map(),
+    states: new Map(),
   }
 
   /** The host's change counter, bumped by the plugin below. */
@@ -344,6 +349,7 @@ export class ArborFactsService extends Service {
       dirty: true,
       listeners: new Set(),
       streams: new Map(),
+      states: new Map(),
     }
     this.sessions.set(sessionId, created)
     return created
@@ -380,6 +386,7 @@ export class ArborFactsService extends Service {
     for (const window of facts.windows) this.windowSession.set(window.ref, sessionId)
     for (const listener of session.listeners) listener({ type: 'facts', facts })
     this.reconcileStreams(session, facts.windows)
+    this.reconcileStates(session.states, facts.windows)
     if (session.dirty && session.timer === undefined) {
       session.timer = setTimeout(() => {
         session.timer = undefined
@@ -413,6 +420,7 @@ export class ArborFactsService extends Service {
     }
     for (const listener of this.host.listeners) listener({ type: 'facts', facts })
     this.reconcileHostStreams(facts)
+    this.reconcileStates(this.host.states, facts.windows)
     if (this.host.dirty && this.host.timer === undefined) {
       this.host.timer = setTimeout(() => {
         this.host.timer = undefined
@@ -420,6 +428,80 @@ export class ArborFactsService extends Service {
       }, REBUILD_MS)
     }
     return facts
+  }
+
+  /**
+   * Watch the window's own state, not only its output: arbor announces
+   * `run_ended` on the window's event bus without journaling it, so a facts
+   * rebuild triggered by journal appends alone would leave a finished run
+   * looking live forever. This watcher turns that event — and the usage event
+   * each model step emits — into a facts rebuild.
+   */
+  private reconcileStates(states: Map<string, () => void>, windows: readonly { readonly ref: string; readonly live: boolean }[]): void {
+    const live = new Set(windows.filter(window => window.live).map(window => window.ref))
+    for (const [window, stop] of states) {
+      if (live.has(window)) continue
+      stop()
+      states.delete(window)
+    }
+    for (const window of live) {
+      if (states.has(window)) continue
+      states.set(window, this.watchState(window))
+    }
+  }
+
+  /** One window's state events, observed beside its output stream. */
+  private watchState(window: string): () => void {
+    let stopped = false
+    let iterator: AsyncIterator<unknown> | undefined
+    let settle: ReturnType<typeof setTimeout> | undefined
+    const bumpSoon = (): void => {
+      if (stopped || settle !== undefined) return
+      settle = setTimeout(() => {
+        settle = undefined
+        if (!stopped) this.bump()
+      }, 150)
+    }
+    void (async () => {
+      // `window_start` is appended before the backend opens the window, so the
+      // state subscription waits for `open` rather than guessing at it.
+      try {
+        await this.arborHost().backend.whenOpen(window as never)
+      } catch {
+        return
+      }
+      if (stopped) return
+      try {
+        iterator = this.arborHost().backend.events(window as never)[Symbol.asyncIterator]() as AsyncIterator<unknown>
+      } catch {
+        this.bump()
+        return
+      }
+      try {
+        for (;;) {
+          const next = await iterator.next()
+          if (next.done === true) return
+          const event = next.value as { readonly kind?: string }
+          if (event.kind === 'run_ended' || event.kind === 'ended' || event.kind === 'usage') this.bump()
+          // The host handles the same event on its own loop, so a rebuild
+          // started now can still see `running`. One delayed read catches the
+          // state it settled on, and the 300 ms catch-up below covers a turn
+          // that ended before this subscription existed.
+          if (event.kind === 'run_ended' || event.kind === 'ended') bumpSoon()
+          if (event.kind === 'ended') return
+        }
+      } catch {
+        // The window's bus closed with the window; the facts already say so.
+      }
+    })()
+    const catchUp = setTimeout(() => { if (!stopped) this.bump() }, 300)
+    return () => {
+      if (stopped) return
+      stopped = true
+      clearTimeout(catchUp)
+      if (settle !== undefined) clearTimeout(settle)
+      void iterator?.return?.()
+    }
   }
 
   /**
@@ -521,6 +603,9 @@ export class ArborFactsService extends Service {
         }
       }))
     }
+    if (this.host.listeners.size > 0 && !this.host.states.has(window)) {
+      this.host.states.set(window, this.watchState(window))
+    }
   }
 
   /** Drop one session's live subscriptions and timer. */
@@ -529,6 +614,8 @@ export class ArborFactsService extends Service {
     session.timer = undefined
     for (const stop of session.streams.values()) stop()
     session.streams.clear()
+    for (const stop of session.states.values()) stop()
+    session.states.clear()
   }
 
   /** Drop the host view's live subscriptions and timer. */
@@ -537,6 +624,8 @@ export class ArborFactsService extends Service {
     this.host.timer = undefined
     for (const stop of this.host.streams.values()) stop()
     this.host.streams.clear()
+    for (const stop of this.host.states.values()) stop()
+    this.host.states.clear()
     this.host.facts = undefined
     this.host.dirty = true
   }

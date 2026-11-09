@@ -77,7 +77,7 @@ export interface ModelCallOutcome {
  */
 export interface ArborWindowBridge {
   /** Open the window on first use and return its ref. */
-  ensureWindow(): Promise<WindowRef>
+  ensureWindow(request?: string): Promise<WindowRef>
   /** The system prompt rendered for this window's epoch. */
   systemPrompt(window: WindowRef): string
   /** One model call through DSH's `ctx.llm`. */
@@ -432,7 +432,15 @@ export class ArborSessionAgent implements Agent {
     signal: AbortSignal,
   ): Promise<Extract<TurnEndReason, { kind: 'completed' | 'max-tokens' }> | null> {
     signal.throwIfAborted()
-    const window = await this.bridge.ensureWindow()
+    const request = messages
+      .filter(message => message.source?.kind === 'user')
+      .flatMap(message => message.content)
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const window = await this.bridge.ensureWindow(request === '' ? undefined : request)
     this.currentWindow = window
     // The system prompt the window's epoch rendered, admitted once per session:
     // a session resumed from its log already carries the one it opened with.

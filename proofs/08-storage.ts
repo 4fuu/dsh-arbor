@@ -150,6 +150,10 @@ async function waitFor<T>(read: () => T | undefined, limit = 10_000): Promise<T 
 }
 
 async function main(): Promise<void> {
+  // This proof is about the plain-directory fallback: keep the orb's ovnfs
+  // binary off PATH so `openWorkspace` makes that choice, as it does on a host
+  // without ovnfs. The real-ovnfs path is proof 20.
+  process.env.PATH = '/usr/local/bin:/usr/bin:/bin'
   scriptedLlm.responses = [{ text: 'pong' }]
   const home = await freshDshHome('arbor-spike')
   loadEnv(NAME)
