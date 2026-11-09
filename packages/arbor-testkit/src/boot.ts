@@ -14,10 +14,11 @@
  */
 
 import { existsSync } from 'node:fs'
-import { writeFile, mkdtemp } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { tempDir } from './temp.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
@@ -140,7 +141,7 @@ export async function bootArborProfile(options: ArborProfileOptions): Promise<Co
 
 /** A fresh Harness home under the system temp directory, for one isolated boot. */
 export async function freshDshHome(prefix: string): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), `${prefix}-`))
+  const home = await tempDir(`${prefix}-`)
   process.env['DSH_HOME'] = home
   return home
 }

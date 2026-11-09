@@ -137,6 +137,11 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-tag-warn{color:var(--dsw-alias-state-warn-primary,#f59e0b);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 12%,transparent)}
 .arbor-page .arbor-tag-err{color:var(--dsw-alias-state-error-primary,#ef4444);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#ef4444) 12%,transparent)}
 .arbor-page .arbor-tag-plain{opacity:.7}
+.arbor-page .arbor-refusal{display:flex;flex-direction:column;gap:4px;padding:9px 10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 28%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 8%,var(--dsw-alias-bg-layer-1,#fff))}
+.arbor-page .arbor-refusal-head{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.arbor-page .arbor-refusal-title{flex:1;min-width:0;font-size:10px;letter-spacing:.04em;color:var(--dsw-alias-state-warn-primary,#f59e0b)}
+.arbor-page .arbor-refusal-message{font-size:11px;line-height:1.55;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
+.arbor-page .arbor-refusal-hint{font-size:10.5px;line-height:1.55;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-env-counts{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;padding:1px 0 4px}
 .arbor-page .arbor-env-count{display:flex;align-items:baseline;gap:3px;color:var(--dsw-alias-label-secondary,#61666b);font-size:10.5px}
 .arbor-page .arbor-env-big{font-family:var(--arbor-font-numeric);font-size:26px;line-height:30px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}

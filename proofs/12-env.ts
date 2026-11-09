@@ -25,8 +25,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
@@ -46,6 +45,7 @@ import {
   scriptedLlm,
   useDshFixtures,
   finishProof,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 /** One scripted model response. */
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   useDshFixtures()
   await freshDshHome('arbor-spike')
   loadEnv(NAME)
-  const project = await mkdtemp(join(tmpdir(), 'arbor-env-'))
+  const project = await tempDir('arbor-env-')
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',

@@ -33,8 +33,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -55,6 +54,7 @@ import {
   finishProof,
   freshDshHome,
   scriptedLlm,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-21'
@@ -214,7 +214,7 @@ try {
 
   // ---- B. a directory the user added is the session's workspace, and the
   // pointer is recorded for it.
-  const added = await mkdtemp(join(tmpdir(), 'arbor-added-'))
+  const added = await tempDir('arbor-added-')
   await writeFile(join(added, 'main.py'), 'print("mine")', 'utf8')
   // The add-workspace action's own registration, the way the shipped flow does
   // it before the picker picks the directory.
@@ -247,7 +247,7 @@ try {
     `workspace: ${String(registry.workspaceOfSession(inShared.id, inShared.session.header.cwd)?.path ?? '(none)')}`)
 
   // ---- D. a directory nobody added is never registered by this bridge.
-  const inherited = await mkdtemp(join(tmpdir(), 'arbor-inherited-'))
+  const inherited = await tempDir('arbor-inherited-')
   await writeFile(join(inherited, 'notes.md'), 'the inherited cwd', 'utf8')
   const inInherited = await createSession(inherited, 'arbor')
   await turn(inInherited)

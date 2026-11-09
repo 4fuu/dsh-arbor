@@ -18,7 +18,7 @@ Pins, and do not change them without being asked:
 
 - DeepSeek Harness `dsh-v0.2.2-rc.1`, installed from npm as
   `@deepseek-ai/dsh@0.2.2-rc.1` and its companion packages.
-- arbor `@4fu/arbor-*` `2026.1109.0`, from npm. The arbor error package
+- arbor `@4fu/arbor-*` `2026.1109.1`, from npm. The arbor error package
   `@4fu/arbor-errors` is still `2026.1107.0`; it is the only published version.
 - This repository's packages are `@4fu/dsh-arbor-*` and are not published;
   installing means checking out this repository.
@@ -62,7 +62,7 @@ pnpm install --frozen-lockfile   # the lockfile matches the manifests
 ## 2. Run the proofs
 
 ```bash
-pnpm proofs         # all twenty-eight, in order, against the scripted model
+pnpm proofs         # all twenty-nine, in order, against the scripted model
 ```
 
 Each proof prints one `PASS` or `FAIL` line per assertion and a final
@@ -97,7 +97,11 @@ pnpm proof:arbor-workspace-membership  # 21 the session belongs to the workspace
 pnpm proof:reload-preset                # 22 a cold client restores a blank under its recorded preset
 pnpm proof:facts                        # 23 the panel facts and live stream are arbor's own
 pnpm proof:host-facts                   # 24 the whole host view names only labeled sessions
+pnpm proof:backend-session              # 25 the backend session's own state, idle and running
 ```
+
+A proof removes every temporary directory it made when it reports, so a run of
+`pnpm proofs` leaves the system temp directory as it found it.
 
 Every proof boots the shipped DSH `headless` profile from npm and composes the
 bundle's own patch file as its first overlay, so what a proof boots is what an
@@ -281,12 +285,21 @@ the window-chain summary as secondary lines. The UI text is Chinese with an
 English dictionary registered in the `arborUi` locale namespace, so DSH's
 language switch switches the page.
 
-One display exception is deliberate. Arbor learns that a run is active from its
-usage event, which arrives after the first text, so a window can be `idle` in
-`Arbor.live()` while `Arbor.stream` is already delivering deltas. The card and
-the hero show that window as running only while a delta is current; the
-underlying arbor state is never rewritten. When the deltas stop, the page falls
-back to the host's own state.
+One display exception is deliberate. Arbor marks a window running from the
+first event its run reports, but the facts stream rebuilds on journal appends,
+so a live delta can arrive before the rebuild that carries the new state. The
+card and the hero show that window as running while a delta is current, because
+the delta is arbor's own evidence that a run is going; the underlying arbor
+state is never rewritten. When the deltas stop, the page falls back to the
+host's own state.
+
+An `end` arbor refuses is shown as its own note on the window card, not as an
+ended window. The journal records the refusal (`end.handoff.invalid` for a
+handoff whose fields are not the required string arrays) with the rule and
+arbor's next action, the window stays live and idle, and the note says what the
+reader can do now: send another message in DSH to keep working, or let the model
+call `end` again with the named fields. The note disappears when a later `end`
+succeeds or the window really ends.
 
 The shape is editorial rather than a dashboard. The date line and one muted
 sentence say the state; only the window refs and counts in that sentence take
@@ -337,6 +350,11 @@ What the page shows comes from arbor, not from a browser guess:
 
 - windows and the chain: `ArborHostService.windowChainOf`, `Arbor.live()` and
   the journal's `window_start`, `window_end` and `board_line` events;
+- a window's run state and cost: the journal's `usage` and `run_ended` events,
+  read after the window's live record is gone; the facts service subscribes to
+  arbor's journal appends, never to a backend's event bus;
+- a refused `end`: the journal's `tool_result` for the `end` `tool_call`, when
+  its rule is `end.*` and the window is still live;
 - a handoff's four parts: the model's `end` tool call in the journal;
 - workspace: the workspace implementation's project, pointers, checkouts,
   keeps and open work;
@@ -355,7 +373,8 @@ The page also says where DSH's own settings card does not apply: the Agent-loop
 plugin page configures ordinary sessions, while an arbor window runs under the
 model tiers and window limits arbor reports. Proof 23 covers the per-session
 facts and the live stream; proof 24 covers the host view, the session title, the
-label and the absence of an ordinary session.
+label, the journal's run records and a refused `end`; proof 25 covers the
+backend session's own idle/running state and its delivery mapping.
 
 ### 3c. Typography contract
 
@@ -496,9 +515,18 @@ Works, and is covered by a proof:
 - `/env` carries DSH's skills (readable by path) and MCP servers (listed, with
   their tools staying DSH tools) beside arbor's own settings, built-in skills
   and the model's own installs.
+- A window opens idle and its run's own events make it running; the run's end
+  returns it to idle. That state belongs to the DSH backend session, not to a
+  copy of the host's record: a context delivery is injected without waking it,
+  an input delivered to an idle window becomes the next turn, and one delivered
+  during a run goes in at the next step.
 - A window that ends hands off to a continuation the next turn drives, and a
   window whose idle period passes ends on its own; arbor's own window defaults
-  apply.
+  apply. The journal records each run's `usage` and `run_ended`, so the page
+  knows a finished run and its cost without a backend bus.
+- An `end` arbor refuses (a malformed handoff is `end.handoff.invalid`) leaves
+  the window live; the page shows the refusal and what the reader can do, never
+  an ended window.
 - Every tool call a window runs leaves one `tool/call` + `tool/result` pair on
   the session log, arbor's own tools included.
 - The arbor page in the web client: one permanent left entry, the whole-host
@@ -508,7 +536,7 @@ Works, and is covered by a proof:
   append/note/environment hooks and `Arbor.stream(window, …)`. Ordinary
   sessions get no arbor tab and keep their composer, sandbox and header
   unchanged. The page's session card and tab lead with DSH's session title.
-- Arbor 2026.1109.0's window label, `Delivery.role` (`context` versus `input`)
+- Arbor 2026.1109.1's window label, `Delivery.role` (`context` versus `input`)
   and `send.unowned` refusal are in use: the facts page finds a session's
   windows by label, and a send from a window that does not own the target is
   refused with arbor's own rule instead of being delivered.

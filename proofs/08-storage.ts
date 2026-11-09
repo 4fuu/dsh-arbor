@@ -29,8 +29,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { rm, writeFile } from 'node:fs/promises'
 import { basename, sep } from 'node:path'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,6 +48,7 @@ import {
   scriptedLlm,
   windowOf,
   finishProof,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-8'
@@ -157,8 +157,8 @@ async function main(): Promise<void> {
   scriptedLlm.responses = [{ text: 'pong' }]
   const home = await freshDshHome('arbor-spike')
   loadEnv(NAME)
-  const first = await mkdtemp(join(tmpdir(), 'arbor-project-'))
-  const second = await mkdtemp(join(tmpdir(), 'arbor-project-'))
+  const first = await tempDir('arbor-project-')
+  const second = await tempDir('arbor-project-')
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
     // The owner's decision (no copy, no mount, no adoption): the session works in
     // the shared folder and the user's own directory is recorded as a pointer, so
     // arbor's prompt names it and the model reaches it on the host directly.
-    const external = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
+    const external = await tempDir('arbor-pointer-')
     await writeFile(join(external, 'code.py'), 'print("hi")', 'utf8')
     const pointerSession = await runSession(ctx, first, [
       { toolCalls: [{ name: 'read', args: { path: join(external, 'code.py') } }] },
@@ -295,7 +295,7 @@ async function main(): Promise<void> {
     // the changed line, the way every other prompt-section change does. The
     // host delivers from its own watch loop, which runs beside the turn rather
     // than inside it, so the proof waits for what it asserts.
-    const secondPointer = await mkdtemp(join(tmpdir(), 'arbor-pointer-'))
+    const secondPointer = await tempDir('arbor-pointer-')
     await writeFile(join(secondPointer, 'notes.md'), 'the second directory', 'utf8')
     host.pointerArborProject(secondPointer, pointerSession)
     await runSession(ctx, first, [{ text: 'one more turn' }], pointerSession)

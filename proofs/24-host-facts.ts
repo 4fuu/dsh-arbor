@@ -13,8 +13,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -35,6 +33,7 @@ import {
   scriptedLlm,
   useDshFixtures,
   waitFor,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-24'
@@ -51,7 +50,7 @@ async function main(): Promise<void> {
   useDshFixtures()
   await freshDshHome('arbor-spike')
   loadEnv(NAME)
-  const project = await mkdtemp(join(tmpdir(), 'arbor-host-facts-'))
+  const project = await tempDir('arbor-host-facts-')
   const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
   const ordinaryId = brandString<SessionId>(`session-${randomUUID()}`)
   const ctx: Context = await bootArborProfile({
@@ -77,9 +76,9 @@ async function main(): Promise<void> {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'say the host facts answer' }], source: { kind: 'user' } }))
     const windowRef = await waitFor(() => host.windowFor(sessionId))
     await agent.whenIdle();
-    // The host's own window state moves to idle on the backend's `run_ended`
-    // event, which is not a journal append. The open host stream must hear it
-    // without anyone calling `hostFactsFor()`.
+    // The run's end is a journal append (`run_ended`), so the open host stream
+    // hears it without anyone calling `hostFactsFor()` and without watching a
+    // backend bus.
     const idle = await waitFor(() => frames
       .filter(frame => frame.type === 'facts')
       .map(frame => frame.facts)
@@ -88,6 +87,41 @@ async function main(): Promise<void> {
       .catch(() => undefined)
     check('the host stream hears the run end without a manual rebuild', idle !== undefined,
       `states=${JSON.stringify(frames.filter(frame => frame.type === 'facts').flatMap(frame => frame.facts.sessions.flatMap(session => session.windows.filter(window => window.ref === windowRef).map(window => `${window.ref}:${window.state}`))))}`)
+    const journalKinds = (await host.journal.list({ window: windowRef as never, limit: 200 })).items.map(event => event.kind)
+    check('the journal records the run end and its usage', journalKinds.includes('run_ended') && journalKinds.includes('usage'),
+      `kinds=${JSON.stringify([...new Set(journalKinds)])}`)
+
+    // An `end` arbor refuses keeps the window alive: the facts carry the rule
+    // and the window's real state, never an ended one.
+    scriptedLlm.responses = [
+      { toolCalls: [{ name: 'end', args: { handoff: { topic: 'CI' } } }] },
+      { text: 'the window is still open' },
+    ]
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'end with a malformed handoff' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    // The host settles `run_ended` on its own watch loop, one turn after the
+    // DSH agent reports the turn done. Wait for the second run's journal row as
+    // well as the idle state: the record is idle before that turn's first event
+    // too, so idle alone does not mean the refusal's run has settled.
+    await waitFor(async () => {
+      const runs = (await host.journal.list({ window: windowRef as never, kinds: ['run_ended'], limit: 50 })).total
+      const idle = host.host.live().every(record => record.window !== windowRef || record.state === 'idle')
+      return runs >= 2 && idle ? true : undefined
+    }, 10_000)
+    const afterRefusal = await ctx.arborFacts.hostFactsFor()
+    const refused = afterRefusal.windows.find(window => window.ref === windowRef)
+    const runEnds = (await host.journal.list({ window: windowRef as never, kinds: ['run_ended'], limit: 50 })).total
+    check('a refused end leaves the window live and idle',
+      refused?.live === true && refused.state === 'idle',
+      `state=${refused?.state ?? 'missing'} live=${String(refused?.live)} facts=${JSON.stringify(afterRefusal.windows.map(window => `${window.ref}:${window.state}`))} host=${JSON.stringify(host.host.live().map(record => `${record.window}:${record.state}`))} run_ended=${runEnds}`)
+    check('the facts carry the refused rule and arbor\'s wording',
+      refused?.endRefused?.rule === 'end.handoff.invalid'
+      && refused.endRefused.message.includes('topics')
+      && refused.endRefused.message.includes('progress'),
+      `refusal=${JSON.stringify(refused?.endRefused)}`)
+    const ends = await host.journal.list({ window: windowRef as never, kinds: ['window_end'], limit: 10 })
+    check('the refused end recorded no window_end', ends.total === 0, `window_end rows: ${ends.total}`)
+
     const titleSession = agent.session as unknown as { append(type: string, data: unknown): unknown };
     titleSession.append('session/title', { title: 'Proof 24 arbor session' })
 

@@ -11,9 +11,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@4fu/arbor-core": "2026.1109.0",
-    "@4fu/arbor-interfaces": "2026.1109.0",
-    "@4fu/arbor-prompt": "2026.1109.0",
+    "@4fu/arbor-core": "2026.1109.1",
+    "@4fu/arbor-interfaces": "2026.1109.1",
+    "@4fu/arbor-prompt": "2026.1109.1",
     "@4fu/dsh-arbor-host": "workspace:*",
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",

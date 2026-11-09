@@ -10,14 +10,14 @@
  * wrapper execs `node` on the fixture `ovnfs-stub.mjs`, which implements the
  * `ctl` admin protocol `@4fu/arbor-workspace-ovnfs` speaks.
  *
- * The directory is left on disk (under the system temp directory); it is inert
- * once the proof process exits.
+ * The directory lives under the system temp directory and is registered with
+ * the proof suite's cleanup, so a proof run removes it when it reports.
  */
 
-import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { chmod, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tempDir } from './temp.ts'
 
 /** The absolute path of the stub script. */
 export const OVNFS_STUB: string = fileURLToPath(new URL('./fixtures/ovnfs-stub.mjs', import.meta.url))
@@ -29,7 +29,7 @@ export const OVNFS_STUB: string = fileURLToPath(new URL('./fixtures/ovnfs-stub.m
 let installed: string | undefined
 export async function useOvnfsStub(): Promise<string> {
   if (installed !== undefined) return installed
-  const dir = await mkdtemp(join(tmpdir(), 'arbor-ovnfs-bin-'))
+  const dir = await tempDir('arbor-ovnfs-bin-')
   const wrapper = join(dir, 'ovnfs')
   await writeFile(wrapper, `#!/bin/sh\nexec node ${JSON.stringify(OVNFS_STUB)} "$@"\n`, 'utf8')
   await chmod(wrapper, 0o755)

@@ -33,6 +33,7 @@ import {
 } from 'react'
 import type {
   ArborBoardFacts,
+  ArborEndRefusalFacts,
   ArborEnvFacts,
   ArborFacts,
   ArborHostFacts,
@@ -750,6 +751,30 @@ function StateChip(props: { readonly state: ArborWindowFacts['state']; readonly 
   }, props.t(props.state === 'running' ? 'statusRunning' : props.state === 'idle' ? 'statusIdle' : props.state === 'paused' ? 'statusPaused' : 'statusEnded'))
 }
 
+/**
+ * An `end` arbor refused while the window stayed open.
+ *
+ * The rule and the wording are arbor's own journal record; the hint names what
+ * the reader can do now. The window is live and idle here, so this never stands
+ * in for an ended state.
+ */
+function EndRefusal(props: {
+  readonly refusal: ArborEndRefusalFacts
+  readonly t: Translate
+}): ReactNode {
+  const { refusal, t } = props
+  return createElement('div', {
+    className: 'arbor-refusal',
+    role: 'status',
+    'data-arbor-end-refused': refusal.rule,
+  },
+    createElement('div', { className: 'arbor-refusal-head' },
+      createElement('span', { className: 'arbor-refusal-title arbor-label', 'data-arbor-text': 'display' }, t('endRefusedTitle')),
+      createElement('span', { className: 'arbor-tag arbor-tag-warn arbor-num' }, refusal.rule)),
+    createElement('div', { className: 'arbor-refusal-message', 'data-arbor-text': 'body' }, refusal.message),
+    createElement('div', { className: 'arbor-refusal-hint', 'data-arbor-text': 'body' }, t('endRefusedHint')))
+}
+
 /** The empty card, with copy that says what will fill it. */
 function EmptyCard(props: {
   readonly title: string
@@ -807,6 +832,7 @@ function LiveWindowCard(props: {
       aside: createElement(StateChip, { state, t }),
     }),
     createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? (session === undefined ? t('live') : sessionTitle(session))),
+    window.endRefused === undefined ? null : createElement(EndRefusal, { refusal: window.endRefused, t }),
     window.live ? createElement(Stream, { stream, t }) : null,
     createElement(CardFoot, null,
       session === undefined ? null : createElement('span', { className: 'arbor-card-session' }, sessionTitle(session)),
@@ -829,6 +855,7 @@ function WindowCard(props: {
       aside: createElement(StateChip, { state, t }),
     }),
     createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, window.doing ?? (session === undefined ? t('live') : sessionTitle(session))),
+    window.endRefused === undefined ? null : createElement(EndRefusal, { refusal: window.endRefused, t }),
     window.live ? createElement(Stream, { stream, t }) : null,
     createElement(CardFoot, null,
       createElement('span', { className: 'arbor-num' }, window.used === undefined ? '—' : `${compact(window.used)} / ${compact(window.limit)}`),

@@ -8,7 +8,7 @@ DSH's own embedded AgentLoop, in the same process.
 - DSH is pinned to tag `dsh-v0.2.2-rc.1` (commit `66491b05e3` of
   deepseek-ai/deepseek-harness); the packages install the published
   `@deepseek-ai/dsh@0.2.2-rc.1` tree, so no monorepo build is needed.
-- arbor is pinned to `2026.1107.0` (`@4fu/arbor-*` from npm).
+- arbor is pinned to `2026.1109.1` (`@4fu/arbor-*` from npm).
 - Node 24+ (developed on Node 26; the sources are erasable-syntax TypeScript
   run directly through Node's type stripping, so there is no build step).
 
@@ -26,7 +26,7 @@ cd dsh-arbor
 git checkout b3
 pnpm install        # pnpm 11+; the dependency build policy is in pnpm-workspace.yaml
 pnpm check          # tsc --noEmit over every package and proof
-pnpm proofs         # all fourteen proofs, against the scripted model
+pnpm proofs         # all twenty-nine proofs, against the scripted model
 ```
 
 One prompt to hand to a model, so it installs and inspects this according to

@@ -174,7 +174,20 @@ class DshWindowSession implements WindowSession {
   readonly window: WindowRef
   private readonly bus: WindowEventBus
   private readonly ended = Promise.withResolvers<WindowOutcome>()
-  private currentState: WindowState = 'running'
+  /**
+   * The backend session's own state, not the host's window record.
+   *
+   * Arbor opens a window idle: opening it starts no run, and a continuation a
+   * restart opened before its session resumed stays idle until one does. This
+   * session starts a DSH turn when the bridge calls `modelCall`, so the turn is
+   * what makes this state running, and the turn's end returns it to idle. The
+   * host's record moves on the events this session publishes; the two are
+   * related but never copied from one another, because a host that says idle
+   * does not mean this session cannot accept a delivery.
+   */
+  private currentState: WindowState = 'idle'
+  /** The state a paused session returns to when the host resumes it. */
+  private resumeState: WindowState = 'idle'
   private readonly usageValue = { used: 0, limit: 0, reserve: 0 }
   private readonly onEnd: () => void
   /** The window's frozen epoch, whose declared tools a `refreshTools` replaces. */
@@ -215,7 +228,33 @@ class DshWindowSession implements WindowSession {
   /** One live event of this window, from the session agent that drives it. */
   publish(event: WindowEvent): void {
     if (this.currentState === 'ended') return
+    // The run's own events are what make the backend session running. Usage is
+    // not one of them: it is reported when a message ends, which can be the
+    // last thing before the run's end, so it must not wake a quiet window.
+    if (event.kind !== 'usage' && event.kind !== 'run_ended' && event.kind !== 'ended') {
+      this.beginRun()
+    }
     this.bus.publish(event)
+  }
+
+  /**
+   * The DSH agent started a turn in this window. The host learns a run is
+   * active from the first event this session publishes; this state is the
+   * backend's own, and starts the window's `state` at running before that
+   * first event arrives.
+   */
+  beginRun(): void {
+    if (this.currentState === 'ended' || this.currentState === 'paused') return
+    this.currentState = 'running'
+  }
+
+  /**
+   * The turn ended and no turn is in progress now. The window stays open for
+   * the session's next turn, exactly as arbor's own record returns to idle.
+   */
+  finishRun(): void {
+    if (this.currentState === 'ended' || this.currentState === 'paused') return
+    this.currentState = 'idle'
   }
 
   /**
@@ -239,8 +278,10 @@ class DshWindowSession implements WindowSession {
   private deliver(delivery: Delivery, how: 'steer' | 'followUp'): void {
     // The host never steers into a window it has ended or paused, and a window
     // whose session is not bound yet has no inbox to splice into: a restart
-    // continuation opens before its session comes back.
-    if (this.currentState !== 'running') return
+    // continuation opens before its session comes back. An idle window is not
+    // one of those: the host sends its related input through `followUp`, which
+    // starts the next turn, so only an ended window drops a delivery.
+    if (this.currentState === 'ended') return
     const agent = this.driver
     if (agent === undefined) return
     const text = this.render(delivery)
@@ -255,8 +296,13 @@ class DshWindowSession implements WindowSession {
     // authoritative; the delivery kind is not consulted. Steering context into
     // a quiet window would wake its session to read a diff, which is a turn the
     // user did not ask for and the model has nothing to do in.
+    //
+    // An input while this session is idle is the next turn's input: DSH's
+    // `followup` is what wakes a quiet agent, and its steering target belongs
+    // to a turn that is already running. A delivery that arrives while a turn
+    // runs goes in at the next step (`steer`), or after the run (`followUp`).
     if (delivery.role === 'context') agent.inject(message)
-    else if (how === 'steer') agent.steer(message)
+    else if (how === 'steer' && this.currentState === 'running') agent.steer(message)
     else agent.followup(message)
   }
 
@@ -306,11 +352,14 @@ class DshWindowSession implements WindowSession {
   }
 
   async pause(): Promise<void> {
+    if (this.currentState === 'ended' || this.currentState === 'paused') return
+    this.resumeState = this.currentState
     this.currentState = 'paused'
   }
 
   async resume(): Promise<void> {
-    this.currentState = 'running'
+    if (this.currentState !== 'paused') return
+    this.currentState = this.resumeState
   }
 
   usage(): { used: number; limit: number; reserve: number } {
@@ -464,6 +513,9 @@ export class DshBackend implements AgentBackend {
   finishRun(window: WindowRef): void {
     const session = this.windows.get(window)?.session
     if (session === undefined || session.state === 'ended') return
+    // The run is over before its end is published, so the next delivery this
+    // window takes is the next turn's input rather than this run's.
+    session.finishRun()
     session.publish({
       kind: 'run_ended',
       outcome: { window, reason: 'model_ended', usage: session.usage() },
@@ -493,6 +545,9 @@ export class DshBackend implements AgentBackend {
     const { agent } = input
     const llm = this.options.llm
     const { signal } = input
+    // A model call is this backend session's turn at work: its state is
+    // running from here, before the first streamed event the host sees.
+    this.requireEntry(input.window).session.beginRun()
     const proposed = {
       provider: input.selection.provider,
       model: input.selection.model,

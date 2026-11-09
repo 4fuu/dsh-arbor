@@ -27,8 +27,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Service } from '@deepseek-ai/cordis'
@@ -47,6 +46,7 @@ import {
   arborHostOf,
   finishProof,
   scriptedLlm,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-16'
@@ -150,7 +150,7 @@ try {
   const shared = host.sharedFolder
 
   // ---- A. the add-workspace action's directory is remembered; a project is not.
-  const added = await mkdtemp(join(tmpdir(), 'arbor-added-'))
+  const added = await tempDir('arbor-added-')
   await writeFile(join(added, 'main.py'), 'print("mine")', 'utf8')
   const project = join(shared, 'web-app')
   check('the stand-in registry is mounted', registry !== undefined,
@@ -189,7 +189,7 @@ try {
   // ---- C. a cwd nobody added never becomes a pointer. The section is checked
   // for arbor's own method lines as well, so an empty section — a window that
   // never opened — cannot pass for a window without a pointer.
-  const inherited = await mkdtemp(join(tmpdir(), 'arbor-inherited-'))
+  const inherited = await tempDir('arbor-inherited-')
   await writeFile(join(inherited, 'notes.md'), 'the inherited cwd', 'utf8')
   const plain = await createSession(inherited, 'arbor')
   await turn(plain)

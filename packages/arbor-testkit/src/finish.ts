@@ -19,8 +19,13 @@
  * deadline — still hangs, which is what should happen.
  */
 
+import { removeTempDirs } from './temp.ts'
+
 /** Report one proof's result and exit the process. */
 export function finishProof(label: string, failures: readonly string[]): void {
+  // Every fixture directory this process made goes before the report, so the
+  // suite leaves /tmp as it found it whether the proof passed or failed.
+  removeTempDirs()
   const ok = failures.length === 0
   const line = ok ? `${label} OK` : `${label} FAILED: ${failures.join('; ')}`
   process.exitCode = ok ? 0 : 1

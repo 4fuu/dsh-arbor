@@ -349,6 +349,8 @@ var en = {
   handoffPending: "Pending",
   handoffAgreements: "Agreements",
   refused: "refused: {rule}",
+  endRefusedTitle: "The last end was refused",
+  endRefusedHint: "The window is still open, so nothing ended. Send another message in DSH to keep working; the model can call end again with the handoff fields arbor named.",
   usage: "{used} / {limit} tokens",
   streamText: "Model output",
   streamSend: "send draft",
@@ -563,6 +565,8 @@ var zh = {
   handoffPending: "\u5F85\u529E",
   handoffAgreements: "\u7EA6\u5B9A",
   refused: "\u88AB\u62D2\u7EDD\uFF1A{rule}",
+  endRefusedTitle: "\u4E0A\u4E00\u6B21 end \u88AB\u62D2\u7EDD",
+  endRefusedHint: "\u7A97\u53E3\u4ECD\u7136\u5F00\u7740\uFF0C\u4EC0\u4E48\u90FD\u6CA1\u6709\u7ED3\u675F\u3002\u5728 DSH \u91CC\u7EE7\u7EED\u53D1\u6D88\u606F\u5C31\u80FD\u63A5\u7740\u505A\uFF1B\u6A21\u578B\u4E5F\u53EF\u4EE5\u6309 arbor \u6307\u51FA\u7684\u4EA4\u63A5\u5B57\u6BB5\u91CD\u65B0\u8C03\u7528 end\u3002",
   usage: "{used} / {limit} \u4EE4\u724C",
   streamText: "\u6A21\u578B\u8F93\u51FA",
   streamSend: "send \u8349\u7A3F",
@@ -776,6 +780,11 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-tag-warn{color:var(--dsw-alias-state-warn-primary,#f59e0b);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 12%,transparent)}
 .arbor-page .arbor-tag-err{color:var(--dsw-alias-state-error-primary,#ef4444);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#ef4444) 12%,transparent)}
 .arbor-page .arbor-tag-plain{opacity:.7}
+.arbor-page .arbor-refusal{display:flex;flex-direction:column;gap:4px;padding:9px 10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 28%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 8%,var(--dsw-alias-bg-layer-1,#fff))}
+.arbor-page .arbor-refusal-head{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.arbor-page .arbor-refusal-title{flex:1;min-width:0;font-size:10px;letter-spacing:.04em;color:var(--dsw-alias-state-warn-primary,#f59e0b)}
+.arbor-page .arbor-refusal-message{font-size:11px;line-height:1.55;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
+.arbor-page .arbor-refusal-hint{font-size:10.5px;line-height:1.55;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-env-counts{display:flex;gap:18px;align-items:baseline;flex-wrap:wrap;padding:1px 0 4px}
 .arbor-page .arbor-env-count{display:flex;align-items:baseline;gap:3px;color:var(--dsw-alias-label-secondary,#61666b);font-size:10.5px}
 .arbor-page .arbor-env-big{font-family:var(--arbor-font-numeric);font-size:26px;line-height:30px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
@@ -1404,6 +1413,25 @@ function StateChip(props) {
     "data-arbor-text": "display"
   }, props.t(props.state === "running" ? "statusRunning" : props.state === "idle" ? "statusIdle" : props.state === "paused" ? "statusPaused" : "statusEnded"));
 }
+function EndRefusal(props) {
+  const { refusal, t } = props;
+  return (0, import_react.createElement)(
+    "div",
+    {
+      className: "arbor-refusal",
+      role: "status",
+      "data-arbor-end-refused": refusal.rule
+    },
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-refusal-head" },
+      (0, import_react.createElement)("span", { className: "arbor-refusal-title arbor-label", "data-arbor-text": "display" }, t("endRefusedTitle")),
+      (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn arbor-num" }, refusal.rule)
+    ),
+    (0, import_react.createElement)("div", { className: "arbor-refusal-message", "data-arbor-text": "body" }, refusal.message),
+    (0, import_react.createElement)("div", { className: "arbor-refusal-hint", "data-arbor-text": "body" }, t("endRefusedHint"))
+  );
+}
 function EmptyCard(props) {
   return (0, import_react.createElement)(
     Card,
@@ -1463,6 +1491,7 @@ function LiveWindowCard(props) {
       aside: (0, import_react.createElement)(StateChip, { state, t })
     }),
     (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? (session === void 0 ? t("live") : sessionTitle(session))),
+    window2.endRefused === void 0 ? null : (0, import_react.createElement)(EndRefusal, { refusal: window2.endRefused, t }),
     window2.live ? (0, import_react.createElement)(Stream, { stream, t }) : null,
     (0, import_react.createElement)(
       CardFoot,
@@ -1484,6 +1513,7 @@ function WindowCard(props) {
       aside: (0, import_react.createElement)(StateChip, { state, t })
     }),
     (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, window2.doing ?? (session === void 0 ? t("live") : sessionTitle(session))),
+    window2.endRefused === void 0 ? null : (0, import_react.createElement)(EndRefusal, { refusal: window2.endRefused, t }),
     window2.live ? (0, import_react.createElement)(Stream, { stream, t }) : null,
     (0, import_react.createElement)(
       CardFoot,

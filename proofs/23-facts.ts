@@ -14,8 +14,6 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -38,6 +36,7 @@ import {
   scriptedLlm,
   useDshFixtures,
   waitFor,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 const NAME = 'arbor-spike-proof-23'
@@ -66,7 +65,7 @@ async function main(): Promise<void> {
   useDshFixtures()
   await freshDshHome('arbor-spike')
   loadEnv(NAME)
-  const project = await mkdtemp(join(tmpdir(), 'arbor-facts-'))
+  const project = await tempDir('arbor-facts-')
   const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
   const ctx: Context = await bootArborProfile({
     binName: NAME,

@@ -38,6 +38,23 @@ export interface ArborOpenWorkFacts {
   readonly detail?: string
 }
 
+/**
+ * An `end` arbor refused while the window stayed open.
+ *
+ * The rule, the wording and the next action are arbor's own journal record of
+ * the refusal (`end.handoff.invalid`, for a handoff whose fields are not the
+ * four string arrays). The window is still live, so a reader must show this as
+ * a refusal, never as an ended window.
+ */
+export interface ArborEndRefusalFacts {
+  readonly rule: string
+  /** The refusal text arbor recorded: rule, message and next action. */
+  readonly message: string
+  readonly at: number
+  /** The `tool_result` event that recorded the refusal. */
+  readonly ref: string
+}
+
 /** One window of a session's chain. */
 export interface ArborWindowFacts {
   /** Arbor's own window ref, `c41`. */
@@ -76,6 +93,11 @@ export interface ArborWindowFacts {
   }
   /** Why the end was refused, when arbor recorded one. */
   readonly refused?: string
+  /**
+   * The latest `end` arbor refused, when the window is still live. Absent once
+   * the window ends or a later `end` succeeds.
+   */
+  readonly endRefused?: ArborEndRefusalFacts
   /** What the window still has open in its workspace, as the board last learned it. */
   readonly openWork?: readonly string[]
 }

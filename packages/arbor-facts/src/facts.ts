@@ -2,23 +2,27 @@
  * Assemble one session's facts from arbor's own reads.
  *
  * Nothing here computes a fact of its own: the chain is
- * `ArborHostService.windowChainOf`, the live state and tokens are
- * `Arbor.live()`, the lines are `Arbor.boardLines()`, the end reasons and
- * handoffs are the journal's `window_end` events, the board's own line history
- * is the journal's `board_line` events, the workspace facts are the workspace
- * implementation's calls, the active set is `NoteStore.snapshot()`, `/env` is
- * `Environment.list()` plus the journal's `service_state` events, the schedules
- * are `Arbor.schedules()`, and the settings are `Environment.settings()` with
- * the deployment's seed as the fallback. The browser renders exactly these
- * values.
+ * `ArborHostService.windowChainOf`, the live state is `Arbor.live()`, the usage
+ * is the journal's `usage` and `run_ended` events (a window's record is gone
+ * once it ends, its journal is not), the lines are `Arbor.boardLines()`, the
+ * end reasons and handoffs are the journal's `window_end` events, a refused
+ * `end` is the journal's `tool_result` for its `tool_call`, the board's own
+ * line history is the journal's `board_line` events, the workspace facts are
+ * the workspace implementation's calls, the active set is
+ * `NoteStore.snapshot()`, `/env` is `Environment.list()` plus the journal's
+ * `service_state` events, the schedules are `Arbor.schedules()`, and the
+ * settings are `Environment.settings()` with the deployment's seed as the
+ * fallback. The browser renders exactly these values.
  */
 
 import type { Arbor } from '@4fu/arbor-core'
 import type { Event, ScheduledTask, Settings, Workspace } from '@4fu/arbor-interfaces'
+import { MAX_PAGE_LIMIT } from '@4fu/arbor-interfaces'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { sessionTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
 import type {
   ArborBoardFacts,
+  ArborEndRefusalFacts,
   ArborEnvFacts,
   ArborEnvItemFacts,
   ArborFacts,
@@ -109,6 +113,57 @@ async function windowEvents(host: ArborHostService, window: string): Promise<Eve
   return page.items
 }
 
+/** The latest page of one window's events of some kinds, newest at the end. */
+async function tailOfWindow(
+  host: ArborHostService,
+  window: string,
+  kinds: readonly string[],
+): Promise<Event[]> {
+  const options = { window: window as never, kinds, limit: MAX_PAGE_LIMIT }
+  const page = await host.journal.list(options)
+  return page.total > page.items.length
+    ? (await host.journal.list({ ...options, offset: page.total - MAX_PAGE_LIMIT })).items
+    : page.items
+}
+
+/** The usage one window last recorded, from its `usage` or `run_ended` event. */
+async function usageOfWindow(
+  host: ArborHostService,
+  window: string,
+): Promise<{ used: number; limit: number; reserve: number } | undefined> {
+  const event = (await tailOfWindow(host, window, ['usage', 'run_ended'])).at(-1)
+  if (event === undefined) return undefined
+  const values = body(event)
+  const number = (key: string): number | undefined =>
+    typeof values[key] === 'number' && Number.isFinite(values[key]) ? values[key] as number : undefined
+  const used = number('used')
+  const limit = number('limit')
+  const reserve = number('reserve')
+  if (used === undefined || limit === undefined || reserve === undefined) return undefined
+  return { used, limit, reserve }
+}
+
+/**
+ * The latest `end` arbor refused while the window is still open.
+ *
+ * The `end` tool call is one journal event and its refusal another; the result
+ * names the call in its refs. A later `end` that succeeds replaces this, and an
+ * ended window never carries it, so a reader can treat its presence as "the
+ * window is still live because arbor refused to end it".
+ */
+async function endRefusalOf(host: ArborHostService, window: string): Promise<ArborEndRefusalFacts | undefined> {
+  const events = await tailOfWindow(host, window, ['tool_call', 'tool_result'])
+  const endCall = events.findLast(event =>
+    event.kind === 'tool_call' && (event.body === 'end' || event.body?.startsWith('end ')))
+  if (endCall === undefined) return undefined
+  const result = events.find(event =>
+    event.kind === 'tool_result' && event.refs.some(ref => ref === endCall.ref))
+  if (result === undefined || result.body === null) return undefined
+  const rule = /^(end\.[a-z_.]+)\s/.exec(result.body)?.[1]
+  if (rule === undefined) return undefined
+  return { rule, message: result.body, at: result.time, ref: result.ref }
+}
+
 /** The session's windows, oldest first, with the live ones' state attached. */
 async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<{
   windows: ArborWindowFacts[]
@@ -125,6 +180,10 @@ async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<
     const lastLine = events.filter(event => event.kind === 'board_line').at(-1)
     const record = live.get(ref)
     const line = lines.get(ref)
+    const usage = await usageOfWindow(host, ref)
+    const endRefused = record === undefined || record.state === 'ended'
+      ? undefined
+      : await endRefusalOf(host, ref)
     const continuationOf = start === undefined ? undefined : text(start, 'continuation')
     const targets = [...new Set([
       ...(start?.targets ?? []),
@@ -138,9 +197,9 @@ async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<
       ...(start === undefined ? {} : { startedAt: start.time }),
       ...(end === undefined ? {} : { endedAt: end.time }),
       ...(end === undefined ? {} : { endReason: text(end, 'reason') }),
-      ...(record === undefined ? {} : { used: record.usage.used }),
-      ...(record === undefined ? {} : { limit: record.usage.limit }),
-      ...(record === undefined ? {} : { reserve: record.usage.reserve }),
+      ...(usage === undefined && record === undefined ? {} : { used: usage?.used ?? record?.usage.used }),
+      ...(usage === undefined && record === undefined ? {} : { limit: usage?.limit ?? record?.usage.limit }),
+      ...(usage === undefined && record === undefined ? {} : { reserve: usage?.reserve ?? record?.usage.reserve }),
       ...(line?.doing === undefined && lastLine === undefined
         ? {}
         : { doing: line?.doing ?? (lastLine === undefined ? undefined : text(lastLine, 'doing')) }),
@@ -149,6 +208,7 @@ async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<
       ...(continuationOf === undefined ? {} : { continuationOf }),
       ...(end === undefined ? {} : { handoff: await handoffOf(host, ref, end) }),
       ...(end === undefined ? {} : { refused: text(end, 'refused') }),
+      ...(endRefused === undefined ? {} : { endRefused }),
       ...(line?.openWork === undefined ? {} : { openWork: line.openWork }),
     })
   }

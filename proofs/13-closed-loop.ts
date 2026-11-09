@@ -22,8 +22,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -45,6 +44,7 @@ import {
   scriptedLlm,
   useDshFixtures,
   finishProof,
+  tempDir,
 } from '../packages/arbor-testkit/src/index.ts'
 
 /** One scripted model response. */
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   useDshFixtures()
   await freshDshHome('arbor-spike')
   loadEnv(NAME)
-  const project = await mkdtemp(join(tmpdir(), 'arbor-loop-'))
+  const project = await tempDir('arbor-loop-')
   const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
   const overlays = proofLive
     ? [arborPatch, arborOverlay, dshEnvOverlay]
