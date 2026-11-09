@@ -307,7 +307,10 @@ rendered card, so a growing output pushes only the cards below it. Holes are
 allowed, but the largest enclosed hole is measured and is smaller than the
 smallest card on the page; only the bottom edge may stay open, and a bottom
 notch is allowed only when no card can fit it. The union of card boxes has no
-overlap. Below about 640 px the same packer becomes one column. The
+overlap. The dock is sticky and floats over the bottom row while the page is
+being scrolled; the scroll content reserves the dock's measured height plus its
+18 px bottom offset, so at the end of the scroll no card is under it. Below
+about 640 px the same packer becomes one column. The
 chain card is wide enough for every node (measured by `scrollWidth` against
 `clientWidth`) and its nodes never overflow.
 

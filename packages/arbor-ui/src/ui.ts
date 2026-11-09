@@ -1525,6 +1525,16 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
       const direct = Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && (node.textContent ?? '').trim() !== '')
       if (direct) element.setAttribute('data-arbor-text', 'body')
     }
+    // The dock is sticky, so it floats over the last cards while the page is
+    // being read. Reserve its exact height plus its bottom offset below the
+    // scroll content; at the end of the scroll the cards clear it completely.
+    const dock = root.querySelector<HTMLElement>('.arbor-dock')
+    if (dock === null) {
+      root.style.removeProperty('--arbor-dock-reserve')
+    } else {
+      const bottom = Number.parseFloat(getComputedStyle(dock).bottom) || 0
+      root.style.setProperty('--arbor-dock-reserve', `${dock.getBoundingClientRect().height + bottom}px`)
+    }
   })
   return createElement('div', { className: 'arbor-page', 'data-arbor-page': true, 'data-arbor-text': 'body' },
     createElement('div', { className: 'arbor-page-inner' },

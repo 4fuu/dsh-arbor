@@ -22,6 +22,7 @@ export const CSS = `.arbor-page{
   --arbor-font-code:var(--ds-font-family-code);
   box-sizing:border-box;min-height:100%;overflow:auto;
   padding:24px 28px 32px;
+  padding-bottom:var(--arbor-dock-reserve,32px);
   background:var(--dsw-alias-bg-base,#fff);
   color:var(--dsw-alias-label-primary,#0f1115);
   font-family:var(--arbor-font-body);
@@ -220,7 +221,7 @@ export const CSS = `.arbor-page{
 .arbor-page .arbor-sky-cell>.arbor-card{transition:none!important}
 }
 @media (max-width:620px){
-.arbor-page{padding:18px 14px 24px}
+.arbor-page{padding:18px 14px 24px;padding-bottom:var(--arbor-dock-reserve,24px)}
 .arbor-page .arbor-hero-title{font-size:23px}
 .arbor-page .arbor-hero-hint{font-size:12px}
 .arbor-page .arbor-dock{max-width:100%}

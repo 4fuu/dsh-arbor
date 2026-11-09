@@ -661,6 +661,7 @@ var CSS = `.arbor-page{
   --arbor-font-code:var(--ds-font-family-code);
   box-sizing:border-box;min-height:100%;overflow:auto;
   padding:24px 28px 32px;
+  padding-bottom:var(--arbor-dock-reserve,32px);
   background:var(--dsw-alias-bg-base,#fff);
   color:var(--dsw-alias-label-primary,#0f1115);
   font-family:var(--arbor-font-body);
@@ -859,7 +860,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-sky-cell>.arbor-card{transition:none!important}
 }
 @media (max-width:620px){
-.arbor-page{padding:18px 14px 24px}
+.arbor-page{padding:18px 14px 24px;padding-bottom:var(--arbor-dock-reserve,24px)}
 .arbor-page .arbor-hero-title{font-size:23px}
 .arbor-page .arbor-hero-hint{font-size:12px}
 .arbor-page .arbor-dock{max-width:100%}
@@ -2269,6 +2270,13 @@ function ArborPage(props) {
       if (element.hasAttribute("data-arbor-text")) continue;
       const direct = Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "");
       if (direct) element.setAttribute("data-arbor-text", "body");
+    }
+    const dock = root.querySelector(".arbor-dock");
+    if (dock === null) {
+      root.style.removeProperty("--arbor-dock-reserve");
+    } else {
+      const bottom = Number.parseFloat(getComputedStyle(dock).bottom) || 0;
+      root.style.setProperty("--arbor-dock-reserve", `${dock.getBoundingClientRect().height + bottom}px`);
     }
   });
   return (0, import_react.createElement)(
