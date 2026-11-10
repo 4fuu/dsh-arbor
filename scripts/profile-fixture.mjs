@@ -40,8 +40,13 @@ export async function workspace(variable, prefix) {
 
 /** Run one command, and return its combined output; throw on a nonzero exit. */
 export function run(command, args, options = {}) {
+  console.log(`$ ${command} ${args.join(' ')}`)
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], ...options })
+    // A command that hangs would hold the job until GitHub's own limit; the
+    // timeout turns it into a named failure while the output still says where.
+    // Windows npm installs a fresh DSH in about eleven minutes, so the limit is
+    // generous enough not to cut a slow but healthy install.
+    const child = spawn(command, args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], timeout: 1_800_000, ...options })
     let output = ''
     child.stdout.on('data', chunk => (output += chunk))
     child.stderr.on('data', chunk => (output += chunk))
@@ -230,7 +235,7 @@ export async function connect(url) {
   const connectUrl = new URL('/connect', launch.origin)
   connectUrl.searchParams.set('token', launch.searchParams.get('token'))
   connectUrl.searchParams.set('interactions', 'none')
-  const response = await fetch(connectUrl, { redirect: 'manual' })
+  const response = await fetch(connectUrl, { redirect: 'manual', signal: AbortSignal.timeout(60_000) })
   if (response.status !== 302) throw new Error(`/connect answered ${response.status}, expected the 302 that mints the API cookie`)
   const cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
   if (cookie === '') throw new Error('/connect minted no cookie')
@@ -244,6 +249,7 @@ export async function createSession(connection, request) {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie: connection.cookie },
     body: JSON.stringify({ type: 'client-request', rpcId, method: 'session/create', payload: { args: { request } } }),
+    signal: AbortSignal.timeout(180_000),
   })
   if (response.status !== 200) throw new Error(`session/create answered HTTP ${response.status}`)
   const body = await response.json()
