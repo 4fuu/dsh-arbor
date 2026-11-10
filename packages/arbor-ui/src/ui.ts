@@ -1420,6 +1420,22 @@ function SettingsPage(props: {
       createElement('span', { className: 'arbor-label' },
         t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment'))),
   ]
+  const windowRows: ReactNode[] = []
+  if (settings.window?.contextTokens !== undefined) {
+    windowRows.push(createElement(SettingRow, { key: 'context', label: t('settingsWindowModel') },
+      createElement('span', { className: 'arbor-num' }, `${number(settings.window.contextTokens)} tokens`)))
+    if (settings.window.reserveTokens !== undefined) {
+      windowRows.push(createElement(SettingRow, { key: 'reserve', label: t('settingsWindowReserve') },
+        createElement('span', { className: 'arbor-num' }, `${number(settings.window.reserveTokens)} tokens`)))
+    }
+    // The source is only known once a window opened. Before that the value can
+    // be the deployment's own setting, so the row would name the wrong origin.
+    if (settings.window.contextTokensSource !== undefined) {
+      windowRows.push(createElement(SettingRow, { key: 'contextSource', label: t('settingsSource') },
+        createElement('span', { className: 'arbor-label' },
+          t(settings.window.contextTokensSource === 'default' ? 'settingsWindowFromDefault' : 'settingsWindowFromModel'))))
+    }
+  }
   const promptRows: ReactNode[] = []
   if (settings.identity !== undefined) {
     promptRows.push(createElement(SettingRow, { key: 'identity', label: t('settingsIdentity') },
@@ -1449,6 +1465,7 @@ function SettingsPage(props: {
   }
   facts.push(
     factGroup('host', t('settingsFactsHost'), hostRows),
+    factGroup('window', t('settingsFactsWindow'), windowRows),
     factGroup('prompt', t('settingsFactsPrompt'), promptRows),
     factGroup('models', t('settingsFactsModels'), modelRows),
     factGroup('judge', t('settingsFactsJudge'), judgeRows),

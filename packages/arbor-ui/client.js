@@ -448,6 +448,10 @@ var en = {
   settingsNotesTokensHint: "The active set's token budget.",
   settingsSource: "Settings source",
   settingsFactsHost: "Host",
+  settingsFactsWindow: "Window budget",
+  settingsWindowModel: "Model context",
+  settingsWindowFromModel: "the selected model's context window",
+  settingsWindowFromDefault: "arbor default; DSH reported no context window",
   settingsFactsPrompt: "Prompt",
   settingsFactsModels: "Models",
   settingsFactsJudge: "Judge thresholds",
@@ -737,6 +741,10 @@ var zh = {
   settingsNotesTokensHint: "\u6D3B\u8DC3\u96C6\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
   settingsSource: "\u8BBE\u7F6E\u6765\u6E90",
   settingsFactsHost: "\u5BBF\u4E3B",
+  settingsFactsWindow: "\u7A97\u53E3\u9884\u7B97",
+  settingsWindowModel: "\u6A21\u578B\u4E0A\u4E0B\u6587",
+  settingsWindowFromModel: "\u6240\u9009\u6A21\u578B\u7684\u4E0A\u4E0B\u6587\u7A97\u53E3",
+  settingsWindowFromDefault: "arbor \u9ED8\u8BA4\u503C\uFF1BDSH \u672A\u63D0\u4F9B\u4E0A\u4E0B\u6587\u7A97\u53E3",
   settingsFactsPrompt: "\u63D0\u793A\u8BCD",
   settingsFactsModels: "\u6A21\u578B",
   settingsFactsJudge: "\u5224\u65AD\u9608\u503C",
@@ -1162,6 +1170,9 @@ function endLabel(t, reason) {
   if (reason === "failed") return t("endFailed");
   if (reason === "paused") return t("endPaused");
   return reason;
+}
+function number(value) {
+  return value === void 0 ? "\u2014" : new Intl.NumberFormat("en-US").format(value);
 }
 function compact(value) {
   if (value === void 0) return "\u2014";
@@ -2278,6 +2289,32 @@ function SettingsPage(props) {
       )
     )
   ];
+  const windowRows = [];
+  if (settings.window?.contextTokens !== void 0) {
+    windowRows.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "context", label: t("settingsWindowModel") },
+      (0, import_react.createElement)("span", { className: "arbor-num" }, `${number(settings.window.contextTokens)} tokens`)
+    ));
+    if (settings.window.reserveTokens !== void 0) {
+      windowRows.push((0, import_react.createElement)(
+        SettingRow,
+        { key: "reserve", label: t("settingsWindowReserve") },
+        (0, import_react.createElement)("span", { className: "arbor-num" }, `${number(settings.window.reserveTokens)} tokens`)
+      ));
+    }
+    if (settings.window.contextTokensSource !== void 0) {
+      windowRows.push((0, import_react.createElement)(
+        SettingRow,
+        { key: "contextSource", label: t("settingsSource") },
+        (0, import_react.createElement)(
+          "span",
+          { className: "arbor-label" },
+          t(settings.window.contextTokensSource === "default" ? "settingsWindowFromDefault" : "settingsWindowFromModel")
+        )
+      ));
+    }
+  }
   const promptRows = [];
   if (settings.identity !== void 0) {
     promptRows.push((0, import_react.createElement)(
@@ -2325,6 +2362,7 @@ function SettingsPage(props) {
   }
   facts.push(
     factGroup("host", t("settingsFactsHost"), hostRows),
+    factGroup("window", t("settingsFactsWindow"), windowRows),
     factGroup("prompt", t("settingsFactsPrompt"), promptRows),
     factGroup("models", t("settingsFactsModels"), modelRows),
     factGroup("judge", t("settingsFactsJudge"), judgeRows)
