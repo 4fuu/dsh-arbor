@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-host",
-  "version": "2026.1110.4",
+  "version": "2026.1110.5",
   "type": "module",
   "description": "The one Arbor host a DSH process runs: the durable SQLite journal and note store under DSH_HOME/arbor, the settings and the window lifecycle",
   "exports": {
@@ -14,7 +14,7 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-core": "2026.1110.2",
+    "@4fu/arbor-core": "2026.1110.3",
     "@4fu/arbor-environment-dir": "2026.1110.2",
     "@4fu/arbor-interfaces": "2026.1110.0",
     "@4fu/arbor-journal-sqlite": "2026.1110.0",

@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-llm",
-  "version": "2026.1110.4",
+  "version": "2026.1110.5",
   "type": "module",
   "description": "arbor AgentBackend that runs each window's turns through DSH's ctx.llm and ctx.tools",
   "exports": {

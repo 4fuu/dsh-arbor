@@ -48,8 +48,8 @@ importers:
   packages/arbor-driver:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1110.2
-        version: 2026.1110.2
+        specifier: 2026.1110.3
+        version: 2026.1110.3
       '@4fu/arbor-interfaces':
         specifier: 2026.1110.0
         version: 2026.1110.0
@@ -134,8 +134,8 @@ importers:
   packages/arbor-facts:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1110.2
-        version: 2026.1110.2
+        specifier: 2026.1110.3
+        version: 2026.1110.3
       '@4fu/arbor-interfaces':
         specifier: 2026.1110.0
         version: 2026.1110.0
@@ -153,8 +153,8 @@ importers:
   packages/arbor-host:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1110.2
-        version: 2026.1110.2
+        specifier: 2026.1110.3
+        version: 2026.1110.3
       '@4fu/arbor-environment-dir':
         specifier: 2026.1110.2
         version: 2026.1110.2
@@ -414,8 +414,8 @@ importers:
   packages/arbor-workspace:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1110.2
-        version: 2026.1110.2
+        specifier: 2026.1110.3
+        version: 2026.1110.3
       '@4fu/arbor-interfaces':
         specifier: 2026.1110.0
         version: 2026.1110.0
@@ -430,8 +430,8 @@ importers:
   proofs:
     dependencies:
       '@4fu/arbor-core':
-        specifier: 2026.1110.2
-        version: 2026.1110.2
+        specifier: 2026.1110.3
+        version: 2026.1110.3
       '@4fu/arbor-interfaces':
         specifier: 2026.1110.0
         version: 2026.1110.0
@@ -508,8 +508,8 @@ importers:
 
 packages:
 
-  '@4fu/arbor-core@2026.1110.2':
-    resolution: {integrity: sha512-ASGV2yYWu1R+FN6HU5FhZ67lrNttcVKRp5Z/xc/GxGXAsR/RPZfVg+c55Ui11QHmc4/kIb9LO/SHQNHTsz2l4A==}
+  '@4fu/arbor-core@2026.1110.3':
+    resolution: {integrity: sha512-mdJyq1THBMOal6dApzHbr6h3iLinMdNlEVqBo0yQ8JoVP+c9EiibXQ1pHmUnfLro1Y6mBgUvVDYnaRtkRroH2Q==}
     engines: {node: '>=24'}
 
   '@4fu/arbor-environment-dir@2026.1110.2':
@@ -4855,7 +4855,7 @@ packages:
 
 snapshots:
 
-  '@4fu/arbor-core@2026.1110.2':
+  '@4fu/arbor-core@2026.1110.3':
     dependencies:
       '@4fu/arbor-errors': 2026.1107.0
       '@4fu/arbor-interfaces': 2026.1110.0

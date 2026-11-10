@@ -15,7 +15,7 @@ Arbor keeps running on DSH's own embedded AgentLoop, in the same process.
 > pinned to one DSH version and relies on DSH internals. Read
 > [Versions and compatibility](docs/versions.md) before installing it on
 > anything you care about. The packages are published under `@4fu` at
-> `2026.1110.4`; the bundle and the font plugin install independently from npm.
+> `2026.1110.5`; the bundle and the font plugin install independently from npm.
 
 ## What an arbor session changes
 
@@ -98,7 +98,7 @@ built or linked.
 Install and update the bundle the same way, with DSH closed:
 
 ```bash
-dsh plugin --profile desktop add @4fu/dsh-arbor-bundle@2026.1110.4
+dsh plugin --profile desktop add @4fu/dsh-arbor-bundle@2026.1110.5
 ```
 
 Then start DSH again. Do not install or update from DSH's Plugins page while
@@ -112,7 +112,7 @@ use the profile you start instead, for example `web` for `dsh web`:
 
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.4
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.5
 dsh web
 ```
 
@@ -164,7 +164,7 @@ model this prompt, editing the bracketed parts or dropping them:
 ```text copy Copy Install Prompt
 Install dsh-arbor (https://github.com/4fuu/dsh-arbor) in this environment [in a
 scratch DSH home under /tmp] and show me that it works: follow
-docs/install-for-agents.md, install @4fu/dsh-arbor-bundle@2026.1110.4 into a DSH
+docs/install-for-agents.md, install @4fu/dsh-arbor-bundle@2026.1110.5 into a DSH
 web profile, pick Arbor for one session, and [also run the proof suite from a
 checkout with pnpm install --frozen-lockfile, pnpm check and pnpm proofs]. Report
 which checks passed, what the live session answered, and anything that did not

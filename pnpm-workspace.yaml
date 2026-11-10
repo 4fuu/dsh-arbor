@@ -2,7 +2,7 @@ packages:
   - 'packages/*'
   - 'proofs'
 minimumReleaseAgeExclude:
-  - '@4fu/arbor-core@2026.1110.2'
+  - '@4fu/arbor-core@2026.1110.3'
   - '@4fu/arbor-environment-dir@2026.1110.2'
   - '@4fu/arbor-errors@2026.1107.0'
   - '@4fu/arbor-interfaces@2026.1110.0'
