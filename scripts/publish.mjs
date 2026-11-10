@@ -144,6 +144,21 @@ async function copyDocuments(package_) {
   await copyFile(join(package_.directory, 'LICENSE'), join(package_.dist, 'LICENSE'))
 }
 
+/**
+ * Run npm in one package directory.
+ *
+ * On Windows npm is a `.cmd` shim, which `CreateProcess` cannot start without a
+ * shell: a plain `spawnSync('npm')` returns a null status there and the pack
+ * step fails before any tarball exists. The Windows command line goes through
+ * cmd.exe instead, and an argument with a space (the pack destination can sit
+ * under a profile name) is quoted for it.
+ */
+function npm(args, cwd) {
+  if (process.platform !== 'win32') return spawnSync('npm', args, { cwd, stdio: 'inherit' })
+  const line = ['npm.cmd', ...args.map(arg => /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg)].join(' ')
+  return spawnSync(line, { cwd, stdio: 'inherit', shell: true })
+}
+
 if (publish) checkDate(version)
 if (packDir !== undefined) await mkdir(resolve(packDir), { recursive: true })
 console.log(`${publish ? 'publishing' : packDir === undefined ? 'packing' : `packing into ${resolve(packDir)}`} ${packages.length} packages at ${version}`)
@@ -155,6 +170,6 @@ for (const package_ of packages) {
   const manifest = await publishManifest(package_, files)
   await writeFile(join(package_.dist, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   const args = publish ? ['publish', '--access', 'public'] : packDir === undefined ? ['pack', '--dry-run'] : ['pack', '--pack-destination', resolve(packDir)]
-  const result = spawnSync('npm', args, { cwd: package_.dist, stdio: 'inherit' })
+  const result = npm(args, package_.dist)
   if (result.status !== 0) throw new Error(`${package_.name}: npm exited with ${result.status}`)
 }

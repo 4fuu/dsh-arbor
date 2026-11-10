@@ -111,6 +111,9 @@ export async function removeTree(path) {
   }
 }
 
+/** The npm executable this host runs. Windows only has the `.cmd` shim. */
+const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+
 /** A DSH runtime package: Cordis or one of the `dsh-*` packages. */
 export function isDshRuntime(name) {
   return name === 'cordis' || name.startsWith('cordis-') || name === 'dsh' || name.startsWith('dsh-')
@@ -151,7 +154,11 @@ export async function installDsh(work) {
   console.log(`installing @deepseek-ai/dsh@${PIN} into ${install}`)
   await removeTree(install)
   await mkdir(install, { recursive: true })
-  await run('npm', ['install', '--prefix', install, '--no-audit', '--no-fund', '--loglevel', 'error', `@deepseek-ai/dsh@${PIN}`], { cwd: install })
+  await run(NPM, ['install', '--no-audit', '--no-fund', '--loglevel', 'error', `@deepseek-ai/dsh@${PIN}`], {
+    cwd: install,
+    // `npm.cmd` needs a shell on Windows; the arguments here carry no spaces.
+    shell: process.platform === 'win32',
+  })
   return install
 }
 
