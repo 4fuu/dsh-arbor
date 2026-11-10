@@ -3,8 +3,9 @@
  *
  * B0 threw a descriptive error here. B1 loads the session the way the official
  * loop loads it, replays onto its log what the arbor journal recorded and the
- * log lost, and binds the session to the window the host continued at boot —
- * so the next turn drives that window instead of opening a second chain.
+ * log lost, and keeps the session on its window chain: a window that was idle
+ * when DSH stopped is continued by the session's next turn, not at boot, and
+ * that turn drives the continuation instead of opening a second chain.
  *
  * Three sections:
  *
@@ -278,17 +279,19 @@ async function cleanRestart(): Promise<void> {
     overlayPaths: [arborPatch, arborOverlay, scriptedOverlay],
   })
   let agent: Agent
+  let firstWindow: string | undefined
   try {
     agent = await createArborSession(ctx, sessionId)
     await turn(agent, 'echo once')
-    const firstWindow = await arborHostOf(ctx).windowFor(sessionId)
+    firstWindow = await arborHostOf(ctx).windowFor(sessionId)
     check('the first process opened a window', firstWindow !== undefined, `window: ${firstWindow}`)
   } finally {
     await ctx.fiber.dispose()
   }
 
-  // The second process: the host starts, continues the window the journal says
-  // was running, and the session resumes onto it.
+  // The second process: the host starts. The window was idle when the first
+  // process stopped, so the host opens no window at boot; the session's next
+  // turn opens the chain's continuation (arbor docs/windows.md#restart).
   scriptedLlm.responses = [{ text: 'answered after the restart' }]
   ctx = await bootArborProfile({
     binName: NAME,
@@ -297,9 +300,9 @@ async function cleanRestart(): Promise<void> {
   })
   try {
     const host = arborHostOf(ctx)
-    const continued = await host.windowFor(sessionId)
-    check('the restart continued the session window', continued !== undefined,
-      `the host continued: ${continued ?? 'nothing'}`)
+    const atBoot = await host.windowFor(sessionId)
+    check('the restart opened no window for the idle session', atBoot === undefined,
+      `the host opened: ${atBoot ?? 'nothing'}`)
     const { agent: resumed } = await ctx.agents.resume({
       resumeSessionId: sessionId,
       agentOptions: { ...SCRIPTED_SELECTION },
@@ -307,9 +310,6 @@ async function cleanRestart(): Promise<void> {
     })
     check('the resumed session is an arbor session', resumed.session.header.agentPreset === 'arbor',
       `header agentPreset=${resumed.session.header.agentPreset ?? 'none'}`)
-    check('the resumed session is bound to the continued window',
-      continued !== undefined && await host.windowFor(sessionId) === continued,
-      `window: ${continued}`)
     check('the log survived the restart whole',
       danglingToolCalls(resumed).length === 0
       && logOf(resumed).filter(entry => entry.type === 'turn/end').length === 1,
@@ -327,11 +327,12 @@ async function cleanRestart(): Promise<void> {
       `turns: ${JSON.stringify(logOf(resumed).filter(entry => entry.type === 'turn/start')
         .map(entry => (entry.data as { turn?: number }).turn))}`)
     const chain = await host.windowChainOf(sessionId)
-    check('the session kept one window chain across the restart', chain.length === 2,
+    check('the session kept one window chain across the restart',
+      chain.length === 2 && chain[0] === firstWindow,
       `the session window chain: ${chain.join(' -> ')}`)
-    check('the resumed turn drove the continued window',
-      windowOf(ctx, sessionId) === continued,
-      `the driver's window: ${windowOf(ctx, sessionId) ?? 'none'}; the host continued: ${continued}`)
+    check('the resumed turn drove the continuation it opened',
+      windowOf(ctx, sessionId) === chain.at(-1) && await host.windowFor(sessionId) === chain.at(-1),
+      `the driver's window: ${windowOf(ctx, sessionId) ?? 'none'}; the chain end: ${chain.at(-1)}`)
     const headers = logOf(resumed).filter(entry => entry.type === 'request/header')
     check('the resumed request header says resume',
       headers.some(entry => (entry.data as { reason?: string }).reason === 'resume'),

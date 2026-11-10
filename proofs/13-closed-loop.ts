@@ -9,9 +9,9 @@
  *    there; the `<workspace>` section is arbor's own, with no sandbox line;
  *  - a DSH skill is readable from `/env`, so `read` of the path the `<env>`
  *    section names returns the skill's own body;
- *  - the mount survives a DSH restart: the session resumes onto the window the
- *    host continued, the workspace is still the window's, and the skill is still
- *    mounted and readable;
+ *  - the mount survives a DSH restart: the session's next turn opens the
+ *    continuation of its idle window, the workspace is still the chain's, and the
+ *    skill is still mounted and readable;
  *  - with `ARBOR_PROOF_LIVE=1`, the same loop runs against the real DeepSeek
  *    model: it reads the DSH skill's SKILL.md through arbor's own `read` tool
  *    and answers from it.
@@ -167,9 +167,12 @@ async function main(): Promise<void> {
   ctx = await bootArborProfile({ binName: NAME, profile: 'headless', overlayPaths: overlays })
   try {
     const host = arborHostOf(ctx)
-    const continued = await host.windowFor(sessionId)
-    check('the restart continued the session window', continued !== undefined,
-      `the host continued: ${continued ?? 'nothing'}`)
+    // The window was idle when the first process stopped, so the host opens no
+    // window at boot; the next turn opens the chain's continuation
+    // (arbor docs/windows.md#restart).
+    const atBoot = await host.windowFor(sessionId)
+    check('the restart opened no window for the idle session', atBoot === undefined,
+      `the host opened: ${atBoot ?? 'nothing'}`)
     const resumed = await ctx.agents.resume({
       resumeSessionId: sessionId,
       agentOptions: selectionOf(ctx),
@@ -179,6 +182,11 @@ async function main(): Promise<void> {
     scriptedLlm.responses = [{ text: 'warmed up' }]
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'warm up again' }], source: { kind: 'user' } }))
     await agent.whenIdle()
+    const continued = await host.windowFor(sessionId)
+    const chain = await host.windowChainOf(sessionId)
+    check('the next turn continued the session window chain',
+      continued !== undefined && chain.length === 2 && chain.at(-1) === continued,
+      `the session window chain: ${chain.join(' -> ')}`)
 
     const driver = ctx.get('arborDriver') as { systemPromptOf(id: SessionId): string | undefined }
     const prompt = driver.systemPromptOf(sessionId) ?? ''
