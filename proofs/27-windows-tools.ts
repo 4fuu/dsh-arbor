@@ -42,10 +42,11 @@ import {
 import { arborPresetPlugins, PRESET_PINNED_VERSION } from '../packages/arbor-preset/src/index.ts'
 import { DSH_TOOLS_ARBOR_REPLACES } from '../packages/arbor-tools/src/index.ts'
 
-const NAME = 'arbor-spike-proof-26'
+const NAME = 'arbor-spike-proof-27'
 const arborOverlay = fileURLToPath(new URL('../patches/arbor.patch.yml', import.meta.url))
 const scriptedOverlay = fileURLToPath(new URL('../patches/scripted.patch.yml', import.meta.url))
 const presetOverlay = fileURLToPath(new URL('../patches/preset-registry.patch.yml', import.meta.url))
+const webFixtureOverlay = fileURLToPath(new URL('../patches/web-fixture.patch.yml', import.meta.url))
 
 const failures: string[] = []
 const check = (label: string, ok: boolean, detail: string): void => {
@@ -80,12 +81,12 @@ async function liveWindowOf(ctx: Parameters<typeof arborHostOf>[0], sessionId: S
 async function main(): Promise<void> {
   scriptedLlm.contextWindow = 64_000
   scriptedLlm.responses = [{ text: 'ok' }, { text: 'ok' }, { text: 'ok' }, { text: 'ok' }]
-  await freshDshHome('arbor-spike-26')
+  await freshDshHome('arbor-spike-27')
   loadEnv(NAME)
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, presetOverlay],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, presetOverlay, webFixtureOverlay],
   })
   try {
     const presets = agentPresetsOf(ctx)

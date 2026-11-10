@@ -329,7 +329,8 @@ What the page shows comes from arbor, not from a browser guess:
 Proof 23 covers the per-session facts and the live stream; proof 24 covers the
 host view, the session title, the label, the journal's run records, a refused
 `end` and a delivery into an idle window; proof 25 covers the backend session's
-own idle/running state and its delivery mapping; proof 26 covers the preset
+own idle/running state and its delivery mapping; proof 26 covers the settings
+install; proof 27 covers the preset
 allowlist, the prompt/tool-set equality, the model-derived window budget, and
 the win32 composition of the shell and terminal rows.
 
@@ -590,9 +591,17 @@ The rows that duplicate arbor are deliberately not mounted: bash/pwsh, DSH's
 read/write/edit/apply_patch (the `tool-fs` row is mounted for `read_image`
 only), glob/grep, jobs, schedule, subagent/team/goal/ralph/workflow, PTC, the
 skill loader and compaction. `DSH_TOOLS_ARBOR_REPLACES` in
-`@4fu/dsh-arbor-tools` is the deny side; `proofs/26-windows-tools.ts` checks
+`@4fu/dsh-arbor-tools` is the deny side; `proofs/27-windows-tools.ts` checks
 that the rendered `<tools>` list and the model request declare exactly the same
 set.
+
+Mounting `tool-web` does not make `web_search` unconditional: DSH itself
+withholds it from a step when the selected search provider cannot authenticate,
+and arbor follows the same rule because it reads the tool set DSH admits. A
+deployment without a search credential therefore sees `web_fetch` but not
+`web_search`, exactly as in a DSH preset. The proofs select an in-memory search
+provider (`patches/web-fixture.patch.yml`) so the checked tool set does not
+depend on the runner's secrets.
 
 Browser-use and computer-use are provider registries in DSH 0.2.2-rc.1: the
 shipped packages add no model tool by themselves. A deployment that enables one

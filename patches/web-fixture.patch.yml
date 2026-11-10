@@ -1,0 +1,18 @@
+# The web overlay: a credential-free search provider for the proofs.
+#
+# DSH's `tool-web` row registers `web_search`, but a model step admits it only
+# while the selected search provider reports that it can authenticate. The
+# shipped profile selects `deepseek-official`, which needs `DEEPSEEK_API_KEY`,
+# so a keyless CI run would see `web_fetch` but not `web_search` and a proof
+# that asserts the tool set would depend on the runner's secrets. This overlay
+# selects the testkit's in-memory provider instead; fetch keeps DSH's `http`
+# provider, which needs no credential.
+
+- id: web
+  config:
+    searchProvider: arbor-proof-search
+    fetchProvider: http
+
+- insert:
+    - id: arbor-web-fixture
+      name: '@4fu/dsh-arbor-testkit/web-fixture'

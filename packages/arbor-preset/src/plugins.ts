@@ -7,7 +7,7 @@
  * `present`, `ask_user_question`, plan mode, the Cordis tools, or a persistent
  * terminal. This list is the explicit allow side. The deny side is
  * `DSH_TOOLS_ARBOR_REPLACES` in `@4fu/dsh-arbor-tools`, and the two are checked
- * against each other by `proofs/26-windows-tools.ts`.
+ * against each other by `proofs/27-windows-tools.ts`.
  *
  * Every row is copied from DSH's own preset at the pin:
  *
@@ -80,6 +80,10 @@ export function arborPresetPlugins(platform: NodeJS.Platform = process.platform)
   const windows = platform === 'win32'
   return [
     // Web search and fetch: DSH's tools, arbor's <harness> carries their usage.
+    // `web_search` still follows DSH's own admission rule: a step sees it only
+    // when the selected search provider can authenticate, while `web_fetch`
+    // needs only the http provider. The bridge reads the admitted set, so the
+    // prompt and the model request agree in either case.
     {
       id: 'tool-web',
       name: '@deepseek-ai/dsh-tool-web',

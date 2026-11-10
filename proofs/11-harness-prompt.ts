@@ -60,6 +60,7 @@ const arborOverlay = fileURLToPath(new URL('../patches/arbor.patch.yml', import.
 const scriptedOverlay = fileURLToPath(new URL('../patches/scripted.patch.yml', import.meta.url))
 const planOverlay = fileURLToPath(new URL('../patches/plan.patch.yml', import.meta.url))
 const mcpOverlay = fileURLToPath(new URL('../patches/mcp.patch.yml', import.meta.url))
+const webFixtureOverlay = fileURLToPath(new URL('../patches/web-fixture.patch.yml', import.meta.url))
 
 const failures: string[] = []
 const check = (label: string, ok: boolean, detail: string): void => {
@@ -159,7 +160,7 @@ async function renderCase(
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, ...overlays],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, webFixtureOverlay, ...overlays],
   })
   const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
   const agent = await createArborSession(ctx, sessionId)
@@ -291,7 +292,7 @@ async function deltaCases(): Promise<void> {
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, planOverlay],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, webFixtureOverlay, planOverlay],
   })
   try {
     const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
@@ -385,7 +386,7 @@ async function toolEquality(): Promise<void> {
   const ctx = await bootArborProfile({
     binName: NAME,
     profile: 'headless',
-    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, mcpOverlay],
+    overlayPaths: [arborPatch, arborOverlay, scriptedOverlay, webFixtureOverlay, mcpOverlay],
   })
   try {
     const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
