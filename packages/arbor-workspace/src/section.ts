@@ -75,8 +75,8 @@ export const POINTER_TEXT: TextTable = {
   // directly rather than through a copy or a mount.
   'workspace.external.lead': '用户另外添加的目录（未复制、未挂载，arbor 按原路径直接使用）：',
   'workspace.external.item': '外部项目 {name}：{path}',
-  'workspace.external.reason': '用户添加的是已有目录，arbor 没有复制它：这些路径上的改动直接落在用户自己的文件上。',
-  'workspace.external.consequence': '要改外部项目就在原处改：按上面的绝对路径直接读写执行，没有检出、没有 apply，也没有可合并的东西。',
+  'workspace.external.reason': '用户添加的是已有目录，arbor 没有复制它：这些路径上的修改直接落在用户自己的文件上。',
+  'workspace.external.consequence': '要修改外部项目就在原处修改：按上面的绝对路径直接读写执行，没有检出、没有 apply，也没有可合并的东西。',
   // The project the session was opened on, and how the window reaches it. The
   // name is the project folder's own and the path is its place in the shared
   // folder, so this line, the DSH project list and the checkout all agree. The
@@ -93,7 +93,7 @@ export const POINTER_TEXT: TextTable = {
   // path the line names and the relative path `{name}/` both reach it with no
   // `cd` and no exploration — and that reading it in place is fine, because
   // only a change needs a checkout.
-  'workspace.project.ovnfs': '它在共享目录里，子目录是 {name}：读它就读 {path}，或按 {name}/ 读，不用开检出、不用 cd；要改它就用 workspace.checkout 给它开检出（子目录填 {name}），改完用 workspace.apply 合回共享目录。',
+  'workspace.project.ovnfs': '它在共享目录里，子目录是 {name}：读取它就读 {path}，或按 {name}/ 读取，不用创建检出、不用 cd；要修改它就用 workspace.checkout 为它创建检出（子目录填 {name}），修改完成后用 workspace.apply 合回共享目录。',
   'workspace.project.directory': '它在共享目录里，路径就是 {path}；本窗口另有自己的工作目录，按这个绝对路径直接读写该项目。',
 }
 

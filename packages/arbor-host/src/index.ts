@@ -34,9 +34,10 @@
  *  - the `send` executor (`./send.ts`): a window's `send` lands on the DSH
  *    session log as an assistant message, which is the only surface the user
  *    reads;
- *  - the settings, whose window block is left to arbor's own defaults: a window
- *    stays open 300 s after its run ends and the next input for the session
- *    opens the next window of its chain;
+ *  - the settings, whose window block keeps a window open for 24 hours after
+ *    its run ends (`window.idleSeconds: 86400`) and leaves the rest to arbor's
+ *    defaults; the session's next turn then continues in the same window, with
+ *    its prefix and context intact, instead of opening a continuation;
  *  - the API keys arbor reads. Their values are DSH's, stored in its credential
  *    store and never in a configuration; this row mirrors a stored value into
  *    the process environment, which is where arbor's judge, its secret scrub
@@ -209,19 +210,20 @@ function checkedInteger(name: string, value: unknown, min: number, max: number):
  * The identity is this bridge's own sentence, in Chinese like every other
  * model-facing line dsh-arbor writes, and it says only what is true and not
  * already said: `<harness>` states that the window runs inside DeepSeek
- * Harness and that the user sees only what `send` writes, and arbor's own
- * `<agent>` rules state that a window is disposable and that its chain
- * continues. Nothing here repeats either, and nothing here claims one DSH
- * session is one arbor window — several windows serve one source and each ends
- * on its own.
+ * Harness, and arbor's own `<agent>` rules state that a finished round leaves
+ * the window idle and that its chain continues. Nothing here repeats either,
+ * and nothing here claims one DSH session is one arbor window — several windows
+ * serve one source and each ends on its own.
  *
  * `generalRules` is deliberately absent: arbor's own defaults are the seven
  * rules every window needs, in Chinese, and B0's English replacements dropped
  * them and restated two of them wrongly.
  *
- * The window block is deliberately absent too: arbor's own defaults apply
- * (300 s idle, 200 000 context tokens, 4 000 reserved), so a window that goes
- * quiet ends and the session's next turn opens the next window of its chain.
+ * The window block keeps a window open for 24 hours after its run ends
+ * (`window.idleSeconds: 86400`), so a session's next turn continues in the
+ * same window with its prefix and context intact; arbor's other window
+ * defaults (200 000 context tokens, 4 000 reserved) still apply. A deployment
+ * that names its own window values overrides the idle period too.
  *
  * The workspaces block is deliberately absent as well: the workspace is arbor's
  * own over the shared folder, ovnfs checkouts are a window's own work, and the
@@ -230,7 +232,7 @@ function checkedInteger(name: string, value: unknown, min: number, max: number):
  */
 export function defaultSettings(extra: Settings | undefined): Settings {
   return {
-    identity: '你是 dsh-arbor 部署里的一个 arbor 窗口：DeepSeek Harness（DSH）是外壳，arbor 是里面的 agent 框架，你替 DSH 的用户干活。',
+    identity: '你替 DeepSeek Harness（DSH）的用户完成会话里的任务。',
     judge: {
       modes: {
         filter: 'off',
@@ -242,6 +244,7 @@ export function defaultSettings(extra: Settings | undefined): Settings {
       },
     },
     ...extra,
+    window: { idleSeconds: 86_400, ...extra?.window },
   }
 }
 

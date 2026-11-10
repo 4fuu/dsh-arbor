@@ -785,7 +785,8 @@ function EndRefusal(props: {
       createElement('span', { className: 'arbor-refusal-title arbor-label', 'data-arbor-text': 'display' }, t('endRefusedTitle')),
       createElement('span', { className: 'arbor-tag arbor-tag-warn arbor-num' }, refusal.rule)),
     createElement('div', { className: 'arbor-refusal-message', 'data-arbor-text': 'body' }, refusalWording(refusal)),
-    createElement('div', { className: 'arbor-refusal-hint', 'data-arbor-text': 'body' }, t('endRefusedHint')))
+    createElement('div', { className: 'arbor-refusal-hint', 'data-arbor-text': 'body' },
+      t(refusal.rule === 'end.handoff.early' ? 'endRefusedHintEarly' : 'endRefusedHint')))
 }
 
 /** The empty card, with copy that says what will fill it. */
@@ -1112,10 +1113,10 @@ interface SettingsDraft {
 }
 
 /**
- * The form's first values: the facts in force, with arbor's own defaults for a
- * block the deployment left unset. A seed without a window block runs 300 s
- * idle, 200 000 context tokens and 4 000 reserved; a seed without a notes block
- * runs 40 active notes and 8 000 tokens. Showing those defaults, rather than an
+ * The form's first values: the facts in force, with the deployment's defaults
+ * for a block it left unset. A seed without a window block runs 24 hours idle,
+ * 200 000 context tokens and 4 000 reserved; a seed without a notes block runs
+ * 40 active notes and 8 000 tokens. Showing those defaults, rather than an
  * empty field, is what makes a saved form the settings the user just read.
  */
 function settingsDraft(settings: ArborSettingsFacts): SettingsDraft {
@@ -1123,7 +1124,7 @@ function settingsDraft(settings: ArborSettingsFacts): SettingsDraft {
     judge: Object.fromEntries(JUDGE_KINDS.map(kind => [kind, settings.judge?.modes?.[kind] ?? 'on'])),
     contextTokens: String(settings.window?.contextTokens ?? 200_000),
     reserveTokens: String(settings.window?.reserveTokens ?? 4_000),
-    idleSeconds: String(settings.window?.idleSeconds ?? 300),
+    idleSeconds: String(settings.window?.idleSeconds ?? 86_400),
     protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
     activeCount: String(settings.notes?.activeCount ?? 40),
     activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8_000),

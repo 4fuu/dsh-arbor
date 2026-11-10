@@ -156,14 +156,14 @@ async function main(): Promise<void> {
   const agent = await createSession(project, 'arbor')
   await turn(agent, [{ text: 'pong' }])
   const workspace = workspaceOf(agent.id)
-  const line = `它在共享目录里，子目录是 web-app：读它就读 ${project}，或按 web-app/ 读，不用开检出、不用 cd；要改它就用 workspace.checkout 给它开检出（子目录填 web-app），改完用 workspace.apply 合回共享目录。`
+  const line = `它在共享目录里，子目录是 web-app：读取它就读 ${project}，或按 web-app/ 读取，不用创建检出、不用 cd；要修改它就用 workspace.checkout 为它创建检出（子目录填 web-app），修改完成后用 workspace.apply 合回共享目录。`
   check('the ovnfs reach line names the project subdirectory and its absolute path',
     workspace.includes(line),
     `the reach line is present: ${workspace.includes(line)}`)
   check('the reach line states that reading the project in place is fine',
-    workspace.includes('不用开检出'), 'reading in place needs no checkout')
+    workspace.includes('不用创建检出'), 'reading in place needs no checkout')
   check('the reach line states that a change goes through a checkout',
-    workspace.includes('要改它就用 workspace.checkout'), 'a change needs a checkout')
+    workspace.includes('要修改它就用 workspace.checkout'), 'a change needs a checkout')
   check('the reach line names the subdirectory as the checkout argument',
     workspace.includes('（子目录填 web-app）'), 'the checkout takes the project subdirectory')
   // The b3d line promised `workspace.checkout("web-app")`, which arbor refuses:
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
 
   // ---- D. arbor's own ovnfs lines are untouched, and the line restates none.
   check("arbor's own ovnfs lines are still in <workspace>",
-    workspace.includes('所有窗口都从这里读，bash 默认也在这里运行') && workspace.includes('共享文件夹按约定只读'),
+    workspace.includes('所有窗口都从这里读取，bash 默认也在这里运行') && workspace.includes('共享文件夹按约定只读'),
     'the shared-folder and read-only lines are present')
   check('the reach line restates nothing arbor already says',
     !workspace.includes('它在共享目录里：') && workspace.split('它在共享目录里').length - 1 === 1,

@@ -331,8 +331,8 @@ async function deltaCases(): Promise<void> {
     check('the delta carries only the changed lines',
       approvalSpliced[0]?.includes('本会话不弹出审批') === true
       && approvalSpliced[0]?.includes('本会话会弹出审批') === true
-      && approvalSpliced[0]?.includes('你是运行在 DeepSeek Harness') !== true
-      && approvalSpliced[0]?.includes('图片写进 send 时用') !== true,
+      && approvalSpliced[0]?.includes('这个窗口运行在 DeepSeek Harness') !== true
+      && approvalSpliced[0]?.includes('在 send 中插入图片用') !== true,
       `delta: ${approvalSpliced[0] ?? '(none)'}`)
     // The model reads it: the delta is in the history the next request is
     // derived from, which is the only delivery that reaches a model.

@@ -20,6 +20,12 @@ export interface ScriptedResponse {
   readonly text?: string
   /** Tool calls the model asks for, in order. */
   readonly toolCalls?: readonly { readonly name: string; readonly args: Record<string, unknown> }[]
+  /**
+   * The usage this response reports to the host. Defaults to a small 10/5
+   * turn; a proof that needs a window past a threshold scripts the real total
+   * here, the way a provider reports it.
+   */
+  readonly usage?: TokenUsage
 }
 
 /** The script a proof fills in, and what the scripted model saw. */
@@ -63,7 +69,7 @@ function* chunksOf(response: ScriptedResponse): Generator<StreamChunk> {
     }
     void index
   }
-  const usage: TokenUsage = { inputTokens: 10, outputTokens: 5 }
+  const usage: TokenUsage = response.usage ?? { inputTokens: 10, outputTokens: 5 }
   yield { type: 'usage', usage }
   yield { type: 'finish', reason: { kind: calls.length === 0 ? 'stop' : 'tool-calls' } }
 }

@@ -85,8 +85,8 @@ export class DshSendExecutor implements EffectExecutor {
         error: {
           code: 'invalid_input',
           rule: 'send.content.empty',
-          message: 'dsh-arbor: a send carried no text',
-          nextAction: '补上要发送的内容，然后重发。',
+          message: 'dsh-arbor：发送内容为空。',
+          nextAction: '补上要发送的内容，然后重新发送。',
         },
       }
     }
@@ -97,8 +97,8 @@ export class DshSendExecutor implements EffectExecutor {
         error: {
           code: 'unavailable',
           rule: 'send.session.absent',
-          message: `dsh-arbor: no DSH session owns the window that sent to ${effect.target}`,
-          nextAction: '确认这个窗口还属于一个存活的 DSH 会话，然后重发。',
+          message: `dsh-arbor：没有 DSH 会话负责窗口发送到的目标 ${effect.target}。`,
+          nextAction: '确认这个窗口仍属于一个存活的 DSH 会话，然后重新发送。',
         },
       }
     }

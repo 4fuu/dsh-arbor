@@ -2,8 +2,8 @@
  * Proof 9: a window ends and the session's next turn opens the window that
  * follows it, with the DSH session log staying correct throughout.
  *
- * B1 leaves the window lifetime to arbor's own defaults — the deployment sets
- * no idle period — so both endings a window can have are covered:
+ * The shipped settings keep a window open for 24 hours
+ * (`window.idleSeconds: 86400`), so both endings a window can have are covered:
  *
  *  A. the model ends the window with a handoff: the host records the end and
  *     opens a continuation, which keeps the chain's watermarks and its
@@ -16,8 +16,7 @@
  *     a result — which is what a provider demands of a history.
  *
  * Part B boots with the idle period shortened to one second, so the proof does
- * not wait five minutes for the same policy the shipped settings leave at
- * arbor's 300 s default.
+ * not wait 24 hours for the same policy the shipped settings use.
  *
  * Run: pnpm proof:lifetime
  */
@@ -151,7 +150,9 @@ async function partA(): Promise<void> {
     const host = arborHostOf(ctx)
     const sessionId = brandString<SessionId>(`session-${randomUUID()}`)
     scriptedLlm.responses = [
-      { toolCalls: [{ name: 'end', args: { handoff: HANDOFF } }] },
+      // 65 % of the window, above the default 60 % handoff floor: this proof is
+      // about the continuation a handoff opens, not about the floor's refusal.
+      { toolCalls: [{ name: 'end', args: { handoff: HANDOFF } }], usage: { inputTokens: 130_000, outputTokens: 5 } },
       { text: 'handed the work over' },
     ]
     const agent = await turn(ctx, sessionId, 'end the window with a handoff')

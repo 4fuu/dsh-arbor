@@ -9,9 +9,10 @@
  *  - one Arbor host serves the whole process: two sessions of different cwds
  *    share one host, one journal and one board, and each session's window
  *    carries that session's target;
- *  - the window settings are arbor's own defaults — the deployment sets no
- *    idle period, context budget or reserve — and the judge is off, so
- *    `host.dispatch` is deterministic;
+ *  - the window settings keep a window open for 24 hours
+ *    (`window.idleSeconds: 86400`) and leave its context budget and reserve to
+ *    arbor's defaults, and the judge is off, so `host.dispatch` is
+ *    deterministic;
  *  - the workspace is arbor's own over the shared folder: every session's
  *    window works in the one shared folder under `DSH_HOME/arbor`, there is no
  *    per-session directory, and the `<workspace>` section names the shared
@@ -197,7 +198,10 @@ async function main(): Promise<void> {
 
     // ---- the settings.
     const settings = host.settings
-    check('the window settings are left to arbor', settings.window === undefined,
+    check('the window settings keep a window open for 24 hours',
+      settings.window?.idleSeconds === 86_400
+      && settings.window?.contextTokens === undefined
+      && settings.window?.reserveTokens === undefined,
       `settings.window: ${JSON.stringify(settings.window)}`)
     const modes = settings.judge?.modes ?? {}
     check('the judge is off, so dispatch is deterministic',
@@ -282,7 +286,7 @@ async function main(): Promise<void> {
       pointerPrompt.split(pointer.path).length - 1 === 1
         && workspace.includes('用户另外添加的目录')
         && workspace.includes('没有复制它')
-        && workspace.includes('就在原处改'),
+        && workspace.includes('就在原处修改'),
       `occurrences of the path in the whole prompt: ${pointerPrompt.split(pointer.path).length - 1}`)
     const readCalls = toolCallsOf(ctx, pointerSession)
     check('a window reads the pointed file on its first call, with no exploratory call before it',

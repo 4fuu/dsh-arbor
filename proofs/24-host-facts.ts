@@ -159,6 +159,38 @@ async function main(): Promise<void> {
     const ends = await host.journal.list({ window: windowRef as never, kinds: ['window_end'], limit: 10 })
     check('the refused end recorded no window_end', ends.total === 0, `window_end rows: ${ends.total}`)
 
+    // A well-formed handoff below the floor is refused too: nothing is open and
+    // the window is still in its useful range, so the next action is to finish
+    // the round and leave the window idle, not to hand over.
+    scriptedLlm.responses = [
+      {
+        toolCalls: [{
+          name: 'end',
+          args: { handoff: { topics: ['CI'], progress: ['still early'], pending: [], agreements: [] } },
+        }],
+      },
+      { text: 'the early handoff was refused' },
+    ]
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'end with a valid handoff too early' }], source: { kind: 'user' } }))
+    await agent.whenIdle()
+    await waitFor(async () => {
+      const runs = (await host.journal.list({ window: windowRef as never, kinds: ['run_ended'], limit: 50 })).total
+      const idle = host.host.live().every(record => record.window !== windowRef || record.state === 'idle')
+      return runs >= 3 && idle ? true : undefined
+    }, 10_000)
+    const afterEarly = await ctx.arborFacts.hostFactsFor()
+    const early = afterEarly.windows.find(window => window.ref === windowRef)
+    check('an early handoff is refused and the same window stays live',
+      early?.live === true && early.state === 'idle' && early.endRefused?.rule === 'end.handoff.early',
+      `refusal=${JSON.stringify(early?.endRefused)} state=${early?.state ?? 'missing'}`)
+    check('the refusal names the usage and the floor and says not to call end',
+      early?.endRefused?.message.includes('已用') === true
+      && early.endRefused.message.includes('交接时机') === true
+      && early.endRefused.message.includes('无需调用 end') === true,
+      `message=${early?.endRefused?.message ?? 'none'}`)
+    const earlyEnds = await host.journal.list({ window: windowRef as never, kinds: ['window_end'], limit: 10 })
+    check('the early handoff recorded no window_end', earlyEnds.total === 0, `window_end rows: ${earlyEnds.total}`)
+
     const titleSession = agent.session as unknown as { append(type: string, data: unknown): unknown };
     titleSession.append('session/title', { title: 'Proof 24 arbor session' })
 

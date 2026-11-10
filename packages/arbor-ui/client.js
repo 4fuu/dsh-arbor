@@ -353,6 +353,7 @@ var en = {
   refused: "refused: {rule}",
   endRefusedTitle: "The last end was refused",
   endRefusedHint: "The window is still open, so nothing ended. Send another message in DSH to keep working; the model can call end again with the handoff fields arbor named.",
+  endRefusedHintEarly: "The window is still open and idle. The turn can simply finish; the next related message continues in this same window.",
   usage: "{used} / {limit} tokens",
   streamText: "Model output",
   streamSend: "send draft",
@@ -639,6 +640,7 @@ var zh = {
   refused: "\u88AB\u62D2\u7EDD\uFF1A{rule}",
   endRefusedTitle: "\u4E0A\u4E00\u6B21 end \u88AB\u62D2\u7EDD",
   endRefusedHint: "\u7A97\u53E3\u4ECD\u7136\u5F00\u7740\uFF0C\u4EC0\u4E48\u90FD\u6CA1\u6709\u7ED3\u675F\u3002\u5728 DSH \u91CC\u7EE7\u7EED\u53D1\u6D88\u606F\u5C31\u80FD\u63A5\u7740\u505A\uFF1B\u6A21\u578B\u4E5F\u53EF\u4EE5\u6309 arbor \u6307\u51FA\u7684\u4EA4\u63A5\u5B57\u6BB5\u91CD\u65B0\u8C03\u7528 end\u3002",
+  endRefusedHintEarly: "\u7A97\u53E3\u4ECD\u7136\u5F00\u7740\u5E76\u4FDD\u6301\u7A7A\u95F2\uFF1A\u8FD9\u4E00\u8F6E\u76F4\u63A5\u7ED3\u675F\u5373\u53EF\uFF0C\u4E0B\u4E00\u6761\u76F8\u5173\u6D88\u606F\u4F1A\u7EE7\u7EED\u9001\u5230\u8FD9\u4E2A\u7A97\u53E3\u3002",
   usage: "{used} / {limit} \u4EE4\u724C",
   streamText: "\u6A21\u578B\u8F93\u51FA",
   streamSend: "send \u8349\u7A3F",
@@ -1637,7 +1639,11 @@ function EndRefusal(props) {
       (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn arbor-num" }, refusal.rule)
     ),
     (0, import_react.createElement)("div", { className: "arbor-refusal-message", "data-arbor-text": "body" }, refusalWording(refusal)),
-    (0, import_react.createElement)("div", { className: "arbor-refusal-hint", "data-arbor-text": "body" }, t("endRefusedHint"))
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-refusal-hint", "data-arbor-text": "body" },
+      t(refusal.rule === "end.handoff.early" ? "endRefusedHintEarly" : "endRefusedHint")
+    )
   );
 }
 function EmptyCard(props) {
@@ -2029,7 +2035,7 @@ function settingsDraft(settings) {
     judge: Object.fromEntries(JUDGE_KINDS.map((kind) => [kind, settings.judge?.modes?.[kind] ?? "on"])),
     contextTokens: String(settings.window?.contextTokens ?? 2e5),
     reserveTokens: String(settings.window?.reserveTokens ?? 4e3),
-    idleSeconds: String(settings.window?.idleSeconds ?? 300),
+    idleSeconds: String(settings.window?.idleSeconds ?? 86400),
     protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
     activeCount: String(settings.notes?.activeCount ?? 40),
     activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8e3),

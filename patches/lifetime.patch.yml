@@ -1,7 +1,7 @@
 # The window-lifetime overlay for proof 9: arbor's own idle policy, with the
-# period shortened so a proof does not wait five minutes for it. The shipped
-# settings set no idle period at all — arbor's 300 s default applies — and this
-# overlay changes only the number, not the policy.
+# period shortened so a proof does not wait 24 hours for it. The shipped
+# settings keep a window open for 86 400 s, and this overlay changes only the
+# number, not the policy.
 
 - id: arbor-host
   config:
