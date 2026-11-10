@@ -53,8 +53,6 @@ jobs:
   # and assert the sidebar, the session tree and the current page still render.
   live-ui:
     runs-on: ubuntu-latest
-    env:
-      ARBOR_CHECK_LIVE_WORK: ${{ runner.temp }}/dsh-arbor-live
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -64,7 +62,11 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      # `runner` is not available in a job-level env, so the work directory is
+      # set on the step.
       - name: Live unload check
+        env:
+          ARBOR_CHECK_LIVE_WORK: ${{ runner.temp }}/dsh-arbor-live
         run: pnpm check:live
       - name: Screenshots
         if: always()
