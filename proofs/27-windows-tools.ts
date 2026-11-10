@@ -129,9 +129,10 @@ async function main(): Promise<void> {
     // normal-mode step must not see it, and the plan-mode case below must.
     check('exit_plan_mode is not admitted outside plan mode', !callable.includes('exit_plan_mode'),
       `tools: ${callable.join(', ')}`)
-    const bashLine = (prompt.match(/<tools>([\s\S]*?)<\/tools>/) ?? [])[1]
-      ?.split('\n').find(line => line.startsWith('bash：')) ?? ''
-    check('the shell tool is arbor\'s own, not DSH\'s bash', bashLine.includes('工作区'), bashLine)
+    const shell = process.platform === 'win32' ? 'pwsh' : 'bash'
+    const shellLine = (prompt.match(/<tools>([\s\S]*?)<\/tools>/) ?? [])[1]
+      ?.split('\n').find(line => line.startsWith(`${shell}：`)) ?? ''
+    check(`the ${shell} tool is arbor's own, not DSH's`, shellLine.includes('工作区'), shellLine)
     const readLine = (prompt.match(/<tools>([\s\S]*?)<\/tools>/) ?? [])[1]
       ?.split('\n').find(line => line.startsWith('read：')) ?? ''
     check('the read tool is arbor\'s own, not DSH\'s read', readLine.includes('工作区'), readLine)
