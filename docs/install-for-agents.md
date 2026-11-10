@@ -501,12 +501,21 @@ testkit and the root package stay private.
   declaration keeps the English copy DSH shows before the client half loads.
   The bundle's plugin page title and description follow the same eight
   languages, and every package row is localized in English and Chinese.
-- The settings drawer is an opaque panel that starts below a desktop title bar,
-  and its controls install arbor's real settings (`/env/settings.json`): judge
+- Settings is a tab of the Arbor page, next to the overview and the session
+  tabs, with a section list on the left and the selected section on the right:
+  judge, windows, notes, workspace, API keys, and a read-only facts section.
+  Its controls install arbor's real settings (`/env/settings.json`): judge
   modes, window token budget and limits, active-note budget and checkout
   retention. Judge modes apply to the next decision and the limits to new
-  windows, with no restart. Workspace backend and shared folder are shown as
-  facts because they are settled when the host starts.
+  windows, with no restart. Workspace backend, shared folder, model tiers and
+  judge thresholds are shown as facts because they are settled when the host
+  starts.
+- The API keys arbor reads are entered on that tab. A key's value goes to DSH's
+  credential store (`$DSH_HOME/.credentials.yaml` through `ctx.credentials`),
+  never into a configuration file; the page shows only whether a key is set,
+  offers a masked field to replace it and a button to clear it, and the value
+  reaches the next judge decision and processes started afterwards without a
+  restart.
 - The published packages ship JavaScript and `.d.ts` declarations. Development
   still points `exports` at the TypeScript sources; `pnpm build` emits `dist`,
   and `node scripts/publish.mjs` packs or publishes a manifest whose

@@ -271,7 +271,6 @@ var en = {
   emptySchedules: "No schedule yet.",
   emptySchedulesHint: "When arbor needs to work at a time, its schedule appears here.",
   openSearch: "Search",
-  openSettings: "Settings",
   closeSheet: "Close",
   settingsHostData: "Host data",
   settingsBackend: "Workspace backend",
@@ -411,20 +410,66 @@ var en = {
   settingsNotes: "Notes",
   settingsNotesCount: "Active count",
   settingsNotesTokens: "Active tokens",
-  settingsSecrets: "Secret names",
   settingsJudgeOn: "on",
   settingsJudgeOff: "off",
   settingsJudgeShadow: "shadow",
   settingsDsh: "DSH's Agent loop page configures ordinary sessions; an arbor window runs under the tier and window limits above.",
   settingsEmpty: "Arbor runs on its own defaults.",
-  settingsEditable: "Settings",
-  settingsFacts: "Facts",
-  settingsSave: "Save",
+  settingsSave: "Save settings",
   settingsSaving: "Saving\u2026",
   settingsSaved: "Saved",
   settingsSaveError: "Could not save: {message}",
   settingsInvalid: "Enter a whole number in every field.",
   settingsApplyHint: "Judge modes apply to the next decision; window limits apply to windows opened after saving. No restart is needed.",
+  tabSettings: "Settings",
+  settingsTitle: "Settings",
+  settingsIntro: "Arbor's own settings, read by the host while it runs. Editable values are installed as /env/settings.json; API keys are stored in DSH's credential store and never in a configuration file.",
+  settingsSections: "Settings sections",
+  settingsSectionJudge: "Judge",
+  settingsSectionJudgeIntro: "Each judge decision is model-based. On consults the judge, shadow records what it would have decided without acting on it, and off leaves the decision to arbor's own rule.",
+  settingsSectionWindows: "Windows",
+  settingsSectionWindowsIntro: "The limits a new window opens with. They apply to windows opened after saving; a window that is already running keeps the limits it opened with.",
+  settingsSectionNotes: "Notes",
+  settingsSectionNotesIntro: "How much of the note store a window's prefix carries: how many active notes, and the token budget the prefix is built against.",
+  settingsSectionWorkspace: "Workspace",
+  settingsSectionWorkspaceIntro: "What happens to a chain's checkouts after its last window ends. The shared folder is never reclaimed, and the workspace backend is settled at startup.",
+  settingsSectionKeys: "API keys",
+  settingsSectionKeysIntro: "The secrets arbor resolves by name. A configuration names a key and never holds its value; saving one here writes it to DSH's credential store.",
+  settingsSectionFacts: "Facts",
+  settingsSectionFactsIntro: "Read-only values: settled when the host started, or supplied by the deployment. Nothing here has a control it would ignore.",
+  settingsWindowContextHint: "The context window's token budget.",
+  settingsWindowReserveHint: "Held back from the model for the last reminder.",
+  settingsWindowIdleHint: "How long an ended run stays open for the next input.",
+  settingsWindowProtectionHint: "How long a window protects the target it started on.",
+  settingsNotesCountHint: "How many notes the active set may hold.",
+  settingsNotesTokensHint: "The active set's token budget.",
+  settingsSource: "Settings source",
+  settingsFactsHost: "Host",
+  settingsFactsPrompt: "Prompt",
+  settingsFactsModels: "Models",
+  settingsFactsJudge: "Judge thresholds",
+  settingsFactsSeed: "These are the deployment's seed; the first save installs them as /env/settings.json.",
+  settingsKeysEmpty: "Arbor reads no API key on this deployment.",
+  settingsKeyJudgeHint: "Arbor's default judge (Jev) reads this key on every decision it makes.",
+  settingsKeySecretHint: "Named by arbor's settings; the environment and every process a window starts resolve it.",
+  settingsKeySet: "Set",
+  settingsKeyUnset: "Not set",
+  settingsKeyFrom: "from {source}",
+  settingsKeySourceFile: "DSH's credential file",
+  settingsKeySourceEnv: "the launch environment",
+  settingsKeySourceProjectEnv: "the project's .env",
+  settingsKeySourceUserEnv: "the harness home .env",
+  settingsKeyEnter: "Enter the key",
+  settingsKeyReplace: "Enter a new value to replace it",
+  settingsKeyValueFor: "New value for {name}",
+  settingsKeySave: "Save key",
+  settingsKeyClear: "Clear",
+  settingsKeySaved: "Key saved.",
+  settingsKeyCleared: "Key cleared.",
+  settingsKeyError: "Could not change the key: {message}",
+  settingsKeyReadOnly: "This deployment has no credential store, so the key can only be read.",
+  settingsKeysWriteOnly: "The value is never shown again: arbor reports whether a key is set, never the key itself.",
+  settingsKeysApply: "A saved or cleared key applies immediately, to the next judge decision and to processes started afterwards. No restart is needed.",
   judgeFilter: "Filter",
   judgeRoute: "Route",
   judgeModelTier: "Model tier",
@@ -512,7 +557,6 @@ var zh = {
   emptySchedules: "\u8FD8\u6CA1\u6709\u65E5\u7A0B\u3002",
   emptySchedulesHint: "\u9700\u8981\u5230\u70B9\u5E72\u6D3B\u65F6\uFF0Carbor \u7684\u65E5\u7A0B\u4F1A\u51FA\u73B0\u5728\u8FD9\u91CC\u3002",
   openSearch: "\u641C\u7D22",
-  openSettings: "\u8BBE\u7F6E",
   closeSheet: "\u5173\u95ED",
   settingsHostData: "\u5BBF\u4E3B\u6570\u636E",
   settingsBackend: "\u5DE5\u4F5C\u533A\u540E\u7AEF",
@@ -652,20 +696,66 @@ var zh = {
   settingsNotes: "\u7B14\u8BB0",
   settingsNotesCount: "\u6D3B\u8DC3\u6761\u6570",
   settingsNotesTokens: "\u6D3B\u8DC3\u4EE4\u724C",
-  settingsSecrets: "\u5BC6\u94A5\u540D",
   settingsJudgeOn: "\u5F00\u542F",
   settingsJudgeOff: "\u5173\u95ED",
   settingsJudgeShadow: "\u5F71\u5B50",
   settingsDsh: "DSH \u7684 Agent loop \u63D2\u4EF6\u9875\u9762\u7BA1\u7684\u662F\u666E\u901A\u4F1A\u8BDD\uFF1Barbor \u7A97\u53E3\u6309\u4E0A\u9762\u7684\u5C42\u7EA7\u548C\u7A97\u53E3\u9650\u5236\u8FD0\u884C\u3002",
   settingsEmpty: "arbor \u4F7F\u7528\u81EA\u5DF1\u7684\u9ED8\u8BA4\u503C\u3002",
-  settingsEditable: "\u8BBE\u7F6E",
-  settingsFacts: "\u4E8B\u5B9E",
-  settingsSave: "\u4FDD\u5B58",
+  settingsSave: "\u4FDD\u5B58\u8BBE\u7F6E",
   settingsSaving: "\u6B63\u5728\u4FDD\u5B58\u2026",
   settingsSaved: "\u5DF2\u4FDD\u5B58",
   settingsSaveError: "\u4FDD\u5B58\u5931\u8D25\uFF1A{message}",
   settingsInvalid: "\u6BCF\u4E2A\u5B57\u6BB5\u90FD\u8981\u586B\u5199\u6574\u6570\u3002",
   settingsApplyHint: "\u5224\u65AD\u6A21\u5F0F\u4ECE\u4E0B\u4E00\u6B21\u51B3\u7B56\u8D77\u751F\u6548\uFF1B\u7A97\u53E3\u9650\u5236\u4ECE\u4FDD\u5B58\u540E\u65B0\u5F00\u7684\u7A97\u53E3\u8D77\u751F\u6548\uFF0C\u65E0\u9700\u91CD\u542F\u3002",
+  tabSettings: "\u8BBE\u7F6E",
+  settingsTitle: "\u8BBE\u7F6E",
+  settingsIntro: "arbor \u81EA\u5DF1\u7684\u8BBE\u7F6E\uFF0C\u5BBF\u4E3B\u8FD0\u884C\u65F6\u76F4\u63A5\u8BFB\u53D6\u3002\u53EF\u7F16\u8F91\u7684\u503C\u4F1A\u88C5\u6210 /env/settings.json\uFF1BAPI \u5BC6\u94A5\u5B58\u5728 DSH \u7684\u51ED\u636E\u5E93\u91CC\uFF0C\u7EDD\u4E0D\u5199\u8FDB\u4EFB\u4F55\u914D\u7F6E\u6587\u4EF6\u3002",
+  settingsSections: "\u8BBE\u7F6E\u5206\u533A",
+  settingsSectionJudge: "\u5224\u65AD",
+  settingsSectionJudgeIntro: "\u6BCF\u4E2A\u5224\u65AD\u51B3\u7B56\u90FD\u7531\u6A21\u578B\u7ED9\u51FA\u3002\u5F00\u542F\u8868\u793A\u771F\u7684\u8BE2\u95EE\u5224\u65AD\u5668\uFF1B\u5F71\u5B50\u53EA\u8BB0\u5F55\u5B83\u672C\u6765\u4F1A\u600E\u4E48\u5224\u65AD\u3001\u4E0D\u636E\u6B64\u884C\u52A8\uFF1B\u5173\u95ED\u8868\u793A\u4EA4\u7ED9 arbor \u81EA\u5DF1\u7684\u89C4\u5219\u3002",
+  settingsSectionWindows: "\u7A97\u53E3",
+  settingsSectionWindowsIntro: "\u65B0\u7A97\u53E3\u6253\u5F00\u65F6\u4F7F\u7528\u7684\u9650\u5236\u3002\u4FDD\u5B58\u540E\u65B0\u5F00\u7684\u7A97\u53E3\u751F\u6548\uFF1B\u5DF2\u7ECF\u5728\u8DD1\u7684\u7A97\u53E3\u4FDD\u7559\u5B83\u6253\u5F00\u65F6\u7684\u9650\u5236\u3002",
+  settingsSectionNotes: "\u7B14\u8BB0",
+  settingsSectionNotesIntro: "\u7A97\u53E3\u524D\u7F00\u4ECE\u7B14\u8BB0\u5E93\u5E26\u591A\u5C11\uFF1A\u6D3B\u8DC3\u7B14\u8BB0\u7684\u6761\u6570\uFF0C\u4EE5\u53CA\u6784\u5EFA\u524D\u7F00\u65F6\u4F7F\u7528\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
+  settingsSectionWorkspace: "\u5DE5\u4F5C\u533A",
+  settingsSectionWorkspaceIntro: "\u94FE\u4E0A\u6700\u540E\u4E00\u4E2A\u7A97\u53E3\u7ED3\u675F\u540E\uFF0C\u5B83\u7684\u68C0\u51FA\u76EE\u5F55\u600E\u4E48\u5904\u7406\u3002\u5171\u4EAB\u76EE\u5F55\u6C38\u8FDC\u4E0D\u56DE\u6536\uFF0C\u5DE5\u4F5C\u533A\u540E\u7AEF\u5728\u542F\u52A8\u65F6\u5C31\u5DF2\u5B9A\u4E0B\u3002",
+  settingsSectionKeys: "API \u5BC6\u94A5",
+  settingsSectionKeysIntro: "arbor \u6309\u540D\u5B57\u89E3\u6790\u7684\u5BC6\u94A5\u3002\u914D\u7F6E\u53EA\u5199\u540D\u5B57\u3001\u4ECE\u4E0D\u4FDD\u5B58\u503C\uFF1B\u5728\u8FD9\u91CC\u4FDD\u5B58\u4F1A\u5199\u8FDB DSH \u7684\u51ED\u636E\u5E93\u3002",
+  settingsSectionFacts: "\u4E8B\u5B9E",
+  settingsSectionFactsIntro: "\u53EA\u8BFB\u7684\u503C\uFF1A\u5BBF\u4E3B\u542F\u52A8\u65F6\u5DF2\u7ECF\u5B9A\u4E0B\uFF0C\u6216\u7531\u90E8\u7F72\u63D0\u4F9B\u3002\u8FD9\u91CC\u6CA1\u6709\u4EFB\u4F55\u63A7\u4EF6\u4F1A\u5047\u88C5\u80FD\u6539\u52A8\u5B83\u4EEC\u3002",
+  settingsWindowContextHint: "\u4E0A\u4E0B\u6587\u7A97\u53E3\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
+  settingsWindowReserveHint: "\u4E3A\u6700\u540E\u7684\u63D0\u9192\u4FDD\u7559\u3001\u4E0D\u7ED9\u6A21\u578B\u7684\u4EE4\u724C\u3002",
+  settingsWindowIdleHint: "\u8FD0\u884C\u7ED3\u675F\u540E\u7A97\u53E3\u518D\u7B49\u591A\u4E45\uFF0C\u7B49\u4E0B\u4E00\u6B21\u8F93\u5165\u3002",
+  settingsWindowProtectionHint: "\u7A97\u53E3\u5BF9\u8D77\u59CB\u76EE\u6807\u7684\u4FDD\u62A4\u65F6\u957F\u3002",
+  settingsNotesCountHint: "\u6D3B\u8DC3\u96C6\u6700\u591A\u5BB9\u7EB3\u591A\u5C11\u6761\u7B14\u8BB0\u3002",
+  settingsNotesTokensHint: "\u6D3B\u8DC3\u96C6\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
+  settingsSource: "\u8BBE\u7F6E\u6765\u6E90",
+  settingsFactsHost: "\u5BBF\u4E3B",
+  settingsFactsPrompt: "\u63D0\u793A\u8BCD",
+  settingsFactsModels: "\u6A21\u578B",
+  settingsFactsJudge: "\u5224\u65AD\u9608\u503C",
+  settingsFactsSeed: "\u8FD9\u4E9B\u662F\u90E8\u7F72\u7684\u79CD\u5B50\u503C\uFF1B\u7B2C\u4E00\u6B21\u4FDD\u5B58\u4F1A\u628A\u5B83\u4EEC\u88C5\u6210 /env/settings.json\u3002",
+  settingsKeysEmpty: "\u8FD9\u4E2A\u90E8\u7F72\u4E0A arbor \u4E0D\u8BFB\u53D6\u4EFB\u4F55 API \u5BC6\u94A5\u3002",
+  settingsKeyJudgeHint: "arbor \u7684\u9ED8\u8BA4\u5224\u65AD\u5668\uFF08Jev\uFF09\u6BCF\u6B21\u51B3\u7B56\u90FD\u4F1A\u8BFB\u8FD9\u4E2A\u5BC6\u94A5\u3002",
+  settingsKeySecretHint: "\u7531 arbor \u7684\u8BBE\u7F6E\u6309\u540D\u5B57\u5F15\u7528\uFF1B\u73AF\u5883\u548C\u7A97\u53E3\u542F\u52A8\u7684\u6BCF\u4E2A\u8FDB\u7A0B\u90FD\u4F1A\u89E3\u6790\u5B83\u3002",
+  settingsKeySet: "\u5DF2\u8BBE\u7F6E",
+  settingsKeyUnset: "\u672A\u8BBE\u7F6E",
+  settingsKeyFrom: "\u6765\u81EA{source}",
+  settingsKeySourceFile: "DSH \u7684\u51ED\u636E\u6587\u4EF6",
+  settingsKeySourceEnv: "\u542F\u52A8\u73AF\u5883\u53D8\u91CF",
+  settingsKeySourceProjectEnv: "\u9879\u76EE\u7684 .env",
+  settingsKeySourceUserEnv: "harness \u4E3B\u76EE\u5F55\u7684 .env",
+  settingsKeyEnter: "\u8F93\u5165\u5BC6\u94A5",
+  settingsKeyReplace: "\u8F93\u5165\u65B0\u503C\u4EE5\u66FF\u6362",
+  settingsKeyValueFor: "\u4E3A {name} \u8F93\u5165\u65B0\u503C",
+  settingsKeySave: "\u4FDD\u5B58\u5BC6\u94A5",
+  settingsKeyClear: "\u6E05\u9664",
+  settingsKeySaved: "\u5BC6\u94A5\u5DF2\u4FDD\u5B58\u3002",
+  settingsKeyCleared: "\u5BC6\u94A5\u5DF2\u6E05\u9664\u3002",
+  settingsKeyError: "\u5BC6\u94A5\u4FEE\u6539\u5931\u8D25\uFF1A{message}",
+  settingsKeyReadOnly: "\u8FD9\u4E2A\u90E8\u7F72\u6CA1\u6709\u51ED\u636E\u5E93\uFF0C\u8FD9\u4E2A\u5BC6\u94A5\u53EA\u80FD\u8BFB\u3002",
+  settingsKeysWriteOnly: "\u503C\u4E0D\u4F1A\u518D\u663E\u793A\uFF1Aarbor \u53EA\u62A5\u544A\u662F\u5426\u5DF2\u8BBE\u7F6E\uFF0C\u6C38\u8FDC\u4E0D\u663E\u793A\u5BC6\u94A5\u672C\u8EAB\u3002",
+  settingsKeysApply: "\u4FDD\u5B58\u6216\u6E05\u9664\u540E\u7ACB\u5373\u751F\u6548\uFF0C\u4F5C\u7528\u4E8E\u4E0B\u4E00\u6B21\u5224\u65AD\u51B3\u7B56\u548C\u4E4B\u540E\u542F\u52A8\u7684\u8FDB\u7A0B\uFF0C\u65E0\u9700\u91CD\u542F\u3002",
   judgeFilter: "\u8FC7\u6EE4",
   judgeRoute: "\u8DEF\u7531",
   judgeModelTier: "\u6A21\u578B\u5C42\u7EA7",
@@ -905,8 +995,33 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-sheet-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:10px;padding-bottom:10px;background:inherit;border-bottom:1px solid var(--dsw-alias-border-l1,#0000000a)}
 .arbor-page .arbor-sheet-title{flex:1;margin:0;font-size:16px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-sheet-body{display:flex;flex-direction:column;gap:12px}
-.arbor-page .arbor-settings{display:flex;flex-direction:column;gap:8px;font-size:12px}
-.arbor-page .arbor-settings-source{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-settings-page{display:flex;flex:1;flex-direction:column;gap:4px;min-height:0}
+.arbor-page .arbor-settings-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:22px;align-items:start;padding:6px 0 12px}
+.arbor-page .arbor-settings-nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:2px;min-width:0;padding:2px}
+.arbor-page .arbor-settings-tab{display:flex;align-items:center;height:32px;padding:0 11px;border:none;border-radius:9px;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:12.5px;text-align:left;white-space:nowrap;cursor:pointer}
+.arbor-page .arbor-settings-tab:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
+.arbor-page .arbor-settings-tab.is-active{background:var(--dsw-alias-interactive-bg-active,#2631481a);color:var(--dsw-alias-label-primary,#0f1115);font-weight:500}
+.arbor-page .arbor-settings-tab:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary,#4176e6));outline-offset:1px}
+.arbor-page .arbor-settings-pane{display:flex;flex-direction:column;gap:10px;min-width:0;padding:18px 20px 16px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:17px;background:var(--dsw-alias-bg-layer-1,#fff);box-shadow:var(--dsw-elevation-soft,0 4px 16px #00000008)}
+.arbor-page .arbor-settings-title{margin:0;font-size:17px;line-height:1.4;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115)}
+.arbor-page .arbor-settings-intro{margin:0;max-width:720px;font-size:12px;line-height:1.65;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-settings-rows{display:flex;flex-direction:column;gap:9px;margin-top:2px}
+.arbor-page .arbor-settings-foot{display:flex;flex-direction:column;gap:6px;margin-top:6px;padding-top:12px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a)}
+.arbor-page .arbor-settings-empty{padding:12px 0;font-size:12px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-settings-keys{display:flex;flex-direction:column;gap:12px;margin-top:2px}
+.arbor-page .arbor-key{display:flex;flex-direction:column;gap:5px;padding:12px 13px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:12px;background:var(--dsw-alias-bg-layer-2,#f6f7f9)}
+.arbor-page .arbor-key-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.arbor-page .arbor-key-name{flex:1;min-width:0;font-size:12px;letter-spacing:.01em;color:var(--dsw-alias-label-primary,#0f1115);overflow-wrap:anywhere}
+.arbor-page .arbor-key-state{flex:none;padding:1px 7px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,#00000014);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-tertiary,#81858c);font-size:10px;letter-spacing:.04em}
+.arbor-page .arbor-key-state.is-set{border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 35%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 12%,var(--dsw-alias-bg-layer-1,#fff));color:var(--dsw-alias-label-primary,#0f1115)}
+.arbor-page .arbor-key-hint{font-size:11px;line-height:1.55;color:var(--dsw-alias-label-secondary,#61666b)}
+.arbor-page .arbor-key-source{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-key-form{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:3px}
+.arbor-page .arbor-key .arbor-key-input{flex:1;min-width:170px;width:auto;height:29px;text-align:left;font-family:var(--arbor-font-code);letter-spacing:.04em}
+.arbor-page .arbor-key-save{height:29px;padding:0 13px;font-size:11.5px}
+.arbor-page .arbor-key-clear{height:29px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,#00000014);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:11.5px;cursor:pointer}
+.arbor-page .arbor-key-clear:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
+.arbor-page .arbor-key-clear:disabled{opacity:.5;cursor:default}
 .arbor-page .arbor-settings-group{display:flex;flex-direction:column;gap:6px;padding:9px 11px;border-radius:11px;background:var(--dsw-alias-bg-layer-2,#fff);border:1px solid var(--dsw-alias-border-l1,#0000000a)}
 .arbor-page .arbor-settings-group-title{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-setting-row{display:flex;gap:10px;align-items:baseline;min-width:0;padding:5px 0;border-bottom:1px solid var(--dsw-alias-border-l1,#0000000a)}
@@ -967,6 +1082,13 @@ var CSS = `.arbor-page{
 @media (prefers-reduced-motion: reduce){
 .arbor-page .arbor-sky-cell{transform:none!important;transition:none!important}
 .arbor-page .arbor-sky-cell>.arbor-card{transition:none!important}
+}
+@media (max-width:760px){
+.arbor-page .arbor-settings-layout{grid-template-columns:minmax(0,1fr);gap:12px}
+.arbor-page .arbor-settings-nav{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none}
+.arbor-page .arbor-settings-nav::-webkit-scrollbar{display:none}
+.arbor-page .arbor-settings-tab{flex:none}
+.arbor-page .arbor-key .arbor-key-input{min-width:140px}
 }
 @media (max-width:620px){
 .arbor-page{padding:18px 14px 24px;padding-bottom:var(--arbor-dock-reserve,24px)}
@@ -1449,25 +1571,6 @@ function SearchIcon() {
     (0, import_react.createElement)("path", { d: "m12.7 12.7 3.6 3.6" })
   );
 }
-function GearIcon() {
-  return (0, import_react.createElement)(
-    "svg",
-    {
-      viewBox: "0 0 20 20",
-      width: 18,
-      height: 18,
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: 1.5,
-      strokeLinecap: "round",
-      "aria-hidden": true
-    },
-    (0, import_react.createElement)("path", { d: "M3 5.5h14M3 10h14M3 14.5h14" }),
-    (0, import_react.createElement)("circle", { cx: 7.5, cy: 5.5, r: 1.8, fill: "var(--dsw-alias-bg-layer-1,#fff)" }),
-    (0, import_react.createElement)("circle", { cx: 12.5, cy: 10, r: 1.8, fill: "var(--dsw-alias-bg-layer-1,#fff)" }),
-    (0, import_react.createElement)("circle", { cx: 6.5, cy: 14.5, r: 1.8, fill: "var(--dsw-alias-bg-layer-1,#fff)" })
-  );
-}
 function CloseIcon() {
   return (0, import_react.createElement)(
     "svg",
@@ -1488,8 +1591,7 @@ function TopActions(props) {
   return (0, import_react.createElement)(
     "div",
     { className: "arbor-top-actions" },
-    (0, import_react.createElement)(IconButton, { label: props.t("openSearch"), onClick: props.onSearch, children: (0, import_react.createElement)(SearchIcon) }),
-    (0, import_react.createElement)(IconButton, { label: props.t("openSettings"), onClick: props.onSettings, children: (0, import_react.createElement)(GearIcon) })
+    (0, import_react.createElement)(IconButton, { label: props.t("openSearch"), onClick: props.onSearch, children: (0, import_react.createElement)(SearchIcon) })
   );
 }
 function Card(props) {
@@ -1961,10 +2063,117 @@ function EditNumber(props) {
     }
   });
 }
-function SettingsBlock(props) {
+var SETTINGS_SECTIONS = [
+  { id: "judge", title: "settingsSectionJudge", intro: "settingsSectionJudgeIntro" },
+  { id: "windows", title: "settingsSectionWindows", intro: "settingsSectionWindowsIntro" },
+  { id: "notes", title: "settingsSectionNotes", intro: "settingsSectionNotesIntro" },
+  { id: "workspace", title: "settingsSectionWorkspace", intro: "settingsSectionWorkspaceIntro" },
+  { id: "keys", title: "settingsSectionKeys", intro: "settingsSectionKeysIntro" },
+  { id: "facts", title: "settingsSectionFacts", intro: "settingsSectionFactsIntro" }
+];
+var KEY_SOURCES = {
+  file: "settingsKeySourceFile",
+  env: "settingsKeySourceEnv",
+  "project-env": "settingsKeySourceProjectEnv",
+  "user-env": "settingsKeySourceUserEnv"
+};
+function KeyRow(props) {
+  const { entry: key, t } = props;
+  const [value, setValue] = (0, import_react.useState)("");
+  const [status, setStatus] = (0, import_react.useState)("idle");
+  const busy = status === "saving";
+  const source = key.source === void 0 ? void 0 : KEY_SOURCES[key.source];
+  const submit = async () => {
+    if (value === "" || busy) return;
+    setStatus("saving");
+    const error = await props.onSave(key.name, value);
+    if (error === void 0) {
+      setValue("");
+      setStatus("saved");
+    } else {
+      setStatus({ error });
+    }
+  };
+  const clear = async () => {
+    if (busy) return;
+    setStatus("saving");
+    const error = await props.onClear(key.name);
+    if (error === void 0) {
+      setValue("");
+      setStatus("cleared");
+    } else {
+      setStatus({ error });
+    }
+  };
+  return (0, import_react.createElement)(
+    "div",
+    { className: "arbor-key", "data-arbor-key": key.name },
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-key-head" },
+      (0, import_react.createElement)("span", { className: "arbor-key-name arbor-mono", "data-arbor-text": "code" }, key.name),
+      (0, import_react.createElement)(
+        "span",
+        { className: `arbor-key-state arbor-label${key.set ? " is-set" : ""}`, "data-arbor-text": "display" },
+        t(key.set ? "settingsKeySet" : "settingsKeyUnset")
+      )
+    ),
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-key-hint" },
+      t(key.purpose === "judge" ? "settingsKeyJudgeHint" : "settingsKeySecretHint")
+    ),
+    key.set && source !== void 0 ? (0, import_react.createElement)("div", { className: "arbor-key-source" }, t("settingsKeyFrom", { source: t(source) })) : null,
+    key.writable ? (0, import_react.createElement)(
+      "form",
+      {
+        className: "arbor-key-form",
+        onSubmit: (event) => {
+          event.preventDefault();
+          void submit();
+        }
+      },
+      (0, import_react.createElement)("input", {
+        className: "arbor-input arbor-key-input",
+        type: "password",
+        autoComplete: "new-password",
+        spellCheck: false,
+        value,
+        "aria-label": t("settingsKeyValueFor", { name: key.name }),
+        placeholder: t(key.set ? "settingsKeyReplace" : "settingsKeyEnter"),
+        onChange: (event) => {
+          setValue(event.target.value);
+          setStatus("idle");
+        }
+      }),
+      (0, import_react.createElement)("button", {
+        type: "submit",
+        className: "arbor-save arbor-key-save",
+        disabled: busy || value === ""
+      }, t(busy ? "settingsSaving" : "settingsKeySave")),
+      key.set ? (0, import_react.createElement)("button", {
+        type: "button",
+        className: "arbor-key-clear",
+        disabled: busy,
+        onClick: () => {
+          void clear();
+        }
+      }, t("settingsKeyClear")) : null
+    ) : (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsKeyReadOnly")),
+    status === "saved" ? (0, import_react.createElement)("div", { className: "arbor-save-state" }, t("settingsKeySaved")) : null,
+    status === "cleared" ? (0, import_react.createElement)("div", { className: "arbor-save-state" }, t("settingsKeyCleared")) : null,
+    typeof status === "object" ? (0, import_react.createElement)("div", { className: "arbor-save-error" }, t("settingsKeyError", { message: status.error })) : null
+  );
+}
+function SettingsPage(props) {
   const { settings, dataRoot, backend, shared, t } = props;
+  const [section, setSection] = (0, import_react.useState)("judge");
   const [draft, setDraft] = (0, import_react.useState)(() => settingsDraft(settings));
   const [status, setStatus] = (0, import_react.useState)("idle");
+  const [keys, setKeys] = (0, import_react.useState)(props.keys);
+  (0, import_react.useEffect)(() => {
+    setKeys(props.keys);
+  }, [props.keys]);
   const update = (patch) => {
     setDraft((current) => ({ ...current, ...patch }));
     setStatus("idle");
@@ -2014,74 +2223,105 @@ function SettingsBlock(props) {
       setStatus({ error: error instanceof Error ? error.message : String(error) });
     }
   };
+  const postKey = async (body2) => {
+    try {
+      const response = await fetch("/api/arbor/keys", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body2)
+      });
+      const answer = await response.json().catch(() => void 0);
+      if (!response.ok || answer?.ok !== true) return answer?.error ?? `HTTP ${response.status}`;
+      if (answer.keys !== void 0) setKeys(answer.keys);
+      return void 0;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  };
+  const spec = SETTINGS_SECTIONS.find((one) => one.id === section) ?? SETTINGS_SECTIONS[0];
   const tiers = Object.entries(settings.modelTiers ?? {});
   const judge = settings.judge ?? {};
-  const facts = [
+  const facts = [];
+  const factGroup = (key, title, rows) => {
+    if (rows.length === 0) return null;
+    return (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-group", key },
+      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, title),
+      ...rows
+    );
+  };
+  const hostRows = [
     (0, import_react.createElement)(SettingRow, { key: "dataRoot", label: t("dataRoot") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, dataRoot)),
     (0, import_react.createElement)(SettingRow, { key: "backend", label: t("settingsBackend") }, (0, import_react.createElement)("span", { className: "arbor-label" }, backend)),
-    (0, import_react.createElement)(SettingRow, { key: "shared", label: t("settingsShared") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, shared))
+    (0, import_react.createElement)(SettingRow, { key: "shared", label: t("settingsShared") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, shared)),
+    (0, import_react.createElement)(
+      SettingRow,
+      { key: "source", label: t("settingsSource") },
+      (0, import_react.createElement)(
+        "span",
+        { className: "arbor-label" },
+        t(settings.source === "environment" ? "settingsSourceEnvironment" : "settingsSourceDeployment")
+      )
+    )
   ];
+  const promptRows = [];
   if (settings.identity !== void 0) {
-    facts.push((0, import_react.createElement)(
+    promptRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "identity", label: t("settingsIdentity") },
       (0, import_react.createElement)("span", { className: "arbor-clamp" }, settings.identity)
     ));
   }
   if (settings.generalRules !== void 0 && settings.generalRules.length > 0) {
-    facts.push((0, import_react.createElement)(
+    promptRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "rules", label: t("settingsRules") },
       (0, import_react.createElement)("span", { className: "arbor-num" }, String(settings.generalRules.length))
     ));
   }
+  const modelRows = [];
   if (tiers.length > 0) {
-    facts.push((0, import_react.createElement)(
+    modelRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "tiers", label: t("settingsTiers") },
       (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, tiers.map(([tier, model]) => `${tier} \u2192 ${model}`).join(" \xB7 "))
     ));
   }
   if (settings.defaultTier !== void 0) {
-    facts.push((0, import_react.createElement)(
+    modelRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "defaultTier", label: t("settingsDefaultTier") },
       (0, import_react.createElement)("span", { className: "arbor-label" }, settings.defaultTier)
     ));
   }
+  const judgeRows = [];
   if (judge.maxCandidates !== void 0) {
-    facts.push((0, import_react.createElement)(
+    judgeRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "maxCandidates", label: t("settingsJudgeCandidates") },
       (0, import_react.createElement)("span", { className: "arbor-num" }, String(judge.maxCandidates))
     ));
   }
   if (judge.activeSetJudgeShare !== void 0) {
-    facts.push((0, import_react.createElement)(
+    judgeRows.push((0, import_react.createElement)(
       SettingRow,
       { key: "judgeShare", label: t("settingsJudgeShare") },
       (0, import_react.createElement)("span", { className: "arbor-num" }, `${Math.round(judge.activeSetJudgeShare * 100)}%`)
     ));
   }
-  if (settings.secrets !== void 0 && settings.secrets.length > 0) {
-    facts.push((0, import_react.createElement)(
-      SettingRow,
-      { key: "secrets", label: t("settingsSecrets") },
-      (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, settings.secrets.join(" \xB7 "))
-    ));
-  }
-  return (0, import_react.createElement)(
-    "div",
-    { className: "arbor-settings" },
-    (0, import_react.createElement)(
+  facts.push(
+    factGroup("host", t("settingsFactsHost"), hostRows),
+    factGroup("prompt", t("settingsFactsPrompt"), promptRows),
+    factGroup("models", t("settingsFactsModels"), modelRows),
+    factGroup("judge", t("settingsFactsJudge"), judgeRows)
+  );
+  const editable = section !== "keys" && section !== "facts";
+  let body;
+  if (section === "judge") {
+    body = (0, import_react.createElement)(
       "div",
-      { className: "arbor-settings-source arbor-muted" },
-      t(settings.source === "environment" ? "settingsSourceEnvironment" : "settingsSourceDeployment")
-    ),
-    (0, import_react.createElement)(
-      "div",
-      { className: "arbor-settings-group" },
-      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, t("settingsEditable")),
+      { className: "arbor-settings-rows" },
       ...JUDGE_KINDS.map((kind) => (0, import_react.createElement)(
         EditRow,
         { key: kind, label: t(JUDGE_LABELS[kind] ?? kind) },
@@ -2096,8 +2336,13 @@ function SettingsBlock(props) {
           { key: mode, value: mode },
           t(mode === "off" ? "settingsJudgeOff" : mode === "shadow" ? "settingsJudgeShadow" : "settingsJudgeOn")
         )))
-      )),
-      (0, import_react.createElement)(EditRow, { label: t("settingsWindowContext") }, (0, import_react.createElement)(EditNumber, {
+      ))
+    );
+  } else if (section === "windows") {
+    body = (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-rows" },
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowContext"), hint: t("settingsWindowContextHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.contextTokens,
         min: 1e3,
         max: 2e6,
@@ -2105,7 +2350,7 @@ function SettingsBlock(props) {
           update({ contextTokens: value });
         }
       })),
-      (0, import_react.createElement)(EditRow, { label: t("settingsWindowReserve") }, (0, import_react.createElement)(EditNumber, {
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowReserve"), hint: t("settingsWindowReserveHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.reserveTokens,
         min: 0,
         max: 1e6,
@@ -2113,7 +2358,7 @@ function SettingsBlock(props) {
           update({ reserveTokens: value });
         }
       })),
-      (0, import_react.createElement)(EditRow, { label: t("settingsWindowIdle") }, (0, import_react.createElement)(EditNumber, {
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowIdle"), hint: t("settingsWindowIdleHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.idleSeconds,
         min: 0,
         max: 86400,
@@ -2121,15 +2366,20 @@ function SettingsBlock(props) {
           update({ idleSeconds: value });
         }
       })),
-      (0, import_react.createElement)(EditRow, { label: t("settingsWindowProtection") }, (0, import_react.createElement)(EditNumber, {
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowProtection"), hint: t("settingsWindowProtectionHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.protectionSeconds,
         min: 0,
         max: 3600,
         onChange: (value) => {
           update({ protectionSeconds: value });
         }
-      })),
-      (0, import_react.createElement)(EditRow, { label: t("settingsNotesCount") }, (0, import_react.createElement)(EditNumber, {
+      }))
+    );
+  } else if (section === "notes") {
+    body = (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-rows" },
+      (0, import_react.createElement)(EditRow, { label: t("settingsNotesCount"), hint: t("settingsNotesCountHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.activeCount,
         min: 1,
         max: 1e3,
@@ -2137,14 +2387,19 @@ function SettingsBlock(props) {
           update({ activeCount: value });
         }
       })),
-      (0, import_react.createElement)(EditRow, { label: t("settingsNotesTokens") }, (0, import_react.createElement)(EditNumber, {
+      (0, import_react.createElement)(EditRow, { label: t("settingsNotesTokens"), hint: t("settingsNotesTokensHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.activeTokenBudget,
         min: 100,
         max: 1e6,
         onChange: (value) => {
           update({ activeTokenBudget: value });
         }
-      })),
+      }))
+    );
+  } else if (section === "workspace") {
+    body = (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-rows" },
       (0, import_react.createElement)(EditRow, { label: t("settingsRetention"), hint: t("settingsRetentionHint") }, (0, import_react.createElement)(EditNumber, {
         value: draft.retentionHours,
         min: 0,
@@ -2153,29 +2408,93 @@ function SettingsBlock(props) {
           update({ retentionHours: value });
         }
       }))
+    );
+  } else if (section === "keys") {
+    body = (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-keys" },
+      keys.length === 0 ? (0, import_react.createElement)("div", { className: "arbor-settings-empty" }, t("settingsKeysEmpty")) : keys.map((entry) => (0, import_react.createElement)(KeyRow, {
+        key: entry.name,
+        entry,
+        t,
+        onSave: async (name, value) => postKey({ name, value }),
+        onClear: async (name) => postKey({ name, clear: true })
+      })),
+      (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsKeysWriteOnly")),
+      (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsKeysApply"))
+    );
+  } else {
+    body = (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-rows" },
+      ...facts,
+      settings.source === "environment" ? null : (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsFactsSeed")),
+      (0, import_react.createElement)("div", { className: "arbor-settings-note" }, t("settingsDsh"))
+    );
+  }
+  return (0, import_react.createElement)(
+    "div",
+    { className: "arbor-settings-page", "data-arbor-page": true, "data-arbor-settings": true },
+    (0, import_react.createElement)(
+      "header",
+      { className: "arbor-hero" },
+      (0, import_react.createElement)(
+        "div",
+        { className: "arbor-hero-top" },
+        (0, import_react.createElement)("span", { className: "arbor-date arbor-label", "data-arbor-text": "numeric" }, dateLine(t, props.at)),
+        (0, import_react.createElement)(TopActions, { t, onSearch: props.onSearch })
+      ),
+      (0, import_react.createElement)("h1", { className: "arbor-hero-title", "data-arbor-text": "display" }, t("settingsTitle")),
+      (0, import_react.createElement)("span", { className: "arbor-hero-hint", "data-arbor-text": "body" }, t("settingsIntro"))
     ),
     (0, import_react.createElement)(
       "div",
-      { className: "arbor-settings-actions" },
-      (0, import_react.createElement)("button", {
-        type: "button",
-        className: "arbor-save",
-        disabled: status === "saving",
-        onClick: () => {
-          void save();
-        }
-      }, t(status === "saving" ? "settingsSaving" : "settingsSave")),
-      status === "saved" ? (0, import_react.createElement)("span", { className: "arbor-save-state" }, t("settingsSaved")) : null,
-      typeof status === "object" ? (0, import_react.createElement)("span", { className: "arbor-save-error" }, t("settingsSaveError", { message: status.error })) : null
-    ),
-    (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsApplyHint")),
-    (0, import_react.createElement)(
-      "div",
-      { className: "arbor-settings-group" },
-      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, t("settingsFacts")),
-      ...facts
-    ),
-    (0, import_react.createElement)("div", { className: "arbor-settings-note" }, t("settingsDsh"))
+      { className: "arbor-settings-layout" },
+      (0, import_react.createElement)(
+        "nav",
+        { className: "arbor-settings-nav", "aria-label": t("settingsSections") },
+        ...SETTINGS_SECTIONS.map((one) => (0, import_react.createElement)(
+          "button",
+          {
+            key: one.id,
+            type: "button",
+            "data-arbor-section": one.id,
+            className: `arbor-settings-tab${one.id === section ? " is-active" : ""}`,
+            "aria-current": one.id === section ? "page" : void 0,
+            onClick: () => {
+              setSection(one.id);
+            }
+          },
+          (0, import_react.createElement)("span", { className: "arbor-settings-tab-title", "data-arbor-text": "display" }, t(one.title))
+        ))
+      ),
+      (0, import_react.createElement)(
+        "section",
+        { className: "arbor-settings-pane", "aria-label": t(spec.title) },
+        (0, import_react.createElement)("h2", { className: "arbor-settings-title", "data-arbor-text": "display" }, t(spec.title)),
+        (0, import_react.createElement)("p", { className: "arbor-settings-intro", "data-arbor-text": "body" }, t(spec.intro)),
+        body,
+        editable ? (0, import_react.createElement)(
+          "div",
+          { className: "arbor-settings-foot" },
+          (0, import_react.createElement)(
+            "div",
+            { className: "arbor-settings-actions" },
+            (0, import_react.createElement)("button", {
+              type: "button",
+              className: "arbor-save",
+              disabled: status === "saving",
+              onClick: () => {
+                void save();
+              }
+            }, t(status === "saving" ? "settingsSaving" : "settingsSave")),
+            status === "saved" ? (0, import_react.createElement)("span", { className: "arbor-save-state" }, t("settingsSaved")) : null,
+            typeof status === "object" ? (0, import_react.createElement)("span", { className: "arbor-save-error" }, t("settingsSaveError", { message: status.error })) : null
+          ),
+          (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsApplyHint"))
+        ) : null
+      )
+    )
   );
 }
 function SearchGroup(props) {
@@ -2340,7 +2659,7 @@ function Dock(props) {
   );
 }
 function Overview(props) {
-  const { facts, snapshot, t, filter, setFilter, onSearch, onSettings, onOpenSession } = props;
+  const { facts, snapshot, t, filter, setFilter, onSearch, onOpenSession } = props;
   const live = facts.windows.filter((window2) => window2.live);
   const active = facts.windows.filter((window2) => shownState(window2, snapshot.streams[window2.ref]) === "running");
   const sessions = facts.sessions;
@@ -2450,7 +2769,7 @@ function Overview(props) {
         "div",
         { className: "arbor-hero-top" },
         (0, import_react.createElement)("span", { className: "arbor-date arbor-label", "data-arbor-text": "numeric" }, dateLine(t, facts.at)),
-        (0, import_react.createElement)(TopActions, { t, onSearch, onSettings })
+        (0, import_react.createElement)(TopActions, { t, onSearch })
       ),
       (0, import_react.createElement)("h1", { className: "arbor-hero-title", "data-arbor-text": "display" }, ...heroContent)
     ),
@@ -2459,7 +2778,7 @@ function Overview(props) {
   );
 }
 function SessionView(props) {
-  const { sessionId, session, t, onSearch, onSettings, openDshSession } = props;
+  const { sessionId, session, t, onSearch, openDshSession } = props;
   const snapshot = useChannel(channelFor(sessionId));
   const facts = snapshot.facts;
   if (facts === void 0) {
@@ -2473,7 +2792,7 @@ function SessionView(props) {
           "div",
           { className: "arbor-hero-top" },
           (0, import_react.createElement)("span", { className: "arbor-date arbor-label", "data-arbor-text": "numeric" }, dateLine(t, Date.now())),
-          (0, import_react.createElement)(TopActions, { t, onSearch, onSettings })
+          (0, import_react.createElement)(TopActions, { t, onSearch })
         )
       ),
       (0, import_react.createElement)(Skyline, {
@@ -2539,7 +2858,7 @@ function SessionView(props) {
         "div",
         { className: "arbor-hero-top" },
         (0, import_react.createElement)("span", { className: "arbor-date arbor-label", "data-arbor-text": "numeric" }, dateLine(t, facts.at)),
-        (0, import_react.createElement)(TopActions, { t, onSearch, onSettings })
+        (0, import_react.createElement)(TopActions, { t, onSearch })
       ),
       (0, import_react.createElement)("h1", { className: "arbor-hero-title", "data-arbor-text": "display" }, ...heroContent),
       openDshSession === void 0 ? null : (0, import_react.createElement)(
@@ -2558,31 +2877,30 @@ function ArborPage(props) {
   const host = useChannel(hostChannel());
   const facts = host.facts;
   const [opened, setOpened] = (0, import_react.useState)([]);
-  const [active, setActive] = (0, import_react.useState)(null);
+  const [tab, setTab] = (0, import_react.useState)("overview");
   const [filter, setFilter] = (0, import_react.useState)("all");
   const [searchOpen, setSearchOpen] = (0, import_react.useState)(false);
-  const [settingsOpen, setSettingsOpen] = (0, import_react.useState)(false);
   const sessions = facts?.sessions ?? [];
-  const activeSession = active !== null && sessions.some((session) => session.sessionId === active) ? active : null;
+  const sessionTab = (sessionId) => `session:${sessionId}`;
+  const activeSession = tab.startsWith("session:") && sessions.some((session) => session.sessionId === tab.slice("session:".length)) ? tab.slice("session:".length) : null;
   (0, import_react.useEffect)(() => {
-    if (!searchOpen && !settingsOpen) return;
+    if (!searchOpen) return;
     const close = (event) => {
       if (event.key !== "Escape") return;
       setSearchOpen(false);
-      setSettingsOpen(false);
     };
     window.addEventListener("keydown", close);
     return () => {
       window.removeEventListener("keydown", close);
     };
-  }, [searchOpen, settingsOpen]);
+  }, [searchOpen]);
   const openSession = (sessionId) => {
     setOpened((current) => current.includes(sessionId) ? current : [...current, sessionId]);
-    setActive(sessionId);
+    setTab(sessionTab(sessionId));
   };
   const closeSession = (sessionId) => {
     setOpened((current) => current.filter((one) => one !== sessionId));
-    if (active === sessionId) setActive(null);
+    if (tab === sessionTab(sessionId)) setTab("overview");
   };
   const tabLabel = (sessionId) => {
     const session = sessions.find((one) => one.sessionId === sessionId);
@@ -2625,12 +2943,23 @@ function ArborPage(props) {
         { className: "arbor-tabs", "aria-label": t("pageTitle") },
         (0, import_react.createElement)("button", {
           type: "button",
-          className: `arbor-tab arbor-label${activeSession === null ? " is-active" : ""}`,
+          className: `arbor-tab arbor-label${tab === "overview" ? " is-active" : ""}`,
           "data-arbor-text": "display",
+          "aria-current": tab === "overview" ? "page" : void 0,
           onClick: () => {
-            setActive(null);
+            setTab("overview");
           }
         }, t("tabOverview")),
+        (0, import_react.createElement)("button", {
+          type: "button",
+          className: `arbor-tab arbor-label${tab === "settings" ? " is-active" : ""}`,
+          "data-arbor-text": "display",
+          "data-arbor-settings-tab": true,
+          "aria-current": tab === "settings" ? "page" : void 0,
+          onClick: () => {
+            setTab("settings");
+          }
+        }, t("tabSettings")),
         opened.map((sessionId) => (0, import_react.createElement)(
           "div",
           { className: `arbor-tab-group${activeSession === sessionId ? " is-active" : ""}`, key: sessionId },
@@ -2638,8 +2967,9 @@ function ArborPage(props) {
             type: "button",
             className: "arbor-tab arbor-label",
             "data-arbor-text": "display",
+            "aria-current": activeSession === sessionId ? "page" : void 0,
             onClick: () => {
-              setActive(sessionId);
+              setTab(sessionTab(sessionId));
             }
           }, tabLabel(sessionId)),
           (0, import_react.createElement)("button", {
@@ -2669,6 +2999,17 @@ function ArborPage(props) {
             ) : null
           )
         }]
+      }) : tab === "settings" ? (0, import_react.createElement)(SettingsPage, {
+        settings: facts.settings,
+        keys: facts.keys,
+        dataRoot: facts.dataRoot,
+        backend: facts.backend,
+        shared: facts.shared,
+        at: facts.at,
+        t,
+        onSearch: () => {
+          setSearchOpen(true);
+        }
       }) : activeSession === null ? (0, import_react.createElement)(Overview, {
         facts,
         snapshot: host,
@@ -2678,9 +3019,6 @@ function ArborPage(props) {
         onSearch: () => {
           setSearchOpen(true);
         },
-        onSettings: () => {
-          setSettingsOpen(true);
-        },
         onOpenSession: openSession
       }) : (0, import_react.createElement)(SessionView, {
         sessionId: activeSession,
@@ -2688,9 +3026,6 @@ function ArborPage(props) {
         t,
         onSearch: () => {
           setSearchOpen(true);
-        },
-        onSettings: () => {
-          setSettingsOpen(true);
         },
         ...props.openDshSession === void 0 ? {} : { openDshSession: props.openDshSession }
       })
@@ -2701,19 +3036,6 @@ function ArborPage(props) {
         setSearchOpen(false);
       } },
       (0, import_react.createElement)(SearchBlock, { t })
-    ) : null,
-    settingsOpen && facts !== void 0 ? (0, import_react.createElement)(
-      Sheet,
-      { title: t("openSettings"), close: t("closeSheet"), onClose: () => {
-        setSettingsOpen(false);
-      } },
-      (0, import_react.createElement)(SettingsBlock, {
-        settings: facts.settings,
-        dataRoot: facts.dataRoot,
-        backend: facts.backend,
-        shared: facts.shared,
-        t
-      })
     ) : null
   );
 }

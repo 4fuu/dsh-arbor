@@ -71,19 +71,35 @@ dispose removed the sidebar during the update. `2026.1110.2` notices that state
 after the update, shows a notice and reloads the page once, which restores the
 sidebar. A manual reload does the same thing.
 
-The Arbor page's settings drawer changes arbor's real settings. It installs
+The Arbor page's Settings tab changes arbor's real settings. It is a tab beside
+the overview and the session tabs, not a sheet over them, and it groups what a
+reader thinks about separately — judge, windows, notes, workspace — with the
+read-only facts in a section of their own. A save installs
 `/env/settings.json` through the host's environment path, the same install the
 model's own `reload` uses, and the host re-reads it immediately. The judge
 modes, the window token budget and limits, the active-note budget and the
 checkout retention are editable; no restart is involved. The workspace backend
 and the shared folder are facts: both are settled when the host starts, so a
-control there would change nothing. Judge candidate count and active-set share
-are facts for the same reason (the default judge is built at host start).
+control there would change nothing. Judge candidate count, active-set share and
+the model tiers are facts for the same reason (the default judge is built at
+host start, and the tier mapping is the deployment's).
+
+The API keys arbor reads are editable there too, and their values live
+somewhere else by design: a configuration names a secret and never holds it.
+The page writes them to DSH's credential store through `ctx.credentials`
+(`$DSH_HOME/.credentials.yaml` on the web and desktop profiles, the same store
+DSH's Models page writes), shows only whether a key is set and which layer
+supplies it, masks the field, and never reads a value back. The host mirrors a
+stored value into the process environment arbor resolves secrets from — the
+judge's per-request `JEV_API_KEY` read, the secret scrub and every child
+process — so a saved or cleared key applies to the next decision without a
+restart. On a profile with no credential store (headless) the keys are shown
+read-only.
 
 The bundle's plugin page follows DSH's language through the plugin metadata
 locale hook: the bundle carries all eight languages DSH ships, and each package
 row carries English and Chinese. The preset's mode-picker copy carries the same
-eight languages. The Arbor page, its drawer and its notices are English and
+eight languages. The Arbor page, its settings tab and its notices are English and
 Chinese; DSH's locale fallback shows English in its other languages. DSH's
 Agent presets settings section (not the mode picker) renders a custom preset's
 host metadata verbatim and offers no client hook, so its description remains

@@ -15,6 +15,15 @@
  * JSON only: the values cross an exact Fetch route as NDJSON.
  */
 
+/**
+ * One API key arbor reads, defined by the host that resolves it
+ * (`@4fu/dsh-arbor-host`): the name, whether a value is set, which layer
+ * supplies it and whether this deployment can change it — never the value.
+ */
+import type { ArborKeyFacts } from '@4fu/dsh-arbor-host'
+
+export type { ArborKeyFacts } from '@4fu/dsh-arbor-host'
+
 /** One checkout a window's chain holds open (ovnfs), as the workspace reports it. */
 export interface ArborCheckoutFacts {
   /** The checkout's name, which begins with the window ref that opened it. */
@@ -234,7 +243,6 @@ export interface ArborSettingsFacts {
     readonly retentionMs?: number
     readonly shared?: string
   }
-  readonly secrets?: readonly string[]
 }
 
 /** Everything one arbor session's panels read, in one frame. */
@@ -258,6 +266,8 @@ export interface ArborFacts {
   readonly env: ArborEnvFacts
   readonly schedules: readonly ArborScheduleFacts[]
   readonly settings: ArborSettingsFacts
+  /** The API keys arbor reads; a name, whether one is set, and never a value. */
+  readonly keys: readonly ArborKeyFacts[]
 }
 
 /**
@@ -311,6 +321,8 @@ export interface ArborHostFacts {
   readonly env: ArborEnvFacts
   readonly schedules: readonly ArborScheduleFacts[]
   readonly settings: ArborSettingsFacts
+  /** The API keys arbor reads; a name, whether one is set, and never a value. */
+  readonly keys: readonly ArborKeyFacts[]
 }
 
 /** One frame of the NDJSON facts stream. */

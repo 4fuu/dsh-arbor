@@ -366,6 +366,10 @@ async function schedulesOf(host: ArborHostService, sessionId?: SessionId): Promi
  * `DshEnvironment.settings()` answers the seed when `/env/settings.json` is not
  * installed, so the source is read off the environment's item list instead:
  * a `settings` item is what the model's own `reload` installs.
+ *
+ * This whole document goes into `settings.json` when the page saves one, so the
+ * API keys are deliberately absent: a settings document names a secret and
+ * never holds its value, and the keys are their own facts (`ArborFacts.keys`).
  */
 async function settingsOf(host: ArborHostService): Promise<ArborSettingsFacts> {
   const settings: Settings = await host.environment.settings() ?? host.settings
@@ -409,7 +413,6 @@ async function settingsOf(host: ArborHostService): Promise<ArborSettingsFacts> {
         ...(settings.workspaces.shared === undefined ? {} : { shared: settings.workspaces.shared }),
       },
     }),
-    ...(settings.secrets === undefined ? {} : { secrets: [...settings.secrets] }),
   }
 }
 
@@ -430,12 +433,13 @@ export async function buildFacts(
 ): Promise<ArborFacts> {
   const { windows, board } = await windowsOf(host, sessionId)
   const chain = windows.map(window => window.ref)
-  const [workspace, notes, env, schedules, settings] = await Promise.all([
+  const [workspace, notes, env, schedules, settings, keys] = await Promise.all([
     workspaceOf(host, sessionId, chain),
     notesOf(host),
     envOf(host),
     schedulesOf(host, sessionId),
     settingsOf(host),
+    host.keys(),
   ])
   return {
     version: 1,
@@ -451,6 +455,7 @@ export async function buildFacts(
     env,
     schedules,
     settings,
+    keys,
   }
 }
 
@@ -539,11 +544,12 @@ export async function buildHostFacts(
     usage: { ...line.usage },
     ...(line.openWork === undefined ? {} : { openWork: [...line.openWork] }),
   }))
-  const [notes, env, schedules, settings] = await Promise.all([
+  const [notes, env, schedules, settings, keys] = await Promise.all([
     notesOf(host),
     envOf(host),
     schedulesOf(host),
     settingsOf(host),
+    host.keys(),
   ])
   return {
     version: 1,
@@ -559,5 +565,6 @@ export async function buildHostFacts(
     env,
     schedules,
     settings,
+    keys,
   }
 }

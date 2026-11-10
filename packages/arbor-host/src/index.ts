@@ -36,7 +36,11 @@
  *    reads;
  *  - the settings, whose window block is left to arbor's own defaults: a window
  *    stays open 300 s after its run ends and the next input for the session
- *    opens the next window of its chain.
+ *    opens the next window of its chain;
+ *  - the API keys arbor reads. Their values are DSH's, stored in its credential
+ *    store and never in a configuration; this row mirrors a stored value into
+ *    the process environment, which is where arbor's judge, its secret scrub
+ *    and every child process resolve a secret by name.
  *
  * The judge is off on purpose in B1: every judge decision is model-based, and
  * a model-based judge cannot run through the DSH backend yet. With the judge
@@ -55,6 +59,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+import { credentialRef, type CredentialProvider, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import z from '@deepseek-ai/schemastery'
 import type { Environment, Journal, NoteStore, Plugin, Settings, Target, WindowRef, Workspace } from '@4fu/arbor-interfaces'
 import { MAX_PAGE_LIMIT } from '@4fu/arbor-interfaces'
@@ -131,6 +136,64 @@ const JUDGE_DECISIONS = new Set(['filter', 'route', 'model_tier', 'notice', 'bro
 
 /** The three modes a judge decision can be in. */
 const JUDGE_MODES = new Set(['off', 'shadow', 'on'])
+
+/**
+ * The environment variable arbor's default judge reads its key from.
+ *
+ * The judge is Jev (`@4fu/arbor-judge-jev`), which resolves `JEV_API_KEY` per
+ * request, so a key set while DSH runs reaches the very next decision. The name
+ * is restated here rather than imported: `@4fu/arbor-core` depends on the judge
+ * package and re-exports neither the name nor the judge, and dsh-arbor's own
+ * settings name the secret the same way a deployment would.
+ */
+export const JUDGE_KEY = 'JEV_API_KEY'
+
+/**
+ * One API key arbor reads, as the settings page may show and change it.
+ *
+ * A key is a name and never a value: the value lives in DSH's credential store
+ * (`$DSH_HOME/.credentials.yaml` through `ctx.credentials` on the web and
+ * desktop profiles), which is the same store DSH's own Models page writes, and
+ * what crosses the wire is only whether one is set, which layer supplies it and
+ * whether this deployment can change it.
+ */
+export interface ArborKeyFacts {
+  /** The name arbor resolves it by, such as `JEV_API_KEY`. */
+  readonly name: string
+  /** What reads it: arbor's default judge, or a name arbor's settings declare. */
+  readonly purpose: 'judge' | 'secret'
+  /** Whether resolving it right now returns a value. */
+  readonly set: boolean
+  /** The layer supplying the value (`file`, `env`, `project-env`, `user-env`). */
+  readonly source?: string
+  /** Whether this deployment has a credential store to write it to. */
+  readonly writable: boolean
+}
+
+/** One key's name and what reads it. */
+interface KeyName {
+  readonly name: string
+  readonly purpose: 'judge' | 'secret'
+}
+
+/**
+ * The credential layer DSH's local provider stores values in.
+ *
+ * `describe` reports which layer supplies a reference; `file` is the managed
+ * document this page writes, as opposed to the launch environment and the two
+ * `.env` layers the provider falls back to.
+ */
+const STORED_LAYER = 'file'
+
+/** A name as a credential reference, or undefined when its grammar refuses it. */
+function refOf(name: string): CredentialRef | undefined {
+  try {
+    return credentialRef(name)
+  } catch {
+    return undefined
+  }
+}
+
 
 /** One integer setting in range, or a refusal naming it. */
 function checkedInteger(name: string, value: unknown, min: number, max: number): number {
@@ -340,6 +403,12 @@ export class ArborHostService extends Service {
   private lastModel: string | undefined
   /** The warnings the bridge raised while the host was built, for diagnostics. */
   readonly warnings: string[] = []
+  /**
+   * What each key's environment variable held before this host mirrored a
+   * stored value into it, so clearing a key restores the launcher's value
+   * rather than removing it.
+   */
+  private readonly ambientKeys = new Map<string, string | undefined>()
 
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'arborHost')
@@ -520,6 +589,16 @@ export class ArborHostService extends Service {
     // Every DSH prompt-provider change moves the `<dsh>` section's revision, so
     // arbor re-renders it and hands the changed lines to live windows.
     ctx.on('system-prompt/change', () => { this.promptChanges += 1 })
+    // DSH's credential store is a row of the web and desktop profiles and is
+    // disabled on the headless one, so it may appear after this host does. When
+    // it is there, the keys arbor reads take their values from it (and follow
+    // every later change); when it is not, the settings page reports them
+    // read-only rather than offering a control that writes nowhere.
+    this.ctx.inject(['credentials'], (child) => {
+      void this.adoptCredentials(child).catch((error: unknown) => {
+        ctx.logger.warn(`arbor: could not adopt DSH's credentials: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    })
     ctx.effect(() => async () => {
       projects.stop()
       // Stopping the host records `host_restart` for every live window, so the
@@ -690,6 +769,188 @@ export class ArborHostService extends Service {
     }
     await (state.host as unknown as { refresh(): Promise<void> }).refresh()
     return await state.environment.settings() ?? next
+  }
+
+  /**
+   * The API keys arbor reads, in the order the settings page lists them: the
+   * judge's own key, then every secret name arbor's settings declare.
+   *
+   * A key is a name and nothing more. The value lives in DSH's credential store,
+   * which is where DSH's Models page writes too, and this answer carries only
+   * what a configuration surface may show: whether a value is behind the name,
+   * which layer supplies it, and whether this deployment can write it.
+   *
+   * @returns one fact per key arbor reads.
+   */
+  async keys(): Promise<readonly ArborKeyFacts[]> {
+    const credentials = this.credentials()
+    const facts: ArborKeyFacts[] = []
+    for (const key of await this.keyNames()) {
+      const ref = refOf(key.name)
+      const value = await this.keyValue(key.name)
+      const info = ref === undefined || credentials === undefined ? undefined : await credentials.describe(ref)
+      facts.push({
+        name: key.name,
+        purpose: key.purpose,
+        set: value !== undefined,
+        ...(value === undefined || info?.source === undefined ? {} : { source: info.source }),
+        writable: info?.writable === true,
+      })
+    }
+    return facts
+  }
+
+  /**
+   * Store one key's value in DSH's credential store, where a configuration never
+   * holds it, and publish it where arbor resolves it.
+   *
+   * The value is written and then forgotten: nothing here returns it, logs it or
+   * puts it in a settings document. The store keeps it for the next process, and
+   * this process's environment carries it so arbor's own resolution — the
+   * judge's per-request `JEV_API_KEY` read and the host's secret scrub — sees it
+   * from the next decision on.
+   *
+   * @param name - one of the names {@link keys} reports.
+   * @param value - the non-empty key to store.
+   * @returns the keys as they stand after the write.
+   * @throws when the name is not one arbor reads, the value is empty, or this
+   *   deployment has no credential store.
+   */
+  async setKey(name: string, value: string): Promise<readonly ArborKeyFacts[]> {
+    if (value === '') throw new Error('a key must not be empty; clear it instead')
+    const ref = await this.keyRef(name)
+    const credentials = this.credentials()
+    if (credentials === undefined) {
+      throw new Error('this deployment has no credential store, so a key cannot be saved here')
+    }
+    await credentials.set(ref, value)
+    await this.publishKey(name)
+    return this.keys()
+  }
+
+  /**
+   * Remove one key's stored value; a value supplied by the launch environment
+   * takes over again, which is what {@link keys} then reports.
+   *
+   * @param name - one of the names {@link keys} reports.
+   * @returns the keys as they stand after the removal.
+   * @throws when the name is not one arbor reads, or this deployment has no
+   *   credential store.
+   */
+  async clearKey(name: string): Promise<readonly ArborKeyFacts[]> {
+    const ref = await this.keyRef(name)
+    const credentials = this.credentials()
+    if (credentials === undefined) {
+      throw new Error('this deployment has no credential store, so a key cannot be cleared here')
+    }
+    await credentials.unset(ref)
+    await this.publishKey(name)
+    return this.keys()
+  }
+
+  /**
+   * Put the value arbor resolves for one name into this process's environment,
+   * which is where arbor reads a secret, and let the host re-read its secrets.
+   *
+   * `Arbor` resolves every configured secret through `process.env` by default,
+   * and the judge reads its key from there per decision, so the environment is
+   * the one place a value saved through the settings page has to reach. The
+   * refresh after it is what re-reads the scrub, so the new value is hidden from
+   * the model and the journal from the next event on; a child process started
+   * afterwards inherits it.
+   *
+   * The value before this host mirrored anything is kept, so clearing a stored
+   * key uncovers the one the process launched with instead of dropping it.
+   */
+  private async publishKey(name: string): Promise<void> {
+    if (!this.ambientKeys.has(name)) this.ambientKeys.set(name, process.env[name])
+    const stored = await this.storedKey(name)
+    const value = stored ?? this.ambientKeys.get(name)
+    if (value === undefined || value === '') delete process.env[name]
+    else process.env[name] = value
+    await (this.requireState().host as unknown as { refresh(): Promise<void> }).refresh()
+  }
+
+  /**
+   * The value DSH's credential store holds for one name, if any.
+   *
+   * The store's own layer is the only one this page writes, and the provider
+   * names it in `describe` — `file` for DSH's local provider. A name the store
+   * does not hold answers undefined even while an environment layer supplies a
+   * value, which is what keeps a clear a clear.
+   */
+  private async storedKey(name: string): Promise<string | undefined> {
+    const ref = refOf(name)
+    const credentials = this.credentials()
+    if (ref === undefined || credentials === undefined) return undefined
+    const info = await credentials.describe(ref)
+    if (info.source !== STORED_LAYER) return undefined
+    const value = (await credentials.resolve(ref))?.value
+    return value === undefined || value === '' ? undefined : value
+  }
+
+  /** The value arbor resolves for one name: the store, else this process. */
+  private async keyValue(name: string): Promise<string | undefined> {
+    const value = await this.storedKey(name) ?? process.env[name]
+    return value === undefined || value === '' ? undefined : value
+  }
+
+  /** Every name arbor reads a secret by: the judge's, then the configured ones. */
+  private async keyNames(): Promise<readonly KeyName[]> {
+    const settings = await this.environment.settings() ?? this.settings
+    const names: KeyName[] = [{ name: JUDGE_KEY, purpose: 'judge' }]
+    for (const name of settings.secrets ?? []) {
+      if (!names.some(one => one.name === name)) names.push({ name, purpose: 'secret' })
+    }
+    // A name outside the credential grammar has no reference to miss, so it is
+    // not a key this page can report or change.
+    return names.filter(one => refOf(one.name) !== undefined)
+  }
+
+  /** One of the names arbor reads, as a credential reference, or a refusal. */
+  private async keyRef(name: string): Promise<CredentialRef> {
+    if (!(await this.keyNames()).some(one => one.name === name)) {
+      throw new Error(`arbor does not read a key named ${JSON.stringify(name)}`)
+    }
+    const ref = refOf(name)
+    if (ref === undefined) throw new Error(`${JSON.stringify(name)} is not a credential name`)
+    return ref
+  }
+
+  /** DSH's credential store, on the profiles that mount one. */
+  private credentials(): CredentialProvider | undefined {
+    return this.ctx.get('credentials') as CredentialProvider | undefined
+  }
+
+  /**
+   * Adopt the keys DSH's credential store already holds, and follow every later
+   * change to them.
+   *
+   * A key saved on this page, a key saved on DSH's own Models page and a hand
+   * edit of the credential file all land in the same document; the provider
+   * reports each committed change, and this mirrors it into the environment
+   * arbor resolves secrets from, so a value changed anywhere applies without a
+   * restart. On a profile with no credential store the row is disabled and this
+   * never runs, which is why the page reports those keys as read-only.
+   */
+  private async adoptCredentials(child: Context): Promise<void> {
+    for (const key of await this.keyNames()) {
+      const value = await this.keyValue(key.name)
+      if (value === undefined) continue
+      process.env[key.name] = value
+    }
+    await (this.requireState().host as unknown as { refresh(): Promise<void> }).refresh()
+    child.on('credentials/reference-updated', (ref) => {
+      void this.publishChangedKey(String(ref)).catch((error: unknown) => {
+        this.ctx.logger.warn(`arbor: could not apply a changed credential: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    })
+  }
+
+  /** Mirror one credential changed elsewhere, when arbor reads that name. */
+  private async publishChangedKey(name: string): Promise<void> {
+    if (!(await this.keyNames()).some(one => one.name === name)) return
+    await this.publishKey(name)
   }
 
   /**

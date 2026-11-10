@@ -38,6 +38,7 @@ import type {
   ArborFacts,
   ArborHostFacts,
   ArborHostSessionFacts,
+  ArborKeyFacts,
   ArborNotesFacts,
   ArborScheduleFacts,
   ArborSettingsFacts,
@@ -698,18 +699,6 @@ function SearchIcon(): ReactNode {
     createElement('path', { d: 'm12.7 12.7 3.6 3.6' }))
 }
 
-/** The settings control, as three sliders. */
-function GearIcon(): ReactNode {
-  return createElement('svg', {
-    viewBox: '0 0 20 20', width: 18, height: 18, fill: 'none',
-    stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', 'aria-hidden': true,
-  },
-    createElement('path', { d: 'M3 5.5h14M3 10h14M3 14.5h14' }),
-    createElement('circle', { cx: 7.5, cy: 5.5, r: 1.8, fill: 'var(--dsw-alias-bg-layer-1,#fff)' }),
-    createElement('circle', { cx: 12.5, cy: 10, r: 1.8, fill: 'var(--dsw-alias-bg-layer-1,#fff)' }),
-    createElement('circle', { cx: 6.5, cy: 14.5, r: 1.8, fill: 'var(--dsw-alias-bg-layer-1,#fff)' }))
-}
-
 /** The close cross. */
 function CloseIcon(): ReactNode {
   return createElement('svg', {
@@ -719,15 +708,13 @@ function CloseIcon(): ReactNode {
     createElement('path', { d: 'm5 5 10 10M15 5 5 15' }))
 }
 
-/** The two top-right actions: arbor's search and settings. */
+/** The top-right action: arbor's search. */
 function TopActions(props: {
   readonly t: Translate
   readonly onSearch: () => void
-  readonly onSettings: () => void
 }): ReactNode {
   return createElement('div', { className: 'arbor-top-actions' },
-    createElement(IconButton, { label: props.t('openSearch'), onClick: props.onSearch, children: createElement(SearchIcon) }),
-    createElement(IconButton, { label: props.t('openSettings'), onClick: props.onSettings, children: createElement(GearIcon) }))
+    createElement(IconButton, { label: props.t('openSearch'), onClick: props.onSearch, children: createElement(SearchIcon) }))
 }
 
 /** One card on the surface. Content first; the footer is metadata. */
@@ -1173,30 +1160,163 @@ function EditNumber(props: {
   })
 }
 
+/** The settings sections, in the order the rail lists them. */
+type SettingsSection = 'judge' | 'windows' | 'notes' | 'workspace' | 'keys' | 'facts'
+
+/** One section: its rail label, the pane's heading and its one-line description. */
+interface SettingsSectionSpec {
+  readonly id: SettingsSection
+  readonly title: string
+  readonly intro: string
+}
+
 /**
- * Arbor's own settings: the part a user can change, backed by arbor's settings
- * item at `/env/settings.json`, and the facts that are not controls.
+ * What the page is grouped by: what each setting actually controls.
  *
- * The controls here are the values arbor reads while it runs: the judge modes
- * its dispatcher consults per decision, the limits a new window opens with, the
- * active-note budget a prefix is built against, and how long a chain's checkout
- * is kept. Saving posts them to the facts service, which installs them through
- * the host's environment path — the same install the model's own `reload` uses
- * — so a value takes effect without a restart and a refused document changes
- * nothing. The workspace backend and the shared folder are facts, not controls:
- * both are settled when the host starts, and a switch would leave the running
- * host exactly as it is.
+ * The four editable sections are the settings arbor reads while it runs, and
+ * each is one concern — how the judge decides, the limits a window opens with,
+ * what a prefix carries from the note store, and what becomes of a chain's
+ * checkouts. The keys are their own concern because their values live somewhere
+ * else entirely (DSH's credential store), and the facts are read-only: the
+ * workspace backend and the shared folder are settled when the host starts, and
+ * the model tiers and judge thresholds come from the deployment. Keeping the
+ * facts in their own section is what stops a value that cannot move from sitting
+ * next to a control that does.
  */
-function SettingsBlock(props: {
+const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
+  { id: 'judge', title: 'settingsSectionJudge', intro: 'settingsSectionJudgeIntro' },
+  { id: 'windows', title: 'settingsSectionWindows', intro: 'settingsSectionWindowsIntro' },
+  { id: 'notes', title: 'settingsSectionNotes', intro: 'settingsSectionNotesIntro' },
+  { id: 'workspace', title: 'settingsSectionWorkspace', intro: 'settingsSectionWorkspaceIntro' },
+  { id: 'keys', title: 'settingsSectionKeys', intro: 'settingsSectionKeysIntro' },
+  { id: 'facts', title: 'settingsSectionFacts', intro: 'settingsSectionFactsIntro' },
+]
+
+/** Where a key's value comes from, as the settings page says it. */
+const KEY_SOURCES: Readonly<Record<string, string>> = {
+  file: 'settingsKeySourceFile',
+  env: 'settingsKeySourceEnv',
+  'project-env': 'settingsKeySourceProjectEnv',
+  'user-env': 'settingsKeySourceUserEnv',
+}
+
+/**
+ * One API key: whether it is set, where its value comes from, and a write-only
+ * field that replaces it.
+ *
+ * The value is never read back — the facts carry only presence and source — so
+ * the field starts empty every time and is emptied again on a successful save.
+ * A failure keeps what was typed, because that value was never stored and
+ * retyping a key from memory is the worst thing this control could ask for.
+ */
+function KeyRow(props: {
+  readonly entry: ArborKeyFacts
+  readonly t: Translate
+  readonly onSave: (name: string, value: string) => Promise<string | undefined>
+  readonly onClear: (name: string) => Promise<string | undefined>
+}): ReactNode {
+  const { entry: key, t } = props
+  const [value, setValue] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'cleared' | { readonly error: string }>('idle')
+  const busy = status === 'saving'
+  const source = key.source === undefined ? undefined : KEY_SOURCES[key.source]
+  const submit = async (): Promise<void> => {
+    if (value === '' || busy) return
+    setStatus('saving')
+    const error = await props.onSave(key.name, value)
+    if (error === undefined) {
+      setValue('')
+      setStatus('saved')
+    } else {
+      setStatus({ error })
+    }
+  }
+  const clear = async (): Promise<void> => {
+    if (busy) return
+    setStatus('saving')
+    const error = await props.onClear(key.name)
+    if (error === undefined) {
+      setValue('')
+      setStatus('cleared')
+    } else {
+      setStatus({ error })
+    }
+  }
+  return createElement('div', { className: 'arbor-key', 'data-arbor-key': key.name },
+    createElement('div', { className: 'arbor-key-head' },
+      createElement('span', { className: 'arbor-key-name arbor-mono', 'data-arbor-text': 'code' }, key.name),
+      createElement('span', { className: `arbor-key-state arbor-label${key.set ? ' is-set' : ''}`, 'data-arbor-text': 'display' },
+        t(key.set ? 'settingsKeySet' : 'settingsKeyUnset'))),
+    createElement('div', { className: 'arbor-key-hint' },
+      t(key.purpose === 'judge' ? 'settingsKeyJudgeHint' : 'settingsKeySecretHint')),
+    key.set && source !== undefined
+      ? createElement('div', { className: 'arbor-key-source' }, t('settingsKeyFrom', { source: t(source) }))
+      : null,
+    key.writable
+      ? createElement('form', {
+        className: 'arbor-key-form',
+        onSubmit: (event: { preventDefault: () => void }) => { event.preventDefault(); void submit() },
+      },
+        createElement('input', {
+          className: 'arbor-input arbor-key-input',
+          type: 'password',
+          autoComplete: 'new-password',
+          spellCheck: false,
+          value,
+          'aria-label': t('settingsKeyValueFor', { name: key.name }),
+          placeholder: t(key.set ? 'settingsKeyReplace' : 'settingsKeyEnter'),
+          onChange: (event: { target: { value: string } }) => { setValue(event.target.value); setStatus('idle') },
+        }),
+        createElement('button', {
+          type: 'submit',
+          className: 'arbor-save arbor-key-save',
+          disabled: busy || value === '',
+        }, t(busy ? 'settingsSaving' : 'settingsKeySave')),
+        key.set
+          ? createElement('button', {
+            type: 'button',
+            className: 'arbor-key-clear',
+            disabled: busy,
+            onClick: () => { void clear() },
+          }, t('settingsKeyClear'))
+          : null)
+      : createElement('div', { className: 'arbor-settings-hint' }, t('settingsKeyReadOnly')),
+    status === 'saved' ? createElement('div', { className: 'arbor-save-state' }, t('settingsKeySaved')) : null,
+    status === 'cleared' ? createElement('div', { className: 'arbor-save-state' }, t('settingsKeyCleared')) : null,
+    typeof status === 'object' ? createElement('div', { className: 'arbor-save-error' }, t('settingsKeyError', { message: status.error })) : null)
+}
+
+/**
+ * The settings page: the sections arbor's own settings are grouped by, and the
+ * one section the reader picked.
+ *
+ * The editable sections write the same document. Saving posts every editable
+ * value to the facts service, which installs them as arbor's own settings item
+ * at `/env/settings.json` through the host's environment path — the same
+ * install the model's own `reload` uses — so a value takes effect without a
+ * restart and a refused document changes nothing. The keys are the exception
+ * their section explains: their values go to DSH's credential store and are
+ * never part of any settings document. The facts section has no control at all,
+ * because a value settled at startup would not move if it had one.
+ */
+function SettingsPage(props: {
   readonly settings: ArborSettingsFacts
+  readonly keys: readonly ArborKeyFacts[]
   readonly dataRoot: string
   readonly backend: string
   readonly shared: string
+  readonly at: number
   readonly t: Translate
+  readonly onSearch: () => void
 }): ReactNode {
   const { settings, dataRoot, backend, shared, t } = props
+  const [section, setSection] = useState<SettingsSection>('judge')
   const [draft, setDraft] = useState<SettingsDraft>(() => settingsDraft(settings))
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | { readonly error: string }>('idle')
+  // The keys as last answered: a save returns them, and the facts stream
+  // carries them again a moment later, so the page never guesses.
+  const [keys, setKeys] = useState(props.keys)
+  useEffect(() => { setKeys(props.keys) }, [props.keys])
   const update = (patch: Partial<SettingsDraft>): void => {
     setDraft(current => ({ ...current, ...patch }))
     setStatus('idle')
@@ -1254,95 +1374,178 @@ function SettingsBlock(props: {
       setStatus({ error: error instanceof Error ? error.message : String(error) })
     }
   }
+  /**
+   * Post one key change and answer the refusal's message, if any.
+   *
+   * The request is the only place the value travels, and the answer is read for
+   * its keys alone: the route never repeats a value, so nothing here can echo
+   * one back into the page or the console.
+   */
+  const postKey = async (body: { name: string; value?: string; clear?: boolean }): Promise<string | undefined> => {
+    try {
+      const response = await fetch('/api/arbor/keys', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const answer = await response.json().catch(() => undefined) as { ok?: boolean; error?: string; keys?: readonly ArborKeyFacts[] } | undefined
+      if (!response.ok || answer?.ok !== true) return answer?.error ?? `HTTP ${response.status}`
+      if (answer.keys !== undefined) setKeys(answer.keys)
+      return undefined
+    } catch (error: unknown) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+  const spec = SETTINGS_SECTIONS.find(one => one.id === section) ?? SETTINGS_SECTIONS[0]
   const tiers = Object.entries(settings.modelTiers ?? {})
   const judge = settings.judge ?? {}
-  const facts: ReactNode[] = [
+  const facts: ReactNode[] = []
+  const factGroup = (key: string, title: string, rows: readonly ReactNode[]): ReactNode => {
+    if (rows.length === 0) return null
+    return createElement('div', { className: 'arbor-settings-group', key },
+      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, title),
+      ...rows)
+  }
+  const hostRows: ReactNode[] = [
     createElement(SettingRow, { key: 'dataRoot', label: t('dataRoot') }, createElement('span', { className: 'arbor-mono' }, dataRoot)),
     createElement(SettingRow, { key: 'backend', label: t('settingsBackend') }, createElement('span', { className: 'arbor-label' }, backend)),
     createElement(SettingRow, { key: 'shared', label: t('settingsShared') }, createElement('span', { className: 'arbor-mono' }, shared)),
+    createElement(SettingRow, { key: 'source', label: t('settingsSource') },
+      createElement('span', { className: 'arbor-label' },
+        t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment'))),
   ]
+  const promptRows: ReactNode[] = []
   if (settings.identity !== undefined) {
-    facts.push(createElement(SettingRow, { key: 'identity', label: t('settingsIdentity') },
+    promptRows.push(createElement(SettingRow, { key: 'identity', label: t('settingsIdentity') },
       createElement('span', { className: 'arbor-clamp' }, settings.identity)))
   }
   if (settings.generalRules !== undefined && settings.generalRules.length > 0) {
-    facts.push(createElement(SettingRow, { key: 'rules', label: t('settingsRules') },
+    promptRows.push(createElement(SettingRow, { key: 'rules', label: t('settingsRules') },
       createElement('span', { className: 'arbor-num' }, String(settings.generalRules.length))))
   }
+  const modelRows: ReactNode[] = []
   if (tiers.length > 0) {
-    facts.push(createElement(SettingRow, { key: 'tiers', label: t('settingsTiers') },
+    modelRows.push(createElement(SettingRow, { key: 'tiers', label: t('settingsTiers') },
       createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, tiers.map(([tier, model]) => `${tier} → ${model}`).join(' · '))))
   }
   if (settings.defaultTier !== undefined) {
-    facts.push(createElement(SettingRow, { key: 'defaultTier', label: t('settingsDefaultTier') },
+    modelRows.push(createElement(SettingRow, { key: 'defaultTier', label: t('settingsDefaultTier') },
       createElement('span', { className: 'arbor-label' }, settings.defaultTier)))
   }
+  const judgeRows: ReactNode[] = []
   if (judge.maxCandidates !== undefined) {
-    facts.push(createElement(SettingRow, { key: 'maxCandidates', label: t('settingsJudgeCandidates') },
+    judgeRows.push(createElement(SettingRow, { key: 'maxCandidates', label: t('settingsJudgeCandidates') },
       createElement('span', { className: 'arbor-num' }, String(judge.maxCandidates))))
   }
   if (judge.activeSetJudgeShare !== undefined) {
-    facts.push(createElement(SettingRow, { key: 'judgeShare', label: t('settingsJudgeShare') },
+    judgeRows.push(createElement(SettingRow, { key: 'judgeShare', label: t('settingsJudgeShare') },
       createElement('span', { className: 'arbor-num' }, `${Math.round(judge.activeSetJudgeShare * 100)}%`)))
   }
-  if (settings.secrets !== undefined && settings.secrets.length > 0) {
-    facts.push(createElement(SettingRow, { key: 'secrets', label: t('settingsSecrets') },
-      createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, settings.secrets.join(' · '))))
-  }
-  return createElement('div', { className: 'arbor-settings' },
-    createElement('div', { className: 'arbor-settings-source arbor-muted' },
-      t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment')),
-    createElement('div', { className: 'arbor-settings-group' },
-      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, t('settingsEditable')),
+  facts.push(
+    factGroup('host', t('settingsFactsHost'), hostRows),
+    factGroup('prompt', t('settingsFactsPrompt'), promptRows),
+    factGroup('models', t('settingsFactsModels'), modelRows),
+    factGroup('judge', t('settingsFactsJudge'), judgeRows),
+  )
+  const editable = section !== 'keys' && section !== 'facts'
+  let body: ReactNode
+  if (section === 'judge') {
+    body = createElement('div', { className: 'arbor-settings-rows' },
       ...JUDGE_KINDS.map(kind => createElement(EditRow, { key: kind, label: t(JUDGE_LABELS[kind] ?? kind) },
         createElement('select', {
           className: 'arbor-select',
           value: draft.judge[kind] ?? 'on',
           onChange: (event: { target: { value: string } }) => { updateJudge(kind, event.target.value) },
         }, ...JUDGE_MODES.map(mode => createElement('option', { key: mode, value: mode },
-          t(mode === 'off' ? 'settingsJudgeOff' : mode === 'shadow' ? 'settingsJudgeShadow' : 'settingsJudgeOn')))))),
-      createElement(EditRow, { label: t('settingsWindowContext') }, createElement(EditNumber, {
+          t(mode === 'off' ? 'settingsJudgeOff' : mode === 'shadow' ? 'settingsJudgeShadow' : 'settingsJudgeOn')))))))
+  } else if (section === 'windows') {
+    body = createElement('div', { className: 'arbor-settings-rows' },
+      createElement(EditRow, { label: t('settingsWindowContext'), hint: t('settingsWindowContextHint') }, createElement(EditNumber, {
         value: draft.contextTokens, min: 1_000, max: 2_000_000,
         onChange: value => { update({ contextTokens: value }) },
       })),
-      createElement(EditRow, { label: t('settingsWindowReserve') }, createElement(EditNumber, {
+      createElement(EditRow, { label: t('settingsWindowReserve'), hint: t('settingsWindowReserveHint') }, createElement(EditNumber, {
         value: draft.reserveTokens, min: 0, max: 1_000_000,
         onChange: value => { update({ reserveTokens: value }) },
       })),
-      createElement(EditRow, { label: t('settingsWindowIdle') }, createElement(EditNumber, {
+      createElement(EditRow, { label: t('settingsWindowIdle'), hint: t('settingsWindowIdleHint') }, createElement(EditNumber, {
         value: draft.idleSeconds, min: 0, max: 86_400,
         onChange: value => { update({ idleSeconds: value }) },
       })),
-      createElement(EditRow, { label: t('settingsWindowProtection') }, createElement(EditNumber, {
+      createElement(EditRow, { label: t('settingsWindowProtection'), hint: t('settingsWindowProtectionHint') }, createElement(EditNumber, {
         value: draft.protectionSeconds, min: 0, max: 3_600,
         onChange: value => { update({ protectionSeconds: value }) },
-      })),
-      createElement(EditRow, { label: t('settingsNotesCount') }, createElement(EditNumber, {
+      })))
+  } else if (section === 'notes') {
+    body = createElement('div', { className: 'arbor-settings-rows' },
+      createElement(EditRow, { label: t('settingsNotesCount'), hint: t('settingsNotesCountHint') }, createElement(EditNumber, {
         value: draft.activeCount, min: 1, max: 1_000,
         onChange: value => { update({ activeCount: value }) },
       })),
-      createElement(EditRow, { label: t('settingsNotesTokens') }, createElement(EditNumber, {
+      createElement(EditRow, { label: t('settingsNotesTokens'), hint: t('settingsNotesTokensHint') }, createElement(EditNumber, {
         value: draft.activeTokenBudget, min: 100, max: 1_000_000,
         onChange: value => { update({ activeTokenBudget: value }) },
-      })),
+      })))
+  } else if (section === 'workspace') {
+    body = createElement('div', { className: 'arbor-settings-rows' },
       createElement(EditRow, { label: t('settingsRetention'), hint: t('settingsRetentionHint') }, createElement(EditNumber, {
         value: draft.retentionHours, min: 0, max: 8_760,
         onChange: value => { update({ retentionHours: value }) },
-      }))),
-    createElement('div', { className: 'arbor-settings-actions' },
-      createElement('button', {
-        type: 'button',
-        className: 'arbor-save',
-        disabled: status === 'saving',
-        onClick: () => { void save() },
-      }, t(status === 'saving' ? 'settingsSaving' : 'settingsSave')),
-      status === 'saved' ? createElement('span', { className: 'arbor-save-state' }, t('settingsSaved')) : null,
-      typeof status === 'object' ? createElement('span', { className: 'arbor-save-error' }, t('settingsSaveError', { message: status.error })) : null),
-    createElement('div', { className: 'arbor-settings-hint' }, t('settingsApplyHint')),
-    createElement('div', { className: 'arbor-settings-group' },
-      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, t('settingsFacts')),
-      ...facts),
-    createElement('div', { className: 'arbor-settings-note' }, t('settingsDsh')))
+      })))
+  } else if (section === 'keys') {
+    body = createElement('div', { className: 'arbor-settings-keys' },
+      keys.length === 0
+        ? createElement('div', { className: 'arbor-settings-empty' }, t('settingsKeysEmpty'))
+        : keys.map(entry => createElement(KeyRow, {
+          key: entry.name,
+          entry,
+          t,
+          onSave: async (name, value) => postKey({ name, value }),
+          onClear: async (name) => postKey({ name, clear: true }),
+        })),
+      createElement('div', { className: 'arbor-settings-hint' }, t('settingsKeysWriteOnly')),
+      createElement('div', { className: 'arbor-settings-hint' }, t('settingsKeysApply')))
+  } else {
+    body = createElement('div', { className: 'arbor-settings-rows' },
+      ...facts,
+      settings.source === 'environment' ? null : createElement('div', { className: 'arbor-settings-hint' }, t('settingsFactsSeed')),
+      createElement('div', { className: 'arbor-settings-note' }, t('settingsDsh')))
+  }
+  return createElement('div', { className: 'arbor-settings-page', 'data-arbor-page': true, 'data-arbor-settings': true },
+    createElement('header', { className: 'arbor-hero' },
+      createElement('div', { className: 'arbor-hero-top' },
+        createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, props.at)),
+        createElement(TopActions, { t, onSearch: props.onSearch })),
+      createElement('h1', { className: 'arbor-hero-title', 'data-arbor-text': 'display' }, t('settingsTitle')),
+      createElement('span', { className: 'arbor-hero-hint', 'data-arbor-text': 'body' }, t('settingsIntro'))),
+    createElement('div', { className: 'arbor-settings-layout' },
+      createElement('nav', { className: 'arbor-settings-nav', 'aria-label': t('settingsSections') },
+        ...SETTINGS_SECTIONS.map(one => createElement('button', {
+          key: one.id,
+          type: 'button',
+          'data-arbor-section': one.id,
+          className: `arbor-settings-tab${one.id === section ? ' is-active' : ''}`,
+          'aria-current': one.id === section ? 'page' : undefined,
+          onClick: () => { setSection(one.id) },
+        },
+          createElement('span', { className: 'arbor-settings-tab-title', 'data-arbor-text': 'display' }, t(one.title))))),
+      createElement('section', { className: 'arbor-settings-pane', 'aria-label': t(spec.title) },
+        createElement('h2', { className: 'arbor-settings-title', 'data-arbor-text': 'display' }, t(spec.title)),
+        createElement('p', { className: 'arbor-settings-intro', 'data-arbor-text': 'body' }, t(spec.intro)),
+        body,
+        editable
+          ? createElement('div', { className: 'arbor-settings-foot' },
+            createElement('div', { className: 'arbor-settings-actions' },
+              createElement('button', {
+                type: 'button',
+                className: 'arbor-save',
+                disabled: status === 'saving',
+                onClick: () => { void save() },
+              }, t(status === 'saving' ? 'settingsSaving' : 'settingsSave')),
+              status === 'saved' ? createElement('span', { className: 'arbor-save-state' }, t('settingsSaved')) : null,
+              typeof status === 'object' ? createElement('span', { className: 'arbor-save-error' }, t('settingsSaveError', { message: status.error })) : null),
+            createElement('div', { className: 'arbor-settings-hint' }, t('settingsApplyHint')))
+          : null)))
 }
 
 /** One search result row. */
@@ -1489,10 +1692,9 @@ function Overview(props: {
   readonly filter: Filter
   readonly setFilter: (filter: Filter) => void
   readonly onSearch: () => void
-  readonly onSettings: () => void
   readonly onOpenSession: (sessionId: string) => void
 }): ReactNode {
-  const { facts, snapshot, t, filter, setFilter, onSearch, onSettings, onOpenSession } = props
+  const { facts, snapshot, t, filter, setFilter, onSearch, onOpenSession } = props
   const live = facts.windows.filter(window => window.live)
   const active = facts.windows.filter(window => shownState(window, snapshot.streams[window.ref]) === 'running')
   const sessions = facts.sessions
@@ -1620,7 +1822,7 @@ function Overview(props: {
     createElement('header', { className: 'arbor-hero' },
       createElement('div', { className: 'arbor-hero-top' },
         createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, facts.at)),
-        createElement(TopActions, { t, onSearch, onSettings })),
+        createElement(TopActions, { t, onSearch })),
       createElement('h1', { className: 'arbor-hero-title', 'data-arbor-text': 'display' }, ...heroContent)),
     createElement(Skyline, { items: cards }),
     sessions.length === 0 ? null : createElement(Dock, { filter, setFilter, t }))
@@ -1632,10 +1834,9 @@ function SessionView(props: {
   readonly session: ArborHostSessionFacts | undefined
   readonly t: Translate
   readonly onSearch: () => void
-  readonly onSettings: () => void
   readonly openDshSession?: (sessionId: string) => void
 }): ReactNode {
-  const { sessionId, session, t, onSearch, onSettings, openDshSession } = props
+  const { sessionId, session, t, onSearch, openDshSession } = props
   const snapshot = useChannel(channelFor(sessionId))
   const facts = snapshot.facts
   if (facts === undefined) {
@@ -1643,7 +1844,7 @@ function SessionView(props: {
       createElement('header', { className: 'arbor-hero' },
         createElement('div', { className: 'arbor-hero-top' },
           createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, Date.now())),
-          createElement(TopActions, { t, onSearch, onSettings }))),
+          createElement(TopActions, { t, onSearch }))),
       createElement(Skyline, {
         items: [{
           key: 'loading',
@@ -1710,42 +1911,50 @@ function SessionView(props: {
     createElement('header', { className: 'arbor-hero' },
       createElement('div', { className: 'arbor-hero-top' },
         createElement('span', { className: 'arbor-date arbor-label', 'data-arbor-text': 'numeric' }, dateLine(t, facts.at)),
-        createElement(TopActions, { t, onSearch, onSettings })),
+        createElement(TopActions, { t, onSearch })),
       createElement('h1', { className: 'arbor-hero-title', 'data-arbor-text': 'display' }, ...heroContent),
       openDshSession === undefined ? null : createElement('div', { className: 'arbor-hero-links' },
         createElement('button', { type: 'button', className: 'arbor-card-link arbor-label', onClick: () => { openDshSession(sessionId) } }, t('openInDsh'), ' →'))),
     createElement(Skyline, { items: cards }))
 }
 
-/** The left sidebar's arbor page: a host overview and one tab per opened session. */
+/**
+ * One tab of the arbor page: the host overview, the settings page, or one
+ * opened session. The settings page is a tab of its own, next to the others,
+ * because it is the same host read at a different angle — not a sheet over it.
+ */
+type PageTab = 'overview' | 'settings' | `session:${string}`
+
+/** The left sidebar's arbor page: a host overview, settings, and one tab per opened session. */
 export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode {
   const t = props.t ?? ((key: string) => key)
   const host = useChannel(hostChannel())
   const facts = host.facts
   const [opened, setOpened] = useState<readonly string[]>([])
-  const [active, setActive] = useState<string | null>(null)
+  const [tab, setTab] = useState<PageTab>('overview')
   const [filter, setFilter] = useState<Filter>('all')
   const [searchOpen, setSearchOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const sessions = facts?.sessions ?? []
-  const activeSession = active !== null && sessions.some(session => session.sessionId === active) ? active : null
+  const sessionTab = (sessionId: string): PageTab => `session:${sessionId}`
+  const activeSession = tab.startsWith('session:') && sessions.some(session => session.sessionId === tab.slice('session:'.length))
+    ? tab.slice('session:'.length)
+    : null
   useEffect(() => {
-    if (!searchOpen && !settingsOpen) return
+    if (!searchOpen) return
     const close = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       setSearchOpen(false)
-      setSettingsOpen(false)
     }
     window.addEventListener('keydown', close)
     return () => { window.removeEventListener('keydown', close) }
-  }, [searchOpen, settingsOpen])
+  }, [searchOpen])
   const openSession = (sessionId: string): void => {
     setOpened(current => current.includes(sessionId) ? current : [...current, sessionId])
-    setActive(sessionId)
+    setTab(sessionTab(sessionId))
   }
   const closeSession = (sessionId: string): void => {
     setOpened(current => current.filter(one => one !== sessionId))
-    if (active === sessionId) setActive(null)
+    if (tab === sessionTab(sessionId)) setTab('overview')
   }
   const tabLabel = (sessionId: string): string => {
     const session = sessions.find(one => one.sessionId === sessionId)
@@ -1792,16 +2001,26 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
       createElement('nav', { className: 'arbor-tabs', 'aria-label': t('pageTitle') },
         createElement('button', {
           type: 'button',
-          className: `arbor-tab arbor-label${activeSession === null ? ' is-active' : ''}`,
+          className: `arbor-tab arbor-label${tab === 'overview' ? ' is-active' : ''}`,
           'data-arbor-text': 'display',
-          onClick: () => { setActive(null) },
+          'aria-current': tab === 'overview' ? 'page' : undefined,
+          onClick: () => { setTab('overview') },
         }, t('tabOverview')),
+        createElement('button', {
+          type: 'button',
+          className: `arbor-tab arbor-label${tab === 'settings' ? ' is-active' : ''}`,
+          'data-arbor-text': 'display',
+          'data-arbor-settings-tab': true,
+          'aria-current': tab === 'settings' ? 'page' : undefined,
+          onClick: () => { setTab('settings') },
+        }, t('tabSettings')),
         opened.map(sessionId => createElement('div', { className: `arbor-tab-group${activeSession === sessionId ? ' is-active' : ''}`, key: sessionId },
           createElement('button', {
             type: 'button',
             className: 'arbor-tab arbor-label',
             'data-arbor-text': 'display',
-            onClick: () => { setActive(sessionId) },
+            'aria-current': activeSession === sessionId ? 'page' : undefined,
+            onClick: () => { setTab(sessionTab(sessionId)) },
           }, tabLabel(sessionId)),
           createElement('button', {
             type: 'button',
@@ -1826,35 +2045,36 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
                 : null),
           }],
         })
-        : activeSession === null
-          ? createElement(Overview, {
-            facts,
-            snapshot: host,
+        : tab === 'settings'
+          ? createElement(SettingsPage, {
+            settings: facts.settings,
+            keys: facts.keys,
+            dataRoot: facts.dataRoot,
+            backend: facts.backend,
+            shared: facts.shared,
+            at: facts.at,
             t,
-            filter,
-            setFilter,
             onSearch: () => { setSearchOpen(true) },
-            onSettings: () => { setSettingsOpen(true) },
-            onOpenSession: openSession,
           })
-          : createElement(SessionView, {
-            sessionId: activeSession,
-            session: sessions.find(session => session.sessionId === activeSession),
-            t,
-            onSearch: () => { setSearchOpen(true) },
-            onSettings: () => { setSettingsOpen(true) },
-            ...(props.openDshSession === undefined ? {} : { openDshSession: props.openDshSession }),
-          })),
+          : activeSession === null
+            ? createElement(Overview, {
+              facts,
+              snapshot: host,
+              t,
+              filter,
+              setFilter,
+              onSearch: () => { setSearchOpen(true) },
+              onOpenSession: openSession,
+            })
+            : createElement(SessionView, {
+              sessionId: activeSession,
+              session: sessions.find(session => session.sessionId === activeSession),
+              t,
+              onSearch: () => { setSearchOpen(true) },
+              ...(props.openDshSession === undefined ? {} : { openDshSession: props.openDshSession }),
+            })),
     searchOpen ? createElement(Sheet, { title: t('openSearch'), close: t('closeSheet'), onClose: () => { setSearchOpen(false) } },
-      createElement(SearchBlock, { t })) : null,
-    settingsOpen && facts !== undefined ? createElement(Sheet, { title: t('openSettings'), close: t('closeSheet'), onClose: () => { setSettingsOpen(false) } },
-      createElement(SettingsBlock, {
-        settings: facts.settings,
-        dataRoot: facts.dataRoot,
-        backend: facts.backend,
-        shared: facts.shared,
-        t,
-      })) : null)
+      createElement(SearchBlock, { t })) : null)
 }
 
 /**

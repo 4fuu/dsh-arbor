@@ -26,7 +26,7 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -40,6 +40,11 @@ import {
   unmountUnder,
   workspace,
 } from './profile-fixture.mjs'
+
+// A key the machine exports is a key arbor reads — the settings page would
+// rightly report it as set, and this check could not tell its own writes from
+// it. The check starts from a home and an environment with no judge key.
+delete process.env.JEV_API_KEY
 
 const work = await workspace('ARBOR_CHECK_LIVE_WORK', 'dsh-arbor-live-')
 const screenshots = process.env.ARBOR_CHECK_SCREENSHOTS ?? join(work, 'screenshots')
@@ -245,6 +250,35 @@ class Page {
   }
 
   /**
+   * Type into the field an expression finds, at a real focus and as the
+   * browser's own input event, so the component's change handler runs the way
+   * a person's typing would make it run.
+   */
+  async fill(description, expression, text) {
+    await this.click(description, expression)
+    await this.send('Input.insertText', { text })
+  }
+
+  /** What the settings page shows right now. */
+  async settingsState() {
+    return JSON.parse(await this.evaluate(`JSON.stringify({
+      open: !!document.querySelector('[data-arbor-settings]'),
+      sections: [...document.querySelectorAll('.arbor-settings-nav button')].map(button => button.textContent.trim()),
+      active: document.querySelector('.arbor-settings-pane h2')?.textContent.trim() ?? null,
+      selects: document.querySelectorAll('.arbor-settings-pane select').length,
+      numbers: document.querySelectorAll('.arbor-settings-pane input[type=number]').length,
+      facts: document.querySelectorAll('.arbor-settings-pane .arbor-setting-row').length,
+      keys: [...document.querySelectorAll('.arbor-key')].map(row => ({
+        name: row.querySelector('.arbor-key-name')?.textContent.trim() ?? null,
+        state: row.querySelector('.arbor-key-state')?.textContent.trim() ?? null,
+      })),
+      passwordFields: document.querySelectorAll('.arbor-key input[type=password]').length,
+      passwordValue: document.querySelector('.arbor-key input[type=password]')?.value ?? null,
+      text: document.body.innerText,
+    })`))
+  }
+
+  /**
    * Dismiss DSH's own first-run dialogs (the preview notice, then the optional
    * API-key onboarding) until none is standing, so the page the check drives
    * is the one a returning user sees. A dialog that will not close fails the
@@ -335,6 +369,21 @@ async function openPlugins(page, description) {
   }
 }
 
+/** The Arbor entry in the global navigation, once the bundle is on. */
+const ARBOR_ENTRY = `document.querySelector('[data-arbor-icon]')?.closest('button')`
+
+/** The Settings tab of the arbor page. */
+const SETTINGS_TAB = `document.querySelector('[data-arbor-settings-tab]')`
+
+/** One section of the settings page's rail, by its label. */
+const sectionButton = name => `[...document.querySelectorAll('.arbor-settings-nav button')].find(button => button.textContent.trim() === ${JSON.stringify(name)})`
+
+/** The settings section this check expects, in the order the rail lists them. */
+const SECTIONS = ['Judge', 'Windows', 'Notes', 'Workspace', 'API keys', 'Facts']
+
+/** The dummy key the check stores: never a real credential. */
+const DUMMY_KEY = 'dsh-arbor-live-dummy-key-0123456789'
+
 try {
   await mkdir(screenshots, { recursive: true })
   console.log(`work directory: ${work}`)
@@ -361,6 +410,113 @@ try {
     await page.waitFor('the workspace toast to clear', `!document.body.innerText.includes('Unable to create default workspace')`, 10_000).catch(() => undefined)
 
     await page.waitFor('the global navigation', `!!document.querySelector('nav[aria-label="Global panels"]')`)
+    // ---- the settings page: a tab of the arbor page, its own sections, and
+    // the API keys it can change. Every section is opened by a real click and
+    // its pane is asserted, because a rail that renders but never switches
+    // would look exactly like this one in a fresh screenshot.
+    const settingsMark = page.messages.length
+    await page.click('the Arbor entry', ARBOR_ENTRY)
+    await page.waitFor('the Settings tab', `!!${SETTINGS_TAB}`, 30_000)
+    await page.click('the Settings tab', SETTINGS_TAB)
+    await page.waitFor('the settings page', `!!document.querySelector('[data-arbor-settings]')`, 30_000)
+    const opened = await page.settingsState()
+    assert('the Settings tab opens a settings page, not a drawer',
+      opened.open && (await page.evaluate(`!document.querySelector('[role=dialog]')`)),
+      JSON.stringify({ open: opened.open }))
+    assert('the rail lists every section',
+      JSON.stringify(opened.sections) === JSON.stringify(SECTIONS),
+      JSON.stringify(opened.sections))
+    assert('the first section is the judge',
+      opened.active === 'Judge' && opened.selects === 6,
+      JSON.stringify({ active: opened.active, selects: opened.selects }))
+
+    for (const [index, name] of SECTIONS.entries()) {
+      await page.click(`the ${name} section`, sectionButton(name))
+      await page.waitFor(`the ${name} pane`, `document.querySelector('.arbor-settings-pane h2')?.textContent.trim() === ${JSON.stringify(name)}`)
+      const pane = await page.settingsState()
+      assert(`the ${name} section switches the pane`, pane.active === name, JSON.stringify({ active: pane.active }))
+      if (name === 'Judge') {
+        assert('the Judge section has one control per judge decision', pane.selects === 6, JSON.stringify({ selects: pane.selects }))
+      } else if (name === 'Windows') {
+        assert('the Windows section has the four window limits', pane.numbers === 4, JSON.stringify({ numbers: pane.numbers }))
+      } else if (name === 'Notes') {
+        assert('the Notes section has the two note budgets', pane.numbers === 2, JSON.stringify({ numbers: pane.numbers }))
+      } else if (name === 'Workspace') {
+        assert('the Workspace section has the checkout retention', pane.numbers === 1, JSON.stringify({ numbers: pane.numbers }))
+      } else if (name === 'API keys') {
+        assert('the API keys section lists the judge key', pane.keys.some(key => key.name === 'JEV_API_KEY'), JSON.stringify(pane.keys))
+        assert('a key with no value reads as not set',
+          pane.keys.every(key => key.state === 'Not set'),
+          JSON.stringify(pane.keys))
+        assert('the key field is a password field', pane.passwordFields === 1, JSON.stringify({ fields: pane.passwordFields }))
+      } else if (name === 'Facts') {
+        assert('the Facts section is read-only', pane.facts >= 3 && pane.numbers === 0 && pane.selects === 0,
+          JSON.stringify({ facts: pane.facts, numbers: pane.numbers, selects: pane.selects }))
+        assert('the Facts section names the workspace and the settings source',
+          pane.text.includes('Workspace backend') && pane.text.includes('Settings source'),
+          pane.text.slice(0, 400))
+      }
+      const shot = await page.screenshot(`settings-0${index + 1}-${name.toLowerCase().replaceAll(' ', '-')}.png`)
+      console.log(`screenshot: ${shot}`)
+    }
+
+    // ---- a key, end to end: typed into a masked field, stored in DSH's
+    // credential store, never echoed back by the page or the facts, and cleared
+    // again from the same control.
+    await page.click('the API keys section', sectionButton('API keys'))
+    await page.waitFor('the API keys pane', `document.querySelector('.arbor-settings-pane h2')?.textContent.trim() === 'API keys'`)
+    await page.fill('the key field', `document.querySelector('.arbor-key input[type=password]')`, DUMMY_KEY)
+    const typed = await page.settingsState()
+    assert('the key field is masked', typed.passwordValue === DUMMY_KEY && (await page.evaluate(`document.querySelector('.arbor-key input[type=password]').type`)) === 'password',
+      JSON.stringify({ type: await page.evaluate(`document.querySelector('.arbor-key input[type=password]').type`) }))
+    await page.click('the save-key button', `[...document.querySelectorAll('.arbor-key button')].find(button => button.textContent.trim() === 'Save key')`)
+    await page.waitFor('the key to read as set', `document.querySelector('.arbor-key-state')?.textContent.trim() === 'Set'`)
+    const stored = await page.settingsState()
+    assert('saving the key reads back as set, with the field emptied', stored.keys[0]?.state === 'Set' && stored.passwordValue === '',
+      JSON.stringify({ keys: stored.keys, field: stored.passwordValue }))
+    assert('the page never shows the key value', !stored.text.includes(DUMMY_KEY), 'the value is in the page text')
+    const credentials = await readFile(join(home, '.credentials.yaml'), 'utf8').catch(error => {
+      fail(`DSH's credential document could not be read: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    assert('the key is stored in DSH\'s credential document',
+      credentials.includes('JEV_API_KEY') && credentials.includes(DUMMY_KEY),
+      `the document holds ${String(credentials.length)} bytes`)
+    const settingsDocument = await readFile(join(home, 'arbor', 'env', 'settings.json'), 'utf8').catch(() => '')
+    assert('the key is in no settings document', !settingsDocument.includes(DUMMY_KEY), 'the value is in settings.json')
+    // The whole point of a write-only field: the facts a browser can fetch must
+    // not carry the value either, now or after a rebuild.
+    const facts = await page.evaluate(`(async () => {
+      const response = await fetch('/api/arbor/host')
+      const reader = response.body.getReader()
+      const first = await reader.read()
+      await reader.cancel().catch(() => undefined)
+      return new TextDecoder().decode(first.value)
+    })()`)
+    assert('the facts stream carries the key\'s state and not its value',
+      facts.includes('JEV_API_KEY') && facts.includes('"set":true') && !facts.includes(DUMMY_KEY),
+      `the first frame holds ${String(facts.length)} characters`)
+    const setShot = await page.screenshot('settings-07-key-set.png')
+    console.log(`screenshot: ${setShot}`)
+
+    const answer = await page.evaluate(`(async () => {
+      const response = await fetch('/api/arbor/keys', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'JEV_API_KEY', clear: true }),
+      })
+      return response.text()
+    })()`)
+    assert('clearing answers with the keys, never the value', answer.includes('JEV_API_KEY') && !answer.includes(DUMMY_KEY),
+      `the answer holds ${String(answer.length)} characters`)
+    await page.waitFor('the key to read as not set', `document.querySelector('.arbor-key-state')?.textContent.trim() === 'Not set'`)
+    const afterClear = await readFile(join(home, '.credentials.yaml'), 'utf8').catch(() => '')
+    assert('clearing removes the stored value from DSH\'s credential document',
+      !afterClear.includes(DUMMY_KEY),
+      `the document holds ${String(afterClear.length)} bytes`)
+    page.assertNoCrash(settingsMark, 'opening the settings page and changing a key')
+    const clearShot = await page.screenshot('settings-08-key-cleared.png')
+    console.log(`screenshot: ${clearShot}`)
+
     await openPlugins(page, 'the Arbor switch on the Plugins page')
     await sleep(500)
 

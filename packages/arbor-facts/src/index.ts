@@ -17,7 +17,11 @@
  *  - `/api/arbor/host` — the whole host across sessions, for the left sidebar's
  *    arbor page;
  *  - `/api/arbor/search?q=…` — arbor's own search over its journal, notes and
- *    board.
+ *    board;
+ *  - `POST /api/arbor/settings` — the values the settings page edits, installed
+ *    as arbor's own settings item;
+ *  - `POST /api/arbor/keys` — one API key stored in DSH's credential store, or
+ *    removed from it. A key's value never comes back out.
  *
  * Liveness comes from arbor, not from polling a heuristic: a plugin this
  * service registers on the host observes every journal append and every note
@@ -78,6 +82,9 @@ export const SEARCH_PATH = '/api/arbor/search'
 
 /** The exact route a settings change posts to. */
 export const SETTINGS_PATH = '/api/arbor/settings'
+
+/** The exact route an API key is stored or cleared on. */
+export const KEYS_PATH = '/api/arbor/keys'
 
 /** How long a burst of journal appends is coalesced before one rebuild. */
 const REBUILD_MS = 120
@@ -241,6 +248,12 @@ export class ArborFactsService extends Service {
         requestBody: 'buffered',
         fetch: (request) => this.settingsResponse(request),
       })
+      void connection.fetch.register({
+        path: KEYS_PATH,
+        methods: ['POST'],
+        requestBody: 'buffered',
+        fetch: (request) => this.keysResponse(request),
+      })
     })
   }
 
@@ -370,6 +383,42 @@ export class ArborFactsService extends Service {
       const settings = await this.arborHost().updateSettings(update)
       this.bump()
       return Response.json({ ok: true, settings })
+    } catch (error: unknown) {
+      return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 })
+    }
+  }
+
+  /**
+   * Store or clear one API key from the Arbor page.
+   *
+   * The body is `{ name, value }` to store a key, or `{ name, clear: true }` to
+   * remove the stored value. The value is handed straight to the host, which
+   * writes it to DSH's credential store and nowhere else; the answer carries the
+   * keys' state and never the value, and no refusal here repeats the body.
+   * @param request - a JSON key request.
+   * @returns 200 with the keys now in force, or 400 with a refusal.
+   */
+  private async keysResponse(request: Request): Promise<Response> {
+    let body: { name?: unknown; value?: unknown; clear?: unknown }
+    try {
+      body = await request.json() as typeof body
+    } catch {
+      return Response.json({ ok: false, error: 'the request body is not valid JSON' }, { status: 400 })
+    }
+    const name = body.name
+    if (typeof name !== 'string' || name === '') {
+      return Response.json({ ok: false, error: 'name must be a key name' }, { status: 400 })
+    }
+    if (body.clear !== true && typeof body.value !== 'string') {
+      return Response.json({ ok: false, error: 'value must be a string, or clear must be true' }, { status: 400 })
+    }
+    try {
+      const host = this.arborHost()
+      const keys = body.clear === true
+        ? await host.clearKey(name)
+        : await host.setKey(name, body.value as string)
+      this.bump()
+      return Response.json({ ok: true, keys })
     } catch (error: unknown) {
       return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 })
     }
