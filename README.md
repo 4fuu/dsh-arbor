@@ -91,11 +91,20 @@ dsh web
 `dsh plugin` adds the bundle to the profile's `dsh.profile.bundles` and installs
 its packages into the profile. Pick **Arbor** in a composer and send a message.
 The optional [font plugin](https://github.com/4fuu/dsh-arbor-fonts) installs the
-same way:
+same way, but it is a Host row rather than a bundle. Add the row to the
+profile's `cordis.patch.yml` after installing it:
 
 ```bash
 dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
 ```
+
+```yaml
+- insert:
+    - id: arbor-fonts
+      name: '@4fu/dsh-arbor-fonts'
+```
+
+Replace the default `[]` in that file with the entry, then restart the profile.
 
 ### From a checkout
 
@@ -175,7 +184,9 @@ dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
 ```
 
 The fonts are licensed under the SIL Open Font License 1.1; the plugin ships the
-license text, per-file hashes and attribution.
+license text, per-file hashes and attribution. The plugin is a Host row rather
+than a bundle: after installing it, add the `arbor-fonts` entry described under
+[Install](#install) to `cordis.patch.yml` and restart the profile.
 
 ## Limits worth knowing
 

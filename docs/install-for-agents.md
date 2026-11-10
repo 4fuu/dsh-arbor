@@ -61,10 +61,18 @@ dsh web
 
 `dsh plugin` installs the bundle into the profile's `node_modules` and adds it
 to `dsh.profile.bundles`. Open the URL it prints and pick **Arbor** in a
-composer. The optional font plugin installs the same way:
+composer. The optional font plugin installs the same way, but it is a Host row
+rather than a bundle; after the command, replace the default `[]` in the
+profile's `cordis.patch.yml` with this entry and restart:
 
 ```bash
 dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
+```
+
+```yaml
+- insert:
+    - id: arbor-fonts
+      name: '@4fu/dsh-arbor-fonts'
 ```
 
 ### From a checkout
