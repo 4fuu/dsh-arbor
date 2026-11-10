@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-tools",
-  "version": "2026.1110.3",
+  "version": "2026.1110.4",
   "type": "module",
   "description": "Tool bridge: DSH tools enter arbor as external tools with their own JSON Schema, the ones arbor replaces are restricted away, and calls run through ctx.tools.execute",
   "exports": {

@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-driver",
-  "version": "2026.1110.3",
+  "version": "2026.1110.4",
   "type": "module",
   "description": "The arbor agent driver: per-preset routing over the embedded official AgentLoop, the arbor AgentFactory, the session agent, and resume from the arbor journal",
   "exports": {
@@ -16,9 +16,9 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-core": "2026.1110.1",
+    "@4fu/arbor-core": "2026.1110.2",
     "@4fu/arbor-interfaces": "2026.1110.0",
-    "@4fu/arbor-prompt": "2026.1110.1",
+    "@4fu/arbor-prompt": "2026.1110.2",
     "@4fu/dsh-arbor-host": "workspace:*",
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",

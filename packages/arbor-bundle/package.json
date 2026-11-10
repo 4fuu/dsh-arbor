@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-bundle",
-  "version": "2026.1110.3",
+  "version": "2026.1110.4",
   "type": "module",
   "description": "The dsh-arbor bundle: the patch layer that replaces DSH's agent row with arbor's routing registry and mounts the arbor host, driver and preset",
   "exports": {

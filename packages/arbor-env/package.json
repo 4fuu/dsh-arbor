@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-env",
-  "version": "2026.1110.3",
+  "version": "2026.1110.4",
   "type": "module",
   "description": "/env for arbor inside DSH: DSH's skills and MCP servers mounted read-only into arbor's environment, beside the settings, built-in skills and the model's own installs under DSH_HOME/arbor",
   "exports": {
@@ -14,10 +14,10 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-environment-dir": "2026.1110.1",
+    "@4fu/arbor-environment-dir": "2026.1110.2",
     "@4fu/arbor-errors": "2026.1107.0",
     "@4fu/arbor-interfaces": "2026.1110.0",
-    "@4fu/arbor-prompt": "2026.1110.1"
+    "@4fu/arbor-prompt": "2026.1110.2"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-skill": "0.2.2-rc.1",

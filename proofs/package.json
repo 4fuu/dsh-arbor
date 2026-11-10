@@ -5,7 +5,7 @@
   "type": "module",
   "description": "The dsh-arbor proofs: one runnable proof per integration point",
   "dependencies": {
-    "@4fu/arbor-core": "2026.1110.1",
+    "@4fu/arbor-core": "2026.1110.2",
     "@4fu/arbor-interfaces": "2026.1110.0",
     "@4fu/dsh-arbor-bundle": "workspace:*",
     "@4fu/dsh-arbor-driver": "workspace:*",

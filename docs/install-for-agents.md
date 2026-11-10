@@ -23,11 +23,11 @@ Pins, and do not change them without being asked:
 - DeepSeek Harness `dsh-v0.2.2-rc.1`, installed from npm as
   `@deepseek-ai/dsh@0.2.2-rc.1` and its companion `@deepseek-ai/dsh-*`
   packages at `0.2.2-rc.1`.
-- arbor `@4fu/arbor-*` from npm: `2026.1110.1` for the core packages,
+- arbor `@4fu/arbor-*` from npm: `2026.1110.2` for the core packages,
   `2026.1110.0` for interfaces and journal-sqlite, `2026.1107.0` for errors
   (`docs/versions.md` lists each).
 - This repository's published packages are `@4fu/dsh-arbor-*` at
-  `2026.1110.3`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.3`.
+  `2026.1110.4`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.4`.
   Install the bundle from npm; a checkout is only needed for the proofs or for
   development. `@4fu/dsh-arbor-testkit` and the root package stay private.
 - The optional font plugin is `@4fu/dsh-arbor-fonts@2026.1110.0` from
@@ -56,7 +56,7 @@ exactly, so install it and let npm fetch them:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home       # any empty directory
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.3
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.4
 dsh web
 ```
 
@@ -405,7 +405,7 @@ From npm, one command does the wiring:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.3
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.4
 dsh web
 ```
 
@@ -492,7 +492,7 @@ path the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
 ## 9. Release notes
 
 The bundle and its 11 dependencies are published under `@4fu` at
-`2026.1110.3`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
+`2026.1110.4`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
 testkit and the root package stay private.
 
 - `2026.1110.3` makes a Windows arbor session work like the Linux one. The
