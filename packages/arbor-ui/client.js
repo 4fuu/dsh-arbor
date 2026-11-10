@@ -421,7 +421,7 @@ var en = {
   settingsSaved: "Saved",
   settingsSaveError: "Could not save: {message}",
   settingsInvalid: "Enter a whole number in every field.",
-  settingsApplyHint: "Judge modes apply to the next decision; window limits apply to windows opened after saving. No restart is needed.",
+  settingsApplyHint: "Judge modes apply to the next decision; the context budget and reserve apply to windows opened after saving, and the idle period and handoff floor apply at the next idle or end. No restart is needed.",
   tabSettings: "Settings",
   settingsTitle: "Settings",
   settingsIntro: "Arbor's own settings, read by the host while it runs. Editable values are installed as /env/settings.json; API keys are stored in DSH's credential store and never in a configuration file.",
@@ -429,7 +429,7 @@ var en = {
   settingsSectionJudge: "Judge",
   settingsSectionJudgeIntro: "Each judge decision is model-based. On consults the judge, shadow records what it would have decided without acting on it, and off leaves the decision to arbor's own rule.",
   settingsSectionWindows: "Windows",
-  settingsSectionWindowsIntro: "The limits a new window opens with. They apply to windows opened after saving; a window that is already running keeps the limits it opened with.",
+  settingsSectionWindowsIntro: "The limits a window runs under. The context budget and reserve apply to new windows; the idle period and handoff floor apply to the next idle or end.",
   settingsSectionNotes: "Notes",
   settingsSectionNotesIntro: "How much of the note store a window's prefix carries: how many active notes, and the token budget the prefix is built against.",
   settingsSectionWorkspace: "Workspace",
@@ -442,6 +442,8 @@ var en = {
   settingsWindowReserveHint: "Held back from the model for the last reminder.",
   settingsWindowIdleHint: "How long an ended run stays open for the next input.",
   settingsWindowProtectionHint: "How long a window protects the target it started on.",
+  settingsWindowHandoff: "Handoff floor (%)",
+  settingsWindowHandoffHint: "Below this share of the context window, an end with a handoff and no unfinished work is refused.",
   settingsNotesCountHint: "How many notes the active set may hold.",
   settingsNotesTokensHint: "The active set's token budget.",
   settingsSource: "Settings source",
@@ -708,7 +710,7 @@ var zh = {
   settingsSaved: "\u5DF2\u4FDD\u5B58",
   settingsSaveError: "\u4FDD\u5B58\u5931\u8D25\uFF1A{message}",
   settingsInvalid: "\u6BCF\u4E2A\u5B57\u6BB5\u90FD\u8981\u586B\u5199\u6574\u6570\u3002",
-  settingsApplyHint: "\u5224\u65AD\u6A21\u5F0F\u4ECE\u4E0B\u4E00\u6B21\u51B3\u7B56\u8D77\u751F\u6548\uFF1B\u7A97\u53E3\u9650\u5236\u4ECE\u4FDD\u5B58\u540E\u65B0\u5F00\u7684\u7A97\u53E3\u8D77\u751F\u6548\uFF0C\u65E0\u9700\u91CD\u542F\u3002",
+  settingsApplyHint: "\u5224\u65AD\u6A21\u5F0F\u4ECE\u4E0B\u4E00\u6B21\u51B3\u7B56\u8D77\u751F\u6548\uFF1B\u4E0A\u4E0B\u6587\u9884\u7B97\u548C\u9884\u7559\u5BF9\u65B0\u7A97\u53E3\u751F\u6548\uFF1B\u7A7A\u95F2\u65F6\u957F\u548C\u4EA4\u63A5\u4E0B\u9650\u5728\u4E0B\u6B21\u7A7A\u95F2\u6216\u7ED3\u675F\u65F6\u751F\u6548\u3002\u65E0\u9700\u91CD\u542F\u3002",
   tabSettings: "\u8BBE\u7F6E",
   settingsTitle: "\u8BBE\u7F6E",
   settingsIntro: "arbor \u81EA\u5DF1\u7684\u8BBE\u7F6E\uFF0C\u5BBF\u4E3B\u8FD0\u884C\u65F6\u76F4\u63A5\u8BFB\u53D6\u3002\u53EF\u7F16\u8F91\u7684\u503C\u4F1A\u88C5\u6210 /env/settings.json\uFF1BAPI \u5BC6\u94A5\u5B58\u5728 DSH \u7684\u51ED\u636E\u5E93\u91CC\uFF0C\u7EDD\u4E0D\u5199\u8FDB\u4EFB\u4F55\u914D\u7F6E\u6587\u4EF6\u3002",
@@ -716,7 +718,7 @@ var zh = {
   settingsSectionJudge: "\u5224\u65AD",
   settingsSectionJudgeIntro: "\u6BCF\u4E2A\u5224\u65AD\u51B3\u7B56\u90FD\u7531\u6A21\u578B\u7ED9\u51FA\u3002\u5F00\u542F\u8868\u793A\u771F\u7684\u8BE2\u95EE\u5224\u65AD\u5668\uFF1B\u5F71\u5B50\u53EA\u8BB0\u5F55\u5B83\u672C\u6765\u4F1A\u600E\u4E48\u5224\u65AD\u3001\u4E0D\u636E\u6B64\u884C\u52A8\uFF1B\u5173\u95ED\u8868\u793A\u4EA4\u7ED9 arbor \u81EA\u5DF1\u7684\u89C4\u5219\u3002",
   settingsSectionWindows: "\u7A97\u53E3",
-  settingsSectionWindowsIntro: "\u65B0\u7A97\u53E3\u6253\u5F00\u65F6\u4F7F\u7528\u7684\u9650\u5236\u3002\u4FDD\u5B58\u540E\u65B0\u5F00\u7684\u7A97\u53E3\u751F\u6548\uFF1B\u5DF2\u7ECF\u5728\u8DD1\u7684\u7A97\u53E3\u4FDD\u7559\u5B83\u6253\u5F00\u65F6\u7684\u9650\u5236\u3002",
+  settingsSectionWindowsIntro: "\u7A97\u53E3\u8FD0\u884C\u65F6\u7684\u9650\u5236\u3002\u4E0A\u4E0B\u6587\u9884\u7B97\u548C\u9884\u7559\u53EA\u5BF9\u65B0\u7A97\u53E3\u751F\u6548\uFF1B\u7A7A\u95F2\u65F6\u957F\u548C\u4EA4\u63A5\u4E0B\u9650\u5728\u4E0B\u6B21\u7A7A\u95F2\u6216\u7ED3\u675F\u65F6\u751F\u6548\u3002",
   settingsSectionNotes: "\u7B14\u8BB0",
   settingsSectionNotesIntro: "\u7A97\u53E3\u524D\u7F00\u4ECE\u7B14\u8BB0\u5E93\u5E26\u591A\u5C11\uFF1A\u6D3B\u8DC3\u7B14\u8BB0\u7684\u6761\u6570\uFF0C\u4EE5\u53CA\u6784\u5EFA\u524D\u7F00\u65F6\u4F7F\u7528\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
   settingsSectionWorkspace: "\u5DE5\u4F5C\u533A",
@@ -729,6 +731,8 @@ var zh = {
   settingsWindowReserveHint: "\u4E3A\u6700\u540E\u7684\u63D0\u9192\u4FDD\u7559\u3001\u4E0D\u7ED9\u6A21\u578B\u7684\u4EE4\u724C\u3002",
   settingsWindowIdleHint: "\u8FD0\u884C\u7ED3\u675F\u540E\u7A97\u53E3\u518D\u7B49\u591A\u4E45\uFF0C\u7B49\u4E0B\u4E00\u6B21\u8F93\u5165\u3002",
   settingsWindowProtectionHint: "\u7A97\u53E3\u5BF9\u8D77\u59CB\u76EE\u6807\u7684\u4FDD\u62A4\u65F6\u957F\u3002",
+  settingsWindowHandoff: "\u4EA4\u63A5\u4E0B\u9650\uFF08%\uFF09",
+  settingsWindowHandoffHint: "\u4E0A\u4E0B\u6587\u7528\u5230\u8FD9\u4E2A\u6BD4\u4F8B\u4EE5\u4E0B\u3001\u53C8\u6CA1\u6709\u672A\u5B8C\u6210\u7684\u5DE5\u4F5C\u65F6\uFF0C\u5E26 handoff \u7684 end \u4F1A\u88AB\u62D2\u7EDD\u3002",
   settingsNotesCountHint: "\u6D3B\u8DC3\u96C6\u6700\u591A\u5BB9\u7EB3\u591A\u5C11\u6761\u7B14\u8BB0\u3002",
   settingsNotesTokensHint: "\u6D3B\u8DC3\u96C6\u7684\u4EE4\u724C\u4E0A\u9650\u3002",
   settingsSource: "\u8BBE\u7F6E\u6765\u6E90",
@@ -2037,6 +2041,7 @@ function settingsDraft(settings) {
     reserveTokens: String(settings.window?.reserveTokens ?? 4e3),
     idleSeconds: String(settings.window?.idleSeconds ?? 86400),
     protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
+    handoffPercent: String(Math.round((settings.window?.handoffFloor ?? 0.6) * 100)),
     activeCount: String(settings.notes?.activeCount ?? 40),
     activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8e3),
     retentionHours: String((settings.workspaces?.retentionMs ?? 0) / 36e5)
@@ -2193,11 +2198,12 @@ function SettingsPage(props) {
       reserveTokens: Number(draft.reserveTokens),
       idleSeconds: Number(draft.idleSeconds),
       protectionSeconds: Number(draft.protectionSeconds),
+      handoffPercent: Number(draft.handoffPercent),
       activeCount: Number(draft.activeCount),
       activeTokenBudget: Number(draft.activeTokenBudget),
       retentionHours: Number(draft.retentionHours)
     };
-    const inRange = Number.isInteger(values.contextTokens) && values.contextTokens >= 1e3 && values.contextTokens <= 2e6 && (Number.isInteger(values.reserveTokens) && values.reserveTokens >= 0 && values.reserveTokens < values.contextTokens) && (Number.isInteger(values.idleSeconds) && values.idleSeconds >= 0 && values.idleSeconds <= 86400) && (Number.isInteger(values.protectionSeconds) && values.protectionSeconds >= 0 && values.protectionSeconds <= 3600) && (Number.isInteger(values.activeCount) && values.activeCount >= 1 && values.activeCount <= 1e3) && (Number.isInteger(values.activeTokenBudget) && values.activeTokenBudget >= 100 && values.activeTokenBudget <= 1e6) && (Number.isInteger(values.retentionHours) && values.retentionHours >= 0 && values.retentionHours <= 8760);
+    const inRange = Number.isInteger(values.contextTokens) && values.contextTokens >= 1e3 && values.contextTokens <= 2e6 && (Number.isInteger(values.reserveTokens) && values.reserveTokens >= 0 && values.reserveTokens < values.contextTokens) && (Number.isInteger(values.idleSeconds) && values.idleSeconds >= 0 && values.idleSeconds <= 86400) && (Number.isInteger(values.protectionSeconds) && values.protectionSeconds >= 0 && values.protectionSeconds <= 3600) && (Number.isInteger(values.handoffPercent) && values.handoffPercent >= 0 && values.handoffPercent <= 100) && (Number.isInteger(values.activeCount) && values.activeCount >= 1 && values.activeCount <= 1e3) && (Number.isInteger(values.activeTokenBudget) && values.activeTokenBudget >= 100 && values.activeTokenBudget <= 1e6) && (Number.isInteger(values.retentionHours) && values.retentionHours >= 0 && values.retentionHours <= 8760);
     if (!inRange) {
       setStatus({ error: t("settingsInvalid") });
       return;
@@ -2213,7 +2219,8 @@ function SettingsPage(props) {
             contextTokens: values.contextTokens,
             reserveTokens: values.reserveTokens,
             idleSeconds: values.idleSeconds,
-            protectionSeconds: values.protectionSeconds
+            protectionSeconds: values.protectionSeconds,
+            handoffFloor: values.handoffPercent / 100
           },
           notes: {
             activeCount: values.activeCount,
@@ -2378,6 +2385,14 @@ function SettingsPage(props) {
         max: 3600,
         onChange: (value) => {
           update({ protectionSeconds: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowHandoff"), hint: t("settingsWindowHandoffHint") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.handoffPercent,
+        min: 0,
+        max: 100,
+        onChange: (value) => {
+          update({ handoffPercent: value });
         }
       }))
     );

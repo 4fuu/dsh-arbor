@@ -123,6 +123,7 @@ export interface SettingsUpdate {
     readonly contextTokens?: number
     readonly reserveTokens?: number
     readonly protectionSeconds?: number
+    readonly handoffFloor?: number
   }
   readonly notes?: {
     readonly activeCount?: number
@@ -200,6 +201,14 @@ function refOf(name: string): CredentialRef | undefined {
 function checkedInteger(name: string, value: unknown, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
     throw new Error(`${name} must be an integer between ${min} and ${max}`)
+  }
+  return value
+}
+
+/** One numeric setting in range, or a refusal naming it. A fraction is not an integer. */
+function checkedNumber(name: string, value: unknown, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`${name} must be a number between ${min} and ${max}`)
   }
   return value
 }
@@ -744,6 +753,7 @@ export class ArborHostService extends Service {
     if (update.window?.contextTokens !== undefined) window.contextTokens = checkedInteger('window.contextTokens', update.window.contextTokens, 1_000, 2_000_000)
     if (update.window?.reserveTokens !== undefined) window.reserveTokens = checkedInteger('window.reserveTokens', update.window.reserveTokens, 0, 1_000_000)
     if (update.window?.protectionSeconds !== undefined) window.protectionSeconds = checkedInteger('window.protectionSeconds', update.window.protectionSeconds, 0, 3_600)
+    if (update.window?.handoffFloor !== undefined) window.handoffFloor = checkedNumber('window.handoffFloor', update.window.handoffFloor, 0, 1)
     if (window.contextTokens !== undefined && window.reserveTokens !== undefined && window.reserveTokens >= window.contextTokens) {
       throw new Error('window.reserveTokens must be smaller than window.contextTokens')
     }

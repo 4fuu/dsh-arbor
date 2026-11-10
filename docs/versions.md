@@ -10,7 +10,7 @@ README and the install guide summarize it.
 | Component | Pin | Where it comes from |
 | --- | --- | --- |
 | DeepSeek Harness | tag `dsh-v0.2.2-rc.1`, commit `66491b05e3` of `deepseek-ai/deepseek-harness` | npm packages `@deepseek-ai/dsh@0.2.2-rc.1` and the companion `@deepseek-ai/dsh-*` packages at `0.2.2-rc.1` |
-| arbor | `2026.1109.1` | npm packages `@4fu/arbor-*`; `@4fu/arbor-errors` is `2026.1107.0`, the only published version |
+| arbor | `2026.1110.0` | npm packages `@4fu/arbor-*`; `@4fu/arbor-errors` is `2026.1107.0`, the only published version |
 | dsh-arbor packages | `2026.1110.2` | npm packages `@4fu/dsh-arbor-*`; the bundle and its 11 dependencies are published together |
 | dsh-arbor-fonts | `2026.1110.0` | npm package `@4fu/dsh-arbor-fonts`, a separate repository |
 | Node.js | `>=24.9.0` (developed on Node 26) | `engines` in the root `package.json`; the checkout runs the TypeScript sources, while the published packages ship JavaScript and declarations |

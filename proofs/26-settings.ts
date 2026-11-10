@@ -73,12 +73,12 @@ try {
 
   const updated = await host.updateSettings({
     judgeModes: { route: 'shadow', active_set: 'on' },
-    window: { contextTokens: 123_456, reserveTokens: 2_345, idleSeconds: 123, protectionSeconds: 30 },
+    window: { contextTokens: 123_456, reserveTokens: 2_345, idleSeconds: 123, protectionSeconds: 30, handoffFloor: 0.35 },
     notes: { activeCount: 17, activeTokenBudget: 4_321 },
     retentionMs: 600_000,
   })
   check('the update answers with the edited values',
-    updated.window?.contextTokens === 123_456 && updated.notes?.activeCount === 17 && updated.judge?.modes?.route === 'shadow',
+    updated.window?.contextTokens === 123_456 && updated.window?.handoffFloor === 0.35 && updated.notes?.activeCount === 17 && updated.judge?.modes?.route === 'shadow',
     `window=${JSON.stringify(updated.window)} notes=${JSON.stringify(updated.notes)} judge=${JSON.stringify(updated.judge)}`)
 
   const items = await host.environment.list()
@@ -91,6 +91,7 @@ try {
       && stored?.window?.reserveTokens === 2_345
       && stored?.window?.idleSeconds === 123
       && stored?.window?.protectionSeconds === 30
+      && stored?.window?.handoffFloor === 0.35
       && stored?.notes?.activeCount === 17
       && stored?.notes?.activeTokenBudget === 4_321
       && stored?.judge?.modes?.route === 'shadow'
@@ -104,6 +105,7 @@ try {
   check('the running host re-read the edited settings',
     live.settings?.window?.contextTokens === 123_456
       && live.settings?.window?.idleSeconds === 123
+      && live.settings?.window?.handoffFloor === 0.35
       && live.settings?.notes?.activeTokenBudget === 4_321
       && live.settings?.judge?.modes?.route === 'shadow'
       && live.settings?.workspaces?.retentionMs === 600_000,
@@ -122,11 +124,23 @@ try {
     refused && afterRefusal?.window?.contextTokens === 123_456 && afterRefusal?.window?.reserveTokens === 2_345,
     `refused=${refused} window=${JSON.stringify(afterRefusal?.window)}`)
 
+  // A fraction outside 0..1 is refused too, and the installed floor stays.
+  let refusedFloor = false
+  try {
+    await host.updateSettings({ window: { handoffFloor: 1.5 } })
+  } catch {
+    refusedFloor = true
+  }
+  check('a handoff floor outside 0..1 is refused and the installed one stays',
+    refusedFloor && (await host.environment.settings())?.window?.handoffFloor === 0.35,
+    `refused=${refusedFloor} window=${JSON.stringify((await host.environment.settings())?.window)}`)
+
   // The fields the settings page does not edit survive a later update.
   await host.updateSettings({ notes: { activeCount: 18 } })
   const afterSecond = await host.environment.settings()
   check('an unedited field survives a later update',
     afterSecond?.window?.contextTokens === 123_456
+      && afterSecond?.window?.handoffFloor === 0.35
       && afterSecond?.judge?.modes?.route === 'shadow'
       && afterSecond?.notes?.activeCount === 18
       && afterSecond?.workspaces?.retentionMs === 600_000,

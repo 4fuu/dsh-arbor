@@ -230,6 +230,8 @@ export interface ArborSettingsFacts {
     readonly contextTokens?: number
     readonly reserveTokens?: number
     readonly protectionSeconds?: number
+    /** The share below which a handoff with nothing unfinished is refused. */
+    readonly handoffFloor?: number
   }
   readonly notes?: {
     readonly activeCount?: number

@@ -1107,6 +1107,7 @@ interface SettingsDraft {
   readonly reserveTokens: string
   readonly idleSeconds: string
   readonly protectionSeconds: string
+  readonly handoffPercent: string
   readonly activeCount: string
   readonly activeTokenBudget: string
   readonly retentionHours: string
@@ -1126,6 +1127,7 @@ function settingsDraft(settings: ArborSettingsFacts): SettingsDraft {
     reserveTokens: String(settings.window?.reserveTokens ?? 4_000),
     idleSeconds: String(settings.window?.idleSeconds ?? 86_400),
     protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
+    handoffPercent: String(Math.round((settings.window?.handoffFloor ?? 0.6) * 100)),
     activeCount: String(settings.notes?.activeCount ?? 40),
     activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8_000),
     retentionHours: String((settings.workspaces?.retentionMs ?? 0) / 3_600_000),
@@ -1331,6 +1333,7 @@ function SettingsPage(props: {
       reserveTokens: Number(draft.reserveTokens),
       idleSeconds: Number(draft.idleSeconds),
       protectionSeconds: Number(draft.protectionSeconds),
+      handoffPercent: Number(draft.handoffPercent),
       activeCount: Number(draft.activeCount),
       activeTokenBudget: Number(draft.activeTokenBudget),
       retentionHours: Number(draft.retentionHours),
@@ -1340,6 +1343,7 @@ function SettingsPage(props: {
       (Number.isInteger(values.reserveTokens) && values.reserveTokens >= 0 && values.reserveTokens < values.contextTokens) &&
       (Number.isInteger(values.idleSeconds) && values.idleSeconds >= 0 && values.idleSeconds <= 86_400) &&
       (Number.isInteger(values.protectionSeconds) && values.protectionSeconds >= 0 && values.protectionSeconds <= 3_600) &&
+      (Number.isInteger(values.handoffPercent) && values.handoffPercent >= 0 && values.handoffPercent <= 100) &&
       (Number.isInteger(values.activeCount) && values.activeCount >= 1 && values.activeCount <= 1_000) &&
       (Number.isInteger(values.activeTokenBudget) && values.activeTokenBudget >= 100 && values.activeTokenBudget <= 1_000_000) &&
       (Number.isInteger(values.retentionHours) && values.retentionHours >= 0 && values.retentionHours <= 8_760)
@@ -1360,6 +1364,7 @@ function SettingsPage(props: {
             reserveTokens: values.reserveTokens,
             idleSeconds: values.idleSeconds,
             protectionSeconds: values.protectionSeconds,
+            handoffFloor: values.handoffPercent / 100,
           },
           notes: {
             activeCount: values.activeCount,
@@ -1476,6 +1481,10 @@ function SettingsPage(props: {
       createElement(EditRow, { label: t('settingsWindowProtection'), hint: t('settingsWindowProtectionHint') }, createElement(EditNumber, {
         value: draft.protectionSeconds, min: 0, max: 3_600,
         onChange: value => { update({ protectionSeconds: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsWindowHandoff'), hint: t('settingsWindowHandoffHint') }, createElement(EditNumber, {
+        value: draft.handoffPercent, min: 0, max: 100,
+        onChange: value => { update({ handoffPercent: value }) },
       })))
   } else if (section === 'notes') {
     body = createElement('div', { className: 'arbor-settings-rows' },

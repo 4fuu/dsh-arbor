@@ -25,7 +25,7 @@ A line was changed when it could mislead, said one fact twice, stated a limit th
 - **Refusals.** `end`'s refusals said "四个字符串数组" and "交接内容格式不对" where the fields matter; they now say `handoff`, name the four fields and their types, and say the window stayed open. The new early refusal is `已用 {percent}%，尚未到交接时机（{floor}%）；窗口没有结束。` with the next action `无需调用 end：直接结束本轮，窗口会保持空闲，等待下一条输入。` Other refusals were checked for the same shape; only register fixes were needed.
 - **Workspace prompts.** Both implementations used 你/别的/开/读/写/跑/删掉/改. They now say what the directory is, what it is for, and what to do, in the same verbs as the rest of the table. The ovnfs method no longer says 轮换 anywhere; it says 交接.
 - **Environment and skills.** The rendered DSH prompt showed the built-in skill lines as truncated fragments ("…一个技能是一个目录，里面有"), because a skill's description is the first non-empty line after its title and that line was half a sentence. Each built-in skill now has one complete sentence as its description, then the full procedure. The `arbor-settings` example had `"窗口是一次性的。"` as a general rule, which would have overridden the corrected rule with the old false one; it now uses a true example and documents `window.handoffFloor`.
-- **dsh-arbor.** `<harness>` repeated identity ("你是运行在 DSH 里的一个 arbor 窗口") and arbor's own delivery rule ("only `send` reaches the user"), and the identity repeated the environment. The split is now: identity says who the agent works for; `<harness>` says the window runs inside DSH; arbor's `<agent>` says what the user sees. `dsh.dsh.lead` was dead text and a second statement of the precedence rule. `send.image`/`send.file` used 写进 and one generic "every mention of a file" rule; they now state the format and when to use it. `send.ts` had English messages with Chinese next actions; both are now Chinese. The refused-end box said "call end again with the handoff fields arbor named" for every refusal; for `end.handoff.early` that is the wrong action, so it now has its own hint. The drawer's idle default is 86400 and its fallback matches.
+- **dsh-arbor.** `<harness>` repeated identity ("你是运行在 DSH 里的一个 arbor 窗口") and arbor's own delivery rule ("only `send` reaches the user"), and the identity repeated the environment. The split is now: identity says who the agent works for; `<harness>` says the window runs inside DSH; arbor's `<agent>` says what the user sees. `dsh.dsh.lead` was dead text and a second statement of the precedence rule. `send.image`/`send.file` used 写进 and one generic "every mention of a file" rule; they now state the format and when to use it. `send.ts` had English messages with Chinese next actions; both are now Chinese. The refused-end box said "call end again with the handoff fields arbor named" for every refusal; for `end.handoff.early` that is the wrong action, so it now has its own hint. The Settings tab's Windows section defaults to 86400 idle and exposes the handoff floor; its fallback matches.
 - **Judge questions.** Audited against `docs/prompting.md` (one instruction per state path, both outcomes, tie-break toward the less harmful action, no arithmetic, `state_note` for every field). They already meet it and were not changed.
 
 ## 2. The mechanism
@@ -33,7 +33,7 @@ A line was changed when it could mislead, said one fact twice, stated a limit th
 - Rule `end.handoff.early`. An `end` that carries a handoff is refused when the window has no unfinished work and its usage is below `window.handoffFloor` (a fraction, default `0.6`). The window stays open and idle. With unfinished work the handoff is always accepted, because the work itself requires a handoff; an `end` without a handoff is never limited by the floor.
 - The refusal carries `{percent}` and `{floor}`; neither is in the prompt, `tool.end` or any reminder.
 - `window.handoffFloor` is a host setting in `packages/interfaces/src/settings.ts`. The host reads it on every `end` call, so an installed settings change moves the floor without a restart.
-- dsh-arbor sets `window.idleSeconds: 86400` in `defaultSettings` and keeps a deployment's own window values when it names them. The settings drawer shows 86400 and its idle range still ends at 86400.
+- dsh-arbor sets `window.idleSeconds: 86400` in `defaultSettings` and keeps a deployment's own window values when it names them. The Settings tab's Windows section shows 86400, keeps its range at 0..86400, and edits `window.handoffFloor` as a percentage.
 - The refused-end box in `arbor-ui` chooses `endRefusedHintEarly` for `end.handoff.early`; every other rule keeps the existing hint.
 
 ## 3. Before and after
@@ -1475,7 +1475,7 @@ Before: `在 host 中注册工具组。` After: `这个工具在本次部署中�
 
 **`packages/arbor-ui` — human-facing refused-end box (not model-visible)**
 
-Before, for every rule: `The window is still open, so nothing ended. Send another message in DSH to keep working; the model can call end again with the handoff fields arbor named.` After, for `end.handoff.early`: `The window is still open and idle. The turn can simply finish; the next related message continues in this same window.` The Chinese hint is `窗口仍然开着并保持空闲：这一轮直接结束即可，下一条相关消息会继续送到这个窗口。` Other rules keep the existing hint. The idle fallback in the settings drawer changed from 300 to 86400.
+Before, for every rule: `The window is still open, so nothing ended. Send another message in DSH to keep working; the model can call end again with the handoff fields arbor named.` After, for `end.handoff.early`: `The window is still open and idle. The turn can simply finish; the next related message continues in this same window.` The Chinese hint is `窗口仍然开着并保持空闲：这一轮直接结束即可，下一条相关消息会继续送到这个窗口。` Other rules keep the existing hint. The idle fallback in the Settings tab changed from 300 to 86400, and the Windows section now edits the handoff floor.
 
 **Built-in skills.** The full diff is below. The first change in each file is the description line the `<env>` block reads; the rest is the same procedure with the register fixed.
 
@@ -2186,7 +2186,7 @@ The same head is every tier's first line. The p50 example carries open work; the
 - **Environment, MCP, supervisor and coordination refusals.** Each already names the rule and a next action that reaches the goal with what the model has; register and clarity were checked and no change was needed.
 - **`tool.send`, `tool.search`, the note tools, `system.agent.precedence`, `system.plugin.outside`, `data.mark`.** Already one fact, one layer, one action; kept.
 - **`param.summary` ("不超过 200 字").** A range that changes the first attempt belongs in a parameter description; the refusal still carries the real limit. Kept.
-- **dsh-arbor's settings drawer labels.** Human UI, not model-visible. Only the idle fallback and the early-refusal hint changed.
+- **dsh-arbor's Settings tab labels.** Human UI, not model-visible. The Windows section now carries the idle default, the handoff floor control and the early-refusal hint.
 
 ## 7. Verification
 

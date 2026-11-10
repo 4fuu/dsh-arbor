@@ -23,7 +23,7 @@ Pins, and do not change them without being asked:
 - DeepSeek Harness `dsh-v0.2.2-rc.1`, installed from npm as
   `@deepseek-ai/dsh@0.2.2-rc.1` and its companion `@deepseek-ai/dsh-*`
   packages at `0.2.2-rc.1`.
-- arbor `@4fu/arbor-*` `2026.1109.1`, from npm. `@4fu/arbor-errors` is
+- arbor `@4fu/arbor-*` `2026.1110.0`, from npm. `@4fu/arbor-errors` is
   `2026.1107.0`, the only published version.
 - This repository's published packages are `@4fu/dsh-arbor-*` at
   `2026.1110.2`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.2`.

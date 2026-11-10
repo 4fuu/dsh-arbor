@@ -393,6 +393,7 @@ async function settingsOf(host: ArborHostService): Promise<ArborSettingsFacts> {
         ...(settings.window.contextTokens === undefined ? {} : { contextTokens: settings.window.contextTokens }),
         ...(settings.window.reserveTokens === undefined ? {} : { reserveTokens: settings.window.reserveTokens }),
         ...(settings.window.protectionSeconds === undefined ? {} : { protectionSeconds: settings.window.protectionSeconds }),
+        ...(settings.window.handoffFloor === undefined ? {} : { handoffFloor: settings.window.handoffFloor }),
       },
     }),
     ...(settings.notes === undefined ? {} : {

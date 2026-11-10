@@ -14,8 +14,8 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-interfaces": "2026.1109.1",
-    "@4fu/arbor-prompt": "2026.1109.1"
+    "@4fu/arbor-interfaces": "2026.1110.0",
+    "@4fu/arbor-prompt": "2026.1110.0"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "0.2.2-rc.1",

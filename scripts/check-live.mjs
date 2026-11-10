@@ -435,7 +435,7 @@ try {
       if (name === 'Judge') {
         assert('the Judge section has one control per judge decision', pane.selects === 6, JSON.stringify({ selects: pane.selects }))
       } else if (name === 'Windows') {
-        assert('the Windows section has the four window limits', pane.numbers === 4, JSON.stringify({ numbers: pane.numbers }))
+        assert('the Windows section has the five window settings', pane.numbers === 5, JSON.stringify({ numbers: pane.numbers }))
       } else if (name === 'Notes') {
         assert('the Notes section has the two note budgets', pane.numbers === 2, JSON.stringify({ numbers: pane.numbers }))
       } else if (name === 'Workspace') {
