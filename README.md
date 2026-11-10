@@ -95,6 +95,21 @@ Requirements: Node.js 24.9 or newer and DeepSeek Harness `dsh-v0.2.2-rc.1`.
 The bundle is published with all packages it depends on; nothing has to be
 built or linked.
 
+Install and update the bundle the same way, with DSH closed:
+
+```bash
+dsh plugin --profile desktop add @4fu/dsh-arbor-bundle@2026.1110.4
+```
+
+Then start DSH again. Do not install or update from DSH's Plugins page while
+DSH is running: DSH cannot stop the running bundle in place and rolls the
+update back. If an interrupted update leaves an empty
+`$DSH_HOME/profiles/<profile>/package.json.lock`, remove it once no DSH process
+is running.
+
+`desktop` is the profile of the DeepSeek Harness desktop app. With the CLI,
+use the profile you start instead, for example `web` for `dsh web`:
+
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.4
@@ -110,7 +125,7 @@ same way, but it is a Host row rather than a bundle. Add the row to the
 profile's `cordis.patch.yml` after installing it:
 
 ```bash
-dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
+dsh plugin --profile desktop add @4fu/dsh-arbor-fonts@2026.1110.0
 ```
 
 ```yaml
