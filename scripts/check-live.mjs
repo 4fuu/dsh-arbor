@@ -345,28 +345,26 @@ const ARBOR_SWITCH = `document.querySelector('button[role="switch"][aria-label*=
 const PLUGINS_ENTRY = `[...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Plugins' || button.getAttribute('aria-label') === 'Plugins')`
 
 /**
- * Open the Plugins page and wait for the Arbor switch. A click that lands
- * while a first-run dialog is still fading out reaches the overlay, not the
- * entry, so the click is repeated a few times before the wait counts as failed.
+ * Click a navigation entry until what it opens appears. On a CI runner a click
+ * shortly after boot reaches the entry but does not navigate, so the click is
+ * repeated a few times before the wait counts as failed.
  */
-async function openPlugins(page, description) {
+async function clickUntil(page, entryDescription, entry, description, ready) {
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await page.click('the Plugins entry', PLUGINS_ENTRY)
+    await page.click(entryDescription, entry)
     try {
-      await page.waitFor(description, `!!${ARBOR_SWITCH}`, 10_000, { dump: attempt === 3 })
+      await page.waitFor(description, ready, 10_000, { dump: attempt === 3 })
       return
     } catch (error) {
       if (attempt === 3) throw error
-      const top = await page.evaluate(`(() => {
-        const entry = ${PLUGINS_ENTRY}
-        if (!entry) return 'no Plugins entry'
-        const rect = entry.getBoundingClientRect()
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-        return hit === null ? 'nothing' : (entry.contains(hit) ? 'the entry itself' : hit.outerHTML.slice(0, 200))
-      })()`)
-      console.log(`the Plugins page did not open on click ${attempt} (top element: ${top}); clicking again`)
+      console.log(`${entryDescription} did not open ${description} on click ${attempt}; clicking again`)
     }
   }
+}
+
+/** Open the Plugins page and wait for the Arbor switch. */
+function openPlugins(page, description) {
+  return clickUntil(page, 'the Plugins entry', PLUGINS_ENTRY, description, `!!${ARBOR_SWITCH}`)
 }
 
 /** The Arbor entry in the global navigation, once the bundle is on. */
@@ -415,8 +413,7 @@ try {
     // its pane is asserted, because a rail that renders but never switches
     // would look exactly like this one in a fresh screenshot.
     const settingsMark = page.messages.length
-    await page.click('the Arbor entry', ARBOR_ENTRY)
-    await page.waitFor('the Settings tab', `!!${SETTINGS_TAB}`, 30_000)
+    await clickUntil(page, 'the Arbor entry', ARBOR_ENTRY, 'the Settings tab', `!!${SETTINGS_TAB}`)
     await page.click('the Settings tab', SETTINGS_TAB)
     await page.waitFor('the settings page', `!!document.querySelector('[data-arbor-settings]')`, 30_000)
     const opened = await page.settingsState()
