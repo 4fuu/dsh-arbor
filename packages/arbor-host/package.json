@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-host",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "The one Arbor host a DSH process runs: the durable SQLite journal and note store under DSH_HOME/arbor, the settings and the window lifecycle",
   "exports": {
@@ -30,6 +29,7 @@
     "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
     "@deepseek-ai/dsh-user-approval": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
     "@deepseek-ai/dsh-workspace": "0.2.2-rc.1",
     "@deepseek-ai/schemastery": "~3.19.0"
   },

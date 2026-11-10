@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-env",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "/env for arbor inside DSH: DSH's skills and MCP servers mounted read-only into arbor's environment, beside the settings, built-in skills and the model's own installs under DSH_HOME/arbor",
   "exports": {

@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-preset",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "The arbor agent preset: the row that declares arbor in DSH's preset roster, so a user can pick it for a session",
   "exports": {

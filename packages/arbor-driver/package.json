@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-driver",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "The arbor agent driver: per-preset routing over the embedded official AgentLoop, the arbor AgentFactory, the session agent, and resume from the arbor journal",
   "exports": {

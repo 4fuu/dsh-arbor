@@ -41,7 +41,10 @@
     "proof:reload-preset": "node --experimental-strip-types --no-warnings proofs/22-reload-preset.ts",
     "proof:facts": "node --experimental-strip-types --no-warnings proofs/23-facts.ts && node --experimental-strip-types --no-warnings proofs/24-host-facts.ts",
     "proof:host-facts": "node --experimental-strip-types --no-warnings proofs/24-host-facts.ts",
-    "proof:backend-session": "node --experimental-strip-types --no-warnings proofs/25-backend-session.ts"
+    "proof:backend-session": "node --experimental-strip-types --no-warnings proofs/25-backend-session.ts",
+    "build": "node scripts/build.mjs",
+    "pack": "node scripts/publish.mjs",
+    "set-version": "node scripts/set-version.mjs"
   },
   "devDependencies": {
     "@4fu/dsh-arbor-driver": "workspace:*",

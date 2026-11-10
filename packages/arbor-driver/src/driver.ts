@@ -619,7 +619,11 @@ export class ArborDriver extends Service implements AgentFactory {
       try {
         let preset: string | undefined = handle.header.agentPreset
         const page = await handle.read(0)
-        for (const event of page.events) {
+        // The event type is declared by the preset registry's module
+        // augmentation; read it structurally so building this package alone does
+        // not depend on that augmentation being in the program.
+        const events = page.events as readonly { readonly type: string; readonly data?: unknown }[]
+        for (const event of events) {
           if (event.type !== 'agent-preset/selected') continue
           const selected = (event.data as { agentPreset?: unknown }).agentPreset
           if (typeof selected === 'string') preset = selected

@@ -11,7 +11,9 @@ README and the install guide summarize it.
 | --- | --- | --- |
 | DeepSeek Harness | tag `dsh-v0.2.2-rc.1`, commit `66491b05e3` of `deepseek-ai/deepseek-harness` | npm packages `@deepseek-ai/dsh@0.2.2-rc.1` and the companion `@deepseek-ai/dsh-*` packages at `0.2.2-rc.1` |
 | arbor | `2026.1109.1` | npm packages `@4fu/arbor-*`; `@4fu/arbor-errors` is `2026.1107.0`, the only published version |
-| Node.js | `>=24.9.0` (developed on Node 26) | `engines` in the root `package.json`; the sources run through Node's type stripping, with no build step |
+| dsh-arbor packages | `2026.1110.0` | npm packages `@4fu/dsh-arbor-*`; the bundle and its 11 dependencies are published together |
+| dsh-arbor-fonts | `2026.1110.0` | npm package `@4fu/dsh-arbor-fonts`, a separate repository |
+| Node.js | `>=24.9.0` (developed on Node 26) | `engines` in the root `package.json`; the checkout runs the TypeScript sources, while the published packages ship JavaScript and declarations |
 | pnpm | `11.28.5` | `packageManager` in the root `package.json`; `.agents/setup` installs that exact version |
 
 `@deepseek-ai/cordis` is pinned separately at `4.1.0`. It is the Cordis runtime,
@@ -45,7 +47,9 @@ An upgrade is a port, not a version bump: change every pin, re-read the DSH
 source locations named in `docs/b0-findings.md`, `docs/b3-findings.md` and
 `docs/b3b-projects-and-sandbox.md`, update the section table and the
 registration checks, then run `pnpm check` and `pnpm proofs`. Do not merge an
-upgrade whose pinned proofs fail.
+upgrade whose pinned proofs fail. A release also republishes the bundle and its
+11 dependencies at one new `YYYY.MDD.REVISION` version, because they name each
+other exactly.
 
 ## How the pin is checked
 

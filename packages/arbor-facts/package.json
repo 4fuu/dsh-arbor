@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-facts",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "What arbor's own mechanisms are doing in one DSH session, read from arbor itself: the window chain, the board, the workspace, active notes, /env, schedules and settings, served to the web client as a live stream",
   "exports": {

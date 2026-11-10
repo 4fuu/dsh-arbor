@@ -1,7 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-ui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "2026.1110.0",
   "type": "module",
   "description": "The dsh-arbor browser package: the permanent left-sidebar arbor page, its per-session tabs and live window streams, and for arbor sessions the sandbox access-mode gate; ordinary sessions keep their controls unchanged",
   "exports": {

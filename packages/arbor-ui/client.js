@@ -24,7 +24,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// packages/arbor-ui/src/client.ts
+// src/client.ts
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -33,7 +33,7 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 var import_react2 = require("react");
 
-// packages/arbor-ui/src/channel.ts
+// src/channel.ts
 var TEXT_LIMIT = 6e3;
 var SEND_LIMIT = 1500;
 var ACTIVITY_MS = 1600;
@@ -213,7 +213,7 @@ function closeChannels() {
   channels.clear();
 }
 
-// packages/arbor-ui/src/i18n.ts
+// src/i18n.ts
 var NAMESPACE = "arborUi";
 var en = {
   expandStream: "Show more",
@@ -656,7 +656,7 @@ function fallbackTranslate(key, args) {
   return value === void 0 ? key : format(value, args);
 }
 
-// packages/arbor-ui/src/styles.ts
+// src/styles.ts
 var STYLE_ID = "arbor-ui-panel-style";
 var CSS = `.arbor-page{
   --arbor-font-body:var(--dsw-font-family);
@@ -890,7 +890,7 @@ function installStyles() {
   };
 }
 
-// packages/arbor-ui/src/ui.ts
+// src/ui.ts
 var import_react = require("react");
 var PANEL_ID = "arbor";
 var FILTERS = ["all", "windows", "board", "notes", "env", "schedules"];
@@ -2437,7 +2437,7 @@ function ArborPanelIcon(props) {
   );
 }
 
-// packages/arbor-ui/src/client.ts
+// src/client.ts
 var SEAT_SLOT = "conversation.input.permission";
 var HERO_SEAT_SLOT = "conversation.hero.agentPreset";
 var ARBOR_PRESET = "arbor";

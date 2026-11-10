@@ -64,6 +64,7 @@ import { DirectoryEnvironment } from '@4fu/arbor-environment-dir'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { planProjectionDefinition } from '@deepseek-ai/dsh-plan-mode'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-working-directory'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { createDshBackend, type DshBackend } from '@4fu/dsh-arbor-llm'
 import {

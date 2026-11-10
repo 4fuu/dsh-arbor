@@ -24,7 +24,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// packages/arbor-ui-workspace/src/client.ts
+// src/client.ts
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,

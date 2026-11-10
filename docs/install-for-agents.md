@@ -1,9 +1,9 @@
 # Installing and inspecting dsh-arbor
 
 This page is written for an AI agent. It says what dsh-arbor is, how to install
-it from a clean checkout, how to verify it, where each piece lives, what works,
-and what is deliberately not finished. Follow it in order; every command is
-meant to be run as given.
+it from npm or a clean checkout, how to verify it, where each piece lives, what
+works, and what is deliberately not finished. Follow it in order; every command
+is meant to be run as given.
 
 The canonical version pin is [docs/versions.md](versions.md). This page repeats
 the current values so an agent does not have to resolve links before installing.
@@ -25,24 +25,51 @@ Pins, and do not change them without being asked:
   packages at `0.2.2-rc.1`.
 - arbor `@4fu/arbor-*` `2026.1109.1`, from npm. `@4fu/arbor-errors` is
   `2026.1107.0`, the only published version.
-- This repository's packages are `@4fu/dsh-arbor-*`, are `private`, and are
-  not published. Installing means checking out this repository.
-- The optional font plugin lives in
-  [dsh-arbor-fonts](https://github.com/4fuu/dsh-arbor-fonts) and is pinned to
-  the same DSH version.
+- This repository's published packages are `@4fu/dsh-arbor-*` at
+  `2026.1110.0`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.0`.
+  Install the bundle from npm; a checkout is only needed for the proofs or for
+  development. `@4fu/dsh-arbor-testkit` and the root package stay private.
+- The optional font plugin is `@4fu/dsh-arbor-fonts@2026.1110.0` from
+  [dsh-arbor-fonts](https://github.com/4fuu/dsh-arbor-fonts), pinned to the
+  same DSH version.
 
 ## 2. Requirements
 
-- Node.js 24.9 or newer (developed on Node 26). The sources are TypeScript run
-  directly through Node's type stripping, so there is no build step.
-- pnpm 11.28.5. `.agents/setup` installs exactly that version with npm into
-  `~/.local/bin`; corepack's pnpm shim does not run under Node 26. To do it by
-  hand: `npm install -g pnpm@11.28.5`.
-- `DEEPSEEK_API_KEY` in the environment only if you want to run the proofs
-  against the real model. The default proof run uses a scripted model and needs
-  neither a key nor network access.
+- Node.js 24.9 or newer (developed on Node 26), and npm for the npm install.
+  The published packages ship JavaScript and `.d.ts` declarations, so Node reads
+  them from `node_modules` without type stripping.
+- pnpm 11.28.5 only for a checkout and the proofs. `.agents/setup` installs
+  exactly that version with npm into `~/.local/bin`; corepack's pnpm shim does
+  not run under Node 26. To do it by hand: `npm install -g pnpm@11.28.5`.
+- `DEEPSEEK_API_KEY` in the environment only if you want to run the proofs or a
+  session against the real model. The default proof run uses a scripted model
+  and needs neither a key nor network access.
 
-## 3. Clone and install
+## 3. Install
+
+### From npm
+
+The bundle is the installable package; it names the other eleven packages
+exactly, so install it and let npm fetch them:
+
+```bash
+npm install -g @deepseek-ai/dsh@0.2.2-rc.1
+export DSH_HOME=/tmp/my-dsh-home       # any empty directory
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.0
+dsh web
+```
+
+`dsh plugin` installs the bundle into the profile's `node_modules` and adds it
+to `dsh.profile.bundles`. Open the URL it prints and pick **Arbor** in a
+composer. The optional font plugin installs the same way:
+
+```bash
+dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
+```
+
+### From a checkout
+
+The proofs and the pin check run against the TypeScript sources:
 
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
@@ -356,21 +383,29 @@ Both are arbor's workspace; neither is a sandbox.
 A DSH profile is a directory under `$DSH_HOME/profiles/<name>` holding a
 `package.json` with a `dsh.profile.bundles` list and its own
 `cordis.patch.yml`. DSH composes each listed bundle's patch over the shipped
-profile, then the profile's own layer. This is verified end to end against the
-published CLI:
+profile, then the profile's own layer.
+
+From npm, one command does the wiring:
+
+```bash
+npm install -g @deepseek-ai/dsh@0.2.2-rc.1
+export DSH_HOME=/tmp/my-dsh-home
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.0
+dsh web
+```
+
+The plugin command installs the bundle and its exact dependencies into
+`$DSH_HOME/profiles/web/node_modules` and adds `@4fu/dsh-arbor-bundle` to that
+profile's `dsh.profile.bundles`. The bundle carries the two `dsh.client`
+packages and the facts route registers on DSH's browser connection.
+
+For a checkout, create a profile from a shipped template and link the package
+directories instead:
 
 ```bash
 npm install @deepseek-ai/dsh@0.2.2-rc.1     # anywhere; gives you the dsh bin
 export DSH_HOME=/tmp/my-dsh-home            # any empty directory
 dsh --profile arbor --from-default-profile headless "Reply with the single word: pong"
-```
-
-That creates the profile from the shipped `headless` template, boots it and
-answers one task with the real model. Now make this repository's packages
-resolvable from the profile (they are private and use the pnpm workspace
-protocol, so they are linked rather than installed), and list the bundle:
-
-```bash
 P="$DSH_HOME/profiles/arbor"
 mkdir -p "$P/node_modules/@4fu"
 for p in host driver llm prompt tools workspace env facts ui ui-workspace bundle preset; do
@@ -380,12 +415,17 @@ done
 dsh arbor --dump-config        # the composed tree, with the arbor rows in it
 ```
 
+Keep one DSH tree. Do not also install the npm packages into a profile that
+uses these links: two copies of DSH's `@deepseek-ai/dsh-scope` make scope
+symbols disagree, and a session create then fails with `Agent preset binding
+requires a scoped context`. The npm path above lets `dsh plugin` manage the
+profile's packages; the checkout path links only this repository's packages and
+lets DSH supply its own.
+
 `dsh arbor "Reply with the single word: pong"` then runs an ordinary session
 through the arbor routing registry and the embedded official loop, and
 `$DSH_HOME/arbor/` holds `journal.sqlite`, `notes.sqlite` and the `env/`
-directory the environment lives in. For the Arbor page, use the `web` profile
-instead of `headless`; the bundle carries the two `dsh.client` packages and the
-facts route registers on DSH's browser connection.
+directory the environment lives in.
 
 The bundle keeps the rows a real installation already has: the base profile's
 `bash-sandbox`, `fs-sandbox`, `sandbox`, `sandbox-policy` and `approval` rows.
@@ -431,23 +471,23 @@ path the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
 
 ## 9. Release notes
 
-The current package metadata is prepared for a public repository and a future
-npm release, but the packages are still `private: true` and version `0.0.0`:
+The bundle and its 11 dependencies are published under `@4fu` at
+`2026.1110.0`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
+testkit and the root package stay private.
 
-- every package carries `license: MIT`, a repository URL with its package
-  directory, `engines.node >=24.9.0`, `engines.dsh: 0.2.2-rc.1`, and an
-  explicit `files` list;
-- the runtime packages carry `publishConfig.access: "public"` (the scope is
-  `@4fu`), but no `npm publish` has run;
-- the bundle's dependencies are `workspace:*`, and its siblings are `0.0.0`, so
-  a release still needs a version for every package and the workspace specs
-  rewritten to those versions; every package now ships its MIT `LICENSE`;
-- the fonts plugin is a separate repository and package, with its own checks and
-  the SIL OFL text for its vendored fonts.
-
-The bundle is not published, so a normal installation is a checkout plus the
-profile wiring in section 7. Do not publish anything as part of an install or a
-review unless the repository owner explicitly asks.
+- The published packages ship JavaScript and `.d.ts` declarations. Development
+  still points `exports` at the TypeScript sources; `pnpm build` emits `dist`,
+  and `node scripts/publish.mjs` packs or publishes a manifest whose
+  `workspace:*` dependency specs are the exact release version.
+- `pnpm build` rebuilds the browser entries, compiles every package, copies the
+  bundle's patch and locale, and rewrites `.ts` specifiers in declarations.
+- `node scripts/publish.mjs` is the dry run; `--publish` publishes all packages
+  at the release version. Every package ships its MIT `LICENSE`, and the font
+  package also ships the OFL text, attribution and per-file hashes.
+- The packages name each other exactly. Install or upgrade the bundle as one
+  unit; a partial install leaves a package at the old version.
+- The build and publish scripts are release tooling, not an install step.
+  Do not publish from a checkout, and do not ask an installing agent to.
 
 ## 10. The prompt bridge
 

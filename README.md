@@ -14,8 +14,8 @@ Arbor keeps running on DSH's own embedded AgentLoop, in the same process.
 > **Status.** This is a research-grade integration, not a DSH release. It is
 > pinned to one DSH version and relies on DSH internals. Read
 > [Versions and compatibility](docs/versions.md) before installing it on
-> anything you care about. The bundle is not published to npm; installing means
-> checking out this repository.
+> anything you care about. The packages are published under `@4fu` at
+> `2026.1110.0`; the bundle and the font plugin install independently from npm.
 
 ## What an arbor session changes
 
@@ -78,9 +78,29 @@ DSH's fonts. The same overview without the plugin is
 
 ## Install
 
-Requirements: Node.js 24.9 or newer, pnpm 11.28.5, and a checkout of this
-repository. The sources are TypeScript run through Node's type stripping, so
-there is no build step. The default proof run needs no API key and no network.
+Requirements: Node.js 24.9 or newer and DeepSeek Harness `dsh-v0.2.2-rc.1`.
+The bundle is published with all packages it depends on; nothing has to be
+built or linked.
+
+```bash
+npm install -g @deepseek-ai/dsh@0.2.2-rc.1
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.0
+dsh web
+```
+
+`dsh plugin` adds the bundle to the profile's `dsh.profile.bundles` and installs
+its packages into the profile. Pick **Arbor** in a composer and send a message.
+The optional [font plugin](https://github.com/4fuu/dsh-arbor-fonts) installs the
+same way:
+
+```bash
+dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
+```
+
+### From a checkout
+
+The proofs and development use the TypeScript sources directly; that checkout is
+what the scripts and the pin check run against.
 
 ```bash
 git clone https://github.com/4fuu/dsh-arbor
@@ -98,29 +118,28 @@ cleanly with that policy.
 ### Hand the install to a model
 
 [docs/install-for-agents.md](docs/install-for-agents.md) is a step-by-step guide
-written for an AI agent: clone, install, check, run the proofs, drive a live turn
-with a restart, boot the web profile, and inspect what ran. Give a model this
-prompt, editing the bracketed parts or dropping them:
+written for an AI agent: install from npm or a checkout, run the proofs, drive a
+live turn with a restart, boot the web profile, and inspect what ran. Give a
+model this prompt, editing the bracketed parts or dropping them:
 
 ```text copy Copy Install Prompt
 Install dsh-arbor (https://github.com/4fuu/dsh-arbor) in this environment [in a
-scratch clone under /tmp] and show me that it works: follow
-docs/install-for-agents.md, run pnpm install --frozen-lockfile, pnpm check and
-pnpm proofs, and [also drive one live turn against the real DeepSeek model, with
-a DSH restart and resume in the middle]. Report which proofs passed, what the
-live turn answered, and anything that did not work. Fix only what is yours to
-fix and tell me what you changed.
+scratch DSH home under /tmp] and show me that it works: follow
+docs/install-for-agents.md, install @4fu/dsh-arbor-bundle@2026.1110.0 into a DSH
+web profile, pick Arbor for one session, and [also run the proof suite from a
+checkout with pnpm install --frozen-lockfile, pnpm check and pnpm proofs]. Report
+which checks passed, what the live session answered, and anything that did not
+work. Fix only what is yours to fix and tell me what you changed.
 ```
 
 ## Use it in DSH
 
-The proofs boot a profile and drive sessions directly. To use the browser
-surface, boot DSH's `web` profile with this repository's bundle mounted, or
-follow [section 7 of the install guide](docs/install-for-agents.md#7-wiring-the-bundle-into-a-real-dsh-installation)
-to wire the bundle into a real `$DSH_HOME/profiles/<name>`. Then pick **Arbor**
-in a composer and send a message. The session is created under the preset; its
-window and chain appear under the **Arbor** entry, and an ordinary session
-started beside it keeps DSH's own composer and sandbox behavior.
+The npm install above adds the bundle to a DSH web profile. Pick **Arbor** in a
+composer and send a message: the session is created under the preset, its window
+and chain appear under the **Arbor** entry, and an ordinary session started
+beside it keeps DSH's own composer and sandbox behavior. A checkout can also be
+wired by hand; [section 7 of the install guide](docs/install-for-agents.md#7-wiring-the-bundle-into-a-real-dsh-installation)
+shows the profile layout.
 
 The one-shot `dsh <task>` runner cannot drive an arbor-preset session: DSH's
 runner refuses to adopt a session that runs under a preset. Use the web client,
@@ -149,16 +168,20 @@ are the behavioral checks. The canonical pin and the upgrade procedure are in
 client plugin that changes only the typography of the Arbor page. It sets
 ChillDIN Gothic for display labels and ChillDIN for numerals, leaves body text
 and code on DSH's fonts, and does nothing on ordinary pages. It is optional and
-must be installed into the same DSH profile as this bundle. The fonts are
-licensed under the SIL Open Font License 1.1; the plugin ships the license text,
-per-file hashes and attribution.
+installs into the same DSH profile:
+
+```bash
+dsh plugin --profile web add @4fu/dsh-arbor-fonts@2026.1110.0
+```
+
+The fonts are licensed under the SIL Open Font License 1.1; the plugin ships the
+license text, per-file hashes and attribution.
 
 ## Limits worth knowing
 
 - The judge is off: a model-based judge cannot run through the DSH backend yet.
-- The bundle is not published to npm. A publication also needs versions for the
-  workspace packages and the `workspace:*` dependency specs replaced; see the
-  release note in [docs/install-for-agents.md](docs/install-for-agents.md#9-release-notes).
+- The 12 bundle packages are published together at one version; install and
+  upgrade the bundle as a unit, because its packages name each other exactly.
 - `ovnfs` is optional. Without it arbor uses the plain-directory workspace, and a
   window no longer gets a copy-on-write checkout.
 - The web page's numbers and layout are read from arbor's journal and API; it is
@@ -202,7 +225,7 @@ packages/
 patches/            overlay layers a proof applies above the shipped profile
 proofs/             one runnable proof per integration point
 docs/               install, versions, screenshots and historical findings
-scripts/            the DSH pin check
+scripts/            the DSH pin check, the release build and the publish dry run
 ```
 
 ## License
