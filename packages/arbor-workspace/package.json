@@ -1,15 +1,17 @@
 {
   "name": "@4fu/dsh-arbor-workspace",
-  "version": "2026.1110.1",
+  "version": "2026.1110.2",
   "type": "module",
   "description": "Arbor's own workspace over the shared folder (ovnfs, or the plain-directory fallback), with no DSH sandbox, and the bridge that makes the shared folder's projects the DSH project list",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "src",
-    "LICENSE"
+    "LICENSE",
+    "locale"
   ],
   "dependencies": {
     "@4fu/arbor-core": "2026.1109.1",

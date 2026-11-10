@@ -120,7 +120,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createElement, useSyncExternalStore, type ComponentType } from 'react'
 import { closeChannels } from './channel.ts'
-import { en, fallbackTranslate, NAMESPACE, zh, type Translate } from './i18n.ts'
+import { en, fallbackTranslate, format, NAMESPACE, PRESET_NAMESPACE, presetCopy, zh, type Translate } from './i18n.ts'
 import { installStyles } from './styles.ts'
 import { ArborPage, ArborPanelIcon, PANEL_ID } from './ui.ts'
 
@@ -164,6 +164,15 @@ interface SeatEntry {
 interface AgentPresetSeatSnapshot {
   /** The staged choice, empty until the roster loads. */
   readonly current: string
+  /** The roster rows the chip and its menu render. */
+  readonly options?: readonly AgentPresetSeatOption[]
+}
+
+/** One roster row as the hero chip's store publishes it. */
+interface AgentPresetSeatOption {
+  readonly id: string
+  readonly name?: string
+  readonly description?: string
 }
 
 /** One seat store, as far as this package reads it. */
@@ -280,8 +289,9 @@ interface ConversationService {
 
 /** The locale service's dictionary and bind faces. */
 interface LocaleService {
-  register(namespace: string, dictionary: { zh: Record<string, string>; en: Record<string, string> }): () => void
+  register(namespace: string, dictionary: Readonly<Record<string, Readonly<Record<string, string>>>>): () => void
   bind(namespace: string): Translate
+  subscribe(listener: () => void): () => void
 }
 
 /**
@@ -322,6 +332,18 @@ export function apply(ctx: Context): void {
   const service = <T>(name: string): T | undefined => (
     ctx as unknown as { get(name: string): unknown }
   ).get(name) as T | undefined
+  let live = true
+  const owned: (() => void)[] = []
+  /**
+   * Take ownership of one thing this plugin installed, so disposing the plugin
+   * removes it. Anything installed after the plugin is gone is disposed on the
+   * spot: a retry that lands after unload must not leave an orphan registration
+   * behind.
+   */
+  const own = (dispose: () => void): void => {
+    if (!live) { dispose(); return }
+    owned.push(dispose)
+  }
   let dispose: (() => void) | undefined
   let poll: ReturnType<typeof setInterval> | undefined
   let attempts = 0
@@ -332,23 +354,116 @@ export function apply(ctx: Context): void {
     if (poll !== undefined) { clearInterval(poll); poll = undefined }
   }
 
+  // One cleanup for everything this plugin puts into DSH's page: the two nav
+  // seats, the two shadowed composer seats, their retry timers, the locale
+  // namespace and the stylesheet. Cordis already disposes a seat registration
+  // with the fiber it was made through; these disposers make the timers, the
+  // locale and the style tag go with it too, and keep a registration that lands
+  // after unload from outliving the plugin. Registered before anything is
+  // installed so the cleanup cannot miss what the body below owns.
+  ctx.effect(() => () => {
+    live = false
+    stop()
+    for (const dispose of owned.splice(0).reverse()) {
+      try { dispose() } catch { /* a disposer that already ran is not an error */ }
+    }
+  }, 'arbor-ui: slot entries, timers and assets')
+
   // ---- the arbor panel: its locale, its stylesheet, its tab type and body,
   // and the session-header chip. All four are DSH's own seams: a locale
   // namespace, plugin-owned style, the sidebar-right tab registry with its
   // keyed body seat, and the conversation header's actions list.
   let bound: Translate | undefined
+  let presetBound: Translate | undefined
+  // The localized seat stores listen for a language switch through this set. It
+  // is declared before the locale injection, whose callback may run
+  // synchronously when the service is already there.
+  const localeListeners = new Set<() => void>()
   ctx.inject(['locale'], () => {
     const locale = service<LocaleService>('locale')
     if (locale === undefined) return
-    try {
-      locale.register(NAMESPACE, { zh, en })
-      bound = locale.bind(NAMESPACE)
-    } catch (error: unknown) {
-      ctx.logger.warn(`arbor-ui: the arbor locale did not register: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    ctx.effect(() => {
+      let unregister: (() => void) | undefined
+      let unregisterPreset: (() => void) | undefined
+      try {
+        unregister = locale.register(NAMESPACE, { zh, en })
+        // The preset's copy is a namespace of its own with every language DSH
+        // ships, because DSH renders a custom preset's metadata verbatim and
+        // this is the one place that can give its mode picker translated text.
+        unregisterPreset = locale.register(PRESET_NAMESPACE, presetCopy)
+        bound = locale.bind(NAMESPACE)
+        presetBound = locale.bind(PRESET_NAMESPACE)
+      } catch (error: unknown) {
+        ctx.logger.warn(`arbor-ui: the arbor locale did not register: ${error instanceof Error ? error.message : String(error)}`)
+        return () => {}
+      }
+      const stop = locale.subscribe(() => { for (const listener of [...localeListeners]) listener() })
+      return () => {
+        stop()
+        bound = undefined
+        presetBound = undefined
+        unregister?.()
+        unregisterPreset?.()
+      }
+    }, 'arbor-ui: locale')
   })
   const t: Translate = (key, args) => (bound ?? fallbackTranslate)(key, args)
-  installStyles()
+  /** The mode picker's copy, from its own all-language namespace. */
+  const presetT: Translate = (key, args) => {
+    if (presetBound !== undefined) return presetBound(key, args)
+    const english = (presetCopy['en'] as Readonly<Record<string, string>> | undefined)?.[key] ?? key
+    return format(english, args)
+  }
+
+  // The preset roster is host metadata: DSH's own presets publish no name and
+  // the client localizes them from its dictionary, while a custom preset owns
+  // its copy and is rendered verbatim in every language. The arbor preset is a
+  // custom row, so its description reached a Chinese mode picker in English.
+  // This package already shadows the hero preset seat; the wrapper below hands
+  // that seat a store whose arbor row carries this package's localized copy.
+  // Everything else about the store — the staged choice, the other rows, the
+  // error fields — passes through untouched.
+  const localizedSeats = new WeakMap<AgentPresetSeatStore, AgentPresetSeatStore>()
+  const localizeSeat = (store: AgentPresetSeatStore): AgentPresetSeatStore => {
+    const cached = localizedSeats.get(store)
+    if (cached !== undefined) return cached
+    let memo: { base: AgentPresetSeatSnapshot; revision: number; value: AgentPresetSeatSnapshot } | undefined
+    let revision = 0
+    const listeners = new Set<() => void>()
+    const changed = (): void => {
+      revision += 1
+      for (const listener of [...listeners]) listener()
+    }
+    const localized: AgentPresetSeatStore = {
+      subscribe(listener: () => void) {
+        listeners.add(listener)
+        localeListeners.add(changed)
+        const stop = store.subscribe(listener)
+        return () => {
+          listeners.delete(listener)
+          stop()
+          if (listeners.size === 0) localeListeners.delete(changed)
+        }
+      },
+      getSnapshot() {
+        const base = store.getSnapshot()
+        if (memo !== undefined && memo.base === base && memo.revision === revision) return memo.value
+        const value: AgentPresetSeatSnapshot = {
+          ...base,
+          ...base.options === undefined ? {} : {
+            options: base.options.map(option => option.id === ARBOR_PRESET
+              ? { ...option, name: presetT('presetName'), description: presetT('presetDescription') }
+              : option),
+          },
+        }
+        memo = { base, revision, value }
+        return value
+      },
+    }
+    localizedSeats.set(store, localized)
+    return localized
+  }
+  own(installStyles())
   ctx.effect(() => () => { closeChannels() }, 'arbor-ui: channels')
 
   /** Switch DSH to the session whose tab a row names. */
@@ -410,19 +525,96 @@ export function apply(ctx: Context): void {
   // seats directly, with a retry, rather than through `slots.inject` is what
   // works for a list entry and a keyed page in this package; see the note on
   // `registerSeat`.
-  registerSeat({
+  own(registerSeat({
     name: 'main',
     key: PANEL_ID,
     locale: NAMESPACE,
     inject: () => ({ openDshSession }),
-  }, ArborPage as unknown as (props: never) => unknown)
-  registerSeat({
+  }, ArborPage as unknown as (props: never) => unknown))
+  own(registerSeat({
     name: 'sidebar.panellist',
     id: PANEL_ID,
     order: 10,
     locale: NAMESPACE,
     label: () => t('panelLabel'),
-  }, ArborPanelIcon as unknown as (props: never) => unknown)
+  }, ArborPanelIcon as unknown as (props: never) => unknown))
+
+  /**
+   * Show one plain notice over the page, because DSH's client packages have no
+   * public toast service for a plugin to call. The returned disposer removes it
+   * early, for example when the bundle is switched off while it is visible.
+   */
+  const showNotice = (text: string, attribute: string): (() => void) => {
+    if (typeof document === 'undefined') return () => {}
+    const notice = document.createElement('div')
+    notice.setAttribute(attribute, '')
+    notice.textContent = text
+    notice.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;padding:10px 16px;border-radius:10px;background:#1f2329;color:#fff;font:13px/1.5 system-ui,sans-serif;box-shadow:0 8px 24px #0008;max-width:min(560px,calc(100vw - 32px))'
+    document.body.append(notice)
+    const timer = setTimeout(() => notice.remove(), 20_000)
+    return () => {
+      clearTimeout(timer)
+      notice.remove()
+    }
+  }
+
+  // One repair for the page an update leaves behind.
+  //
+  // `2026.1110.1`'s registration wrapper made DSH's own sidebar seats children
+  // of its fiber, so disposing that version during an update removed the
+  // sidebar: a reload is the only way back, and it is what a person would do by
+  // hand. A package cannot re-register another plugin's seats, so this installs
+  // a one-time repair instead: on a page that has been running long enough to be
+  // a live update, a sidebar slot with no occupant for two seconds gets a notice
+  // and one reload. A cold boot is given its first seconds, and the session flag
+  // stops a page whose sidebar is missing for another reason from looping.
+  const REPAIR_FLAG = 'dsh-arbor.sidebar-repair'
+  const watchSidebar = (): void => {
+    if (typeof window === 'undefined' || typeof performance === 'undefined') return
+    const started = performance.now()
+    const timer = setInterval(() => {
+      if (slots.entriesOfSlot('sidebar').length > 0) {
+        clearInterval(timer)
+        window.sessionStorage.removeItem(REPAIR_FLAG)
+        return
+      }
+      if (performance.now() - started < 2_000) return
+      clearInterval(timer)
+      if (performance.now() < 10_000) return
+      if (window.sessionStorage.getItem(REPAIR_FLAG) !== null) return
+      window.sessionStorage.setItem(REPAIR_FLAG, '1')
+      showNotice(t('reloadNotice'), 'data-arbor-reload-notice')
+      setTimeout(() => window.location.reload(), 1_500)
+    }, 200)
+    own(() => clearInterval(timer))
+  }
+  watchSidebar()
+
+  // A live enable applies this client half but cannot mount the host half:
+  // DSH's loader refuses to provide the `agents` service while the base row's
+  // registry is still registered, so the plugin page reports the host rows as
+  // pending with a technical toast. Say what that means in words: a restart is
+  // needed. The probe runs only on a page that was already running, so a cold
+  // boot does not mistake its host for missing, and a route that answers (405
+  // for this method when the host is mounted, anything but 404) cancels it.
+  const announceRestartNeeded = (): void => {
+    if (typeof window === 'undefined' || typeof performance === 'undefined') return
+    if (performance.now() < 10_000) return
+    let attempts = 0
+    let announced = false
+    const timer = setInterval(() => {
+      if (announced) return
+      if (++attempts > 6) { clearInterval(timer); return }
+      void fetch('/api/arbor/settings').then(response => {
+        if (response.status !== 404) { clearInterval(timer); return }
+        clearInterval(timer)
+        announced = true
+        own(showNotice(t('enableRestartNotice'), 'data-arbor-enable-notice'))
+      }).catch(() => undefined)
+    }, 1_500)
+    own(() => clearInterval(timer))
+  }
+  announceRestartNeeded()
 
   // The hero chip's staged pick. Resolved from the hero seat's own registration
   // once DSH's agent-preset surface has mounted; absent leaves the gate on the
@@ -686,10 +878,14 @@ export function apply(ctx: Context): void {
     if (typeof shipped !== 'function') return
     const wrapped: AgentPresetSeatInject = (sessionId?: string) => {
       const face = shipped(sessionId)
-      const select = face.select
-      if (typeof select !== 'function') return face
+      const seat = face.hooks?.agentPresetSeat
+      const withCopy: AgentPresetSeatInjected = seat === undefined
+        ? face
+        : { ...face, hooks: { ...face.hooks, agentPresetSeat: localizeSeat(seat) } }
+      const select = withCopy.select
+      if (typeof select !== 'function') return withCopy
       return {
-        ...face,
+        ...withCopy,
         select: (id: string): unknown => {
           if (!crossesArbor(id)) return select(id)
           // The mint is asynchronous and the pick is not committed here, so the
@@ -709,6 +905,7 @@ export function apply(ctx: Context): void {
       locale: entry.locale,
       inject: wrapped,
     }, entry.component)
+    own(heroDispose)
   }
 
   const tryRegister = (): void => {
@@ -734,6 +931,7 @@ export function apply(ctx: Context): void {
       locale: seat.locale,
       inject: seat.inject,
     }, gate(seat))
+    own(dispose)
     // The hero seat is shadowed only after the shipped face above has been
     // captured, so the wrapper reads the shipped inject rather than its own.
     tryShadowHeroSeat()

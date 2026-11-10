@@ -26,7 +26,7 @@ Pins, and do not change them without being asked:
 - arbor `@4fu/arbor-*` `2026.1109.1`, from npm. `@4fu/arbor-errors` is
   `2026.1107.0`, the only published version.
 - This repository's published packages are `@4fu/dsh-arbor-*` at
-  `2026.1110.1`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.1`.
+  `2026.1110.2`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.2`.
   Install the bundle from npm; a checkout is only needed for the proofs or for
   development. `@4fu/dsh-arbor-testkit` and the root package stay private.
 - The optional font plugin is `@4fu/dsh-arbor-fonts@2026.1110.0` from
@@ -55,7 +55,7 @@ exactly, so install it and let npm fetch them:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home       # any empty directory
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.1
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.2
 dsh web
 ```
 
@@ -398,7 +398,7 @@ From npm, one command does the wiring:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.1
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.2
 dsh web
 ```
 
@@ -485,9 +485,28 @@ path the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
 ## 9. Release notes
 
 The bundle and its 11 dependencies are published under `@4fu` at
-`2026.1110.1`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
+`2026.1110.2`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
 testkit and the root package stay private.
 
+- `2026.1110.2` makes live plugin changes safe. Disabling, uninstalling and
+  updating the bundle restore the DSH seats the client packages occupy, shadow
+  or wrap, so the sidebar and the current page keep rendering. Enabling live
+  restores the Arbor page but needs a DSH restart for the host rows; the page
+  says so and a notice says so where the bundle was switched on. An update from
+  `2026.1110.1` reloads the page once, because that version's dispose removed
+  DSH's sidebar.
+- The Arbor preset's mode-picker name and description follow DSH's language
+  in all eight languages DSH ships (`Arbor 模式` and its Chinese description in
+  a Chinese UI, `Arbor mode` and its English description otherwise); the host
+  declaration keeps the English copy DSH shows before the client half loads.
+  The bundle's plugin page title and description follow the same eight
+  languages, and every package row is localized in English and Chinese.
+- The settings drawer is an opaque panel that starts below a desktop title bar,
+  and its controls install arbor's real settings (`/env/settings.json`): judge
+  modes, window token budget and limits, active-note budget and checkout
+  retention. Judge modes apply to the next decision and the limits to new
+  windows, with no restart. Workspace backend and shared folder are shown as
+  facts because they are settled when the host starts.
 - The published packages ship JavaScript and `.d.ts` declarations. Development
   still points `exports` at the TypeScript sources; `pnpm build` emits `dist`,
   and `node scripts/publish.mjs` packs or publishes a manifest whose

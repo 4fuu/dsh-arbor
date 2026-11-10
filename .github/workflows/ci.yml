@@ -46,6 +46,34 @@ jobs:
       - name: Profile install
         run: pnpm check:profile
 
+  # The web client is recomposed in place when a plugin is switched: a client
+  # package whose dispose does not release the seats it occupies or shadows
+  # takes DSH's own sidebar with it, and a fresh page load never shows it. This
+  # job drives the real page in headless Chrome: switch the bundle off and on,
+  # and assert the sidebar, the session tree and the current page still render.
+  live-ui:
+    runs-on: ubuntu-latest
+    env:
+      ARBOR_CHECK_LIVE_WORK: ${{ runner.temp }}/dsh-arbor-live
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Live unload check
+        run: pnpm check:live
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-ui-screenshots
+          path: ${{ runner.temp }}/dsh-arbor-live/screenshots
+          if-no-files-found: ignore
+
   # Four proofs against the real DeepSeek model, including the B3 closed loop.
   # The job is skipped
   # unless the repository variable ARBOR_PROOF_LIVE is set to 1, because a run

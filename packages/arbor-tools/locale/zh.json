@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 工具桥",
+    "description": "DSH 的工具以外部工具的形式进入 arbor，并带上各自的 JSON Schema；arbor 替换掉的工具会被限制；调用通过 ctx.tools.execute 执行。"
+  }
+}

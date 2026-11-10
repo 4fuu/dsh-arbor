@@ -451,6 +451,87 @@ function markState(state: WorkspaceState): WorkspaceState {
   return result
 }
 
+/** One slot component, as this package passes it through. */
+type SeatComponent = (props: Record<string, unknown>) => unknown
+
+/** One wrapped seat's replacement component, built from the component being registered. */
+type SeatFilter = (shipped: SeatComponent) => SeatComponent
+
+/**
+ * The live replacement for each wrapped seat, shared by every instance of this
+ * package in the page.
+ *
+ * A registration outlives this plugin: the shipped workspace plugin owns it, so
+ * it stays in the slot ledger after this plugin is disposed and a later instance
+ * of this package must be able to reach it again. That is why the replacement
+ * component reads its filter from here at render time instead of closing over
+ * one: a wrapped seat is filtered while an instance publishes a filter and is
+ * the shipped component, unchanged, the moment that instance is gone.
+ *
+ * The store lives on `globalThis` because the client module loader replaces this
+ * module on a plugin update; a module-local store would be a different object to
+ * the component registered by the previous instance. The store's own
+ * `subscribe`/`revision` pair is stable for the life of the page, so a component
+ * can pass them to `useSyncExternalStore` unchanged.
+ */
+interface SeatFilterStore {
+  subscribe(listener: () => void): () => void
+  revision(): number
+  read(slot: string): SeatFilter | undefined
+  write(slot: string, filter: SeatFilter | undefined): void
+}
+
+/** The page-wide key of {@link SeatFilterStore}. */
+const SEAT_FILTERS: unique symbol = Symbol.for('@4fu/dsh-arbor-ui-workspace.seat-filters')
+
+/** The page's one seat-filter store, created on first use. */
+function seatFilters(): SeatFilterStore {
+  const holder = globalThis as { [SEAT_FILTERS]?: SeatFilterStore }
+  const existing = holder[SEAT_FILTERS]
+  if (existing !== undefined) return existing
+  const filters = new Map<string, SeatFilter>()
+  const listeners = new Set<() => void>()
+  let revision = 0
+  const store: SeatFilterStore = {
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    revision: () => revision,
+    read: slot => filters.get(slot),
+    write(slot, filter) {
+      if (filters.get(slot) === filter) return
+      if (filter === undefined) filters.delete(slot)
+      else filters.set(slot, filter)
+      revision += 1
+      for (const listener of [...listeners]) listener()
+    },
+  }
+  holder[SEAT_FILTERS] = store
+  return store
+}
+
+/** The page's seat-filter store, resolved once so the subscription identities stay stable. */
+const filters = seatFilters()
+
+/**
+ * The component actually registered for a wrapped seat.
+ *
+ * It re-reads the live filter on every revision, so disposing this package — and
+ * with it the filter — turns the same registration back into the shipped
+ * component without touching the registration itself, which this package does
+ * not own. Re-enabling publishes a new filter and the same registration filters
+ * again.
+ */
+function wrappedSeat(slot: string, shipped: SeatComponent): SeatComponent {
+  return (props: Record<string, unknown>) => {
+    useSyncExternalStore(filters.subscribe, filters.revision)
+    const filter = filters.read(slot)
+    const component = filter === undefined ? shipped : filter(shipped)
+    return createElement(component as unknown as ComponentType<Record<string, unknown>>, props)
+  }
+}
+
 /**
  * Intercept the workspace client's registrations: filter the hero picker per
  * preset, and mark arbor's rows in the sidebar browser.
@@ -753,20 +834,27 @@ export function apply(ctx: Context): void {
    * the picker is the shipped one in every other respect. The pick itself rides
    * along at create through the wrapped adopt call above, not through a
    * re-commit after the switch.
+   *
+   * The replacement is memoized on the shipped component, so a re-render keeps
+   * the same component type and the picker's state is not thrown away.
    */
-  const gate = (shipped: unknown) => (props: Record<string, unknown>): unknown => {
-    const sessionId = useMainSessionId(props)
-    const preset = usePresetPick(sessionId, useProjectionOf(props))
-    const useWorkspaces = props['useWorkspaces'] as WorkspaceHook | undefined
-    const filtered = (selector: (state: WorkspaceState) => unknown): unknown => (
-      useWorkspaces === undefined
-        ? undefined
-        : selector(filterState(useWorkspaces(state => state) as WorkspaceState, preset))
-    )
-    return createElement(shipped as ComponentType<Record<string, unknown>>, {
-      ...props,
-      useWorkspaces: filtered,
-    })
+  const pickerCache = new WeakMap<SeatComponent, SeatComponent>()
+  const pickerFilter: SeatFilter = shipped => {
+    const cached = pickerCache.get(shipped)
+    if (cached !== undefined) return cached
+    const Filtered: SeatComponent = props => {
+      const sessionId = useMainSessionId(props)
+      const preset = usePresetPick(sessionId, useProjectionOf(props))
+      const useWorkspaces = props['useWorkspaces'] as WorkspaceHook | undefined
+      const filtered = (selector: (state: WorkspaceState) => unknown): unknown => (
+        useWorkspaces === undefined
+          ? undefined
+          : selector(filterState(useWorkspaces(state => state) as WorkspaceState, preset))
+      )
+      return createElement(shipped as unknown as ComponentType<Record<string, unknown>>, { ...props, useWorkspaces: filtered })
+    }
+    pickerCache.set(shipped, Filtered)
+    return Filtered
   }
 
   /**
@@ -782,17 +870,21 @@ export function apply(ctx: Context): void {
    * only the rows' titles carry the mark — the same shape the hero picker's
    * external marker uses.
    */
-  const marked = (shipped: unknown) => (props: Record<string, unknown>): unknown => {
-    const useWorkspaces = props['useWorkspaces'] as WorkspaceHook | undefined
-    const marking = (selector: (state: WorkspaceState) => unknown): unknown => (
-      useWorkspaces === undefined
-        ? undefined
-        : selector(markState(useWorkspaces(state => state) as WorkspaceState))
-    )
-    return createElement(shipped as ComponentType<Record<string, unknown>>, {
-      ...props,
-      useWorkspaces: marking,
-    })
+  const markedCache = new WeakMap<SeatComponent, SeatComponent>()
+  const sidebarFilter: SeatFilter = shipped => {
+    const cached = markedCache.get(shipped)
+    if (cached !== undefined) return cached
+    const Marked: SeatComponent = props => {
+      const useWorkspaces = props['useWorkspaces'] as WorkspaceHook | undefined
+      const marking = (selector: (state: WorkspaceState) => unknown): unknown => (
+        useWorkspaces === undefined
+          ? undefined
+          : selector(markState(useWorkspaces(state => state) as WorkspaceState))
+      )
+      return createElement(shipped as unknown as ComponentType<Record<string, unknown>>, { ...props, useWorkspaces: marking })
+    }
+    markedCache.set(shipped, Marked)
+    return Marked
   }
 
   // The wrapper is an own property on the service instance, which is what makes
@@ -800,23 +892,43 @@ export function apply(ctx: Context): void {
   // instance is the one every plugin's `ctx.slots` resolves to, and the shipped
   // plugin registers its seats through `ctx.slots.inject`, whose deferred
   // callbacks run after the whole boot has applied — so the order the rows
-  // activate in does not matter. It stays installed for as long as this plugin is
-  // live, and is removed with it.
-  const original = slots.register.bind(slots)
-  const register = (
+  // activate in does not matter.
+  //
+  // Every forwarded registration must keep the *caller's* context. A
+  // registration's disposer is an effect on the context it is made through, and
+  // `ctx.slots` is a traceable proxy that binds that context per caller; calling
+  // a pre-bound `register` would put every registration made while this wrapper
+  // is installed — DSH's sidebar, its panel list, the workspace browser — on this
+  // plugin's fiber, and disposing this plugin would then tear down DSH's own
+  // seats. `this` is the caller's bound context when the proxy invokes this
+  // function, so the original is invoked with exactly that.
+  const original = slots.register
+  const register = function (
+    this: unknown,
     options: { name: string; [key: string]: unknown },
     component: (props: never) => unknown,
-  ): (() => void) => {
+  ): () => void {
+    const receiver = this ?? slots
+    const shipped = component as unknown as SeatComponent
     if (options.name === PICKER_SLOT) {
-      return original(options, gate(component) as (props: never) => unknown)
+      return original.call(receiver, options, wrappedSeat(PICKER_SLOT, shipped) as unknown as (props: never) => unknown)
     }
     if (options.name === SIDEBAR_SLOT) {
-      return original(options, marked(component) as (props: never) => unknown)
+      return original.call(receiver, options, wrappedSeat(SIDEBAR_SLOT, shipped) as unknown as (props: never) => unknown)
     }
-    return original(options, component)
+    return original.call(receiver, options, component)
   }
+  const previous = Object.getOwnPropertyDescriptor(slots, 'register')
   Object.defineProperty(slots, 'register', { value: register, configurable: true, writable: true })
+  filters.write(PICKER_SLOT, pickerFilter)
+  filters.write(SIDEBAR_SLOT, sidebarFilter)
   ctx.effect(() => () => {
-    delete (slots as unknown as { register?: unknown }).register
-  }, 'dsh-arbor-ui-workspace: restore slots.register')
+    // Only undo what is still this instance's: during an update a newer instance
+    // may already have replaced the wrapper and the filters.
+    if (filters.read(PICKER_SLOT) === pickerFilter) filters.write(PICKER_SLOT, undefined)
+    if (filters.read(SIDEBAR_SLOT) === sidebarFilter) filters.write(SIDEBAR_SLOT, undefined)
+    if (Object.getOwnPropertyDescriptor(slots, 'register')?.value !== register) return
+    if (previous === undefined) delete (slots as unknown as { register?: unknown }).register
+    else Object.defineProperty(slots, 'register', previous)
+  }, 'dsh-arbor-ui-workspace: restore slots.register and the wrapped seats')
 }

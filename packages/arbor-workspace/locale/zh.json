@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 工作区",
+    "description": "arbor 在共享目录上的工作区（ovnfs，或纯目录回退），没有 DSH 沙箱；以及把共享目录里的项目变成 DSH 项目列表的桥接。"
+  }
+}

@@ -1,15 +1,17 @@
 {
   "name": "@4fu/dsh-arbor-preset",
-  "version": "2026.1110.1",
+  "version": "2026.1110.2",
   "type": "module",
   "description": "The arbor agent preset: the row that declares arbor in DSH's preset roster, so a user can pick it for a session",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "src",
-    "LICENSE"
+    "LICENSE",
+    "locale"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.19.0"

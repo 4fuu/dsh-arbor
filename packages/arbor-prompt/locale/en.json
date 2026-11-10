@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor prompt bridge",
+    "description": "Prompt bridge: DSH official sections decided per name into a trusted <harness> section, the deployment persona into <identity>, and third-party material into a <dsh> data block"
+  }
+}

@@ -113,6 +113,9 @@ export const en = {
   notArbor: "This session does not run on arbor.",
   loading: "Reading arbor…",
   error: "The arbor channel is unavailable: {message}",
+  reloadNotice: "Arbor was updated. Reloading the page to restore the DSH sidebar…",
+  restartHint: "If Arbor was just enabled, restart DSH to load its host plugins.",
+  enableRestartNotice: "Arbor is enabled. Restart DSH before using arbor sessions; its host side loads at startup.",
   retry: "Retrying…",
   statusRunning: "Running",
   statusIdle: "Idle",
@@ -211,6 +214,28 @@ export const en = {
   settingsJudgeShadow: "shadow",
   settingsDsh: "DSH's Agent loop page configures ordinary sessions; an arbor window runs under the tier and window limits above.",
   settingsEmpty: "Arbor runs on its own defaults.",
+  settingsEditable: "Settings",
+  settingsFacts: "Facts",
+  settingsSave: "Save",
+  settingsSaving: "Saving…",
+  settingsSaved: "Saved",
+  settingsSaveError: "Could not save: {message}",
+  settingsInvalid: "Enter a whole number in every field.",
+  settingsApplyHint: "Judge modes apply to the next decision; window limits apply to windows opened after saving. No restart is needed.",
+  judgeFilter: "Filter",
+  judgeRoute: "Route",
+  judgeModelTier: "Model tier",
+  judgeNotice: "Notice",
+  judgeBroadcast: "Broadcast",
+  judgeActiveSet: "Active set",
+  settingsWindowContext: "Context tokens",
+  settingsWindowReserve: "Reserved tokens",
+  settingsWindowIdle: "Idle seconds",
+  settingsWindowProtection: "Protection seconds",
+  settingsRetention: "Keep checkouts (hours)",
+  settingsRetentionHint: "0 keeps them forever.",
+  settingsJudgeCandidates: "Judge candidates",
+  settingsJudgeShare: "Active-set judge share",
   searchPlaceholder: "Search the journal and notes",
   searchButton: "Search",
   searchEmpty: "Nothing matched.",
@@ -330,6 +355,9 @@ export const zh: Record<keyof typeof en, string> = {
   notArbor: "这个会话不是 arbor 会话。",
   loading: "正在读取 arbor…",
   error: "arbor 通道不可用：{message}",
+  reloadNotice: "Arbor 已更新，正在刷新页面以恢复 DSH 侧边栏…",
+  restartHint: "如果刚刚启用 Arbor，请重启 DSH 以加载它的宿主插件。",
+  enableRestartNotice: "Arbor 已启用。请重启 DSH 后再使用 Arbor 会话；它的宿主部分在启动时加载。",
   retry: "正在重试…",
   statusRunning: "运行中",
   statusIdle: "空闲",
@@ -428,6 +456,28 @@ export const zh: Record<keyof typeof en, string> = {
   settingsJudgeShadow: "影子",
   settingsDsh: "DSH 的 Agent loop 插件页面管的是普通会话；arbor 窗口按上面的层级和窗口限制运行。",
   settingsEmpty: "arbor 使用自己的默认值。",
+  settingsEditable: "设置",
+  settingsFacts: "事实",
+  settingsSave: "保存",
+  settingsSaving: "正在保存…",
+  settingsSaved: "已保存",
+  settingsSaveError: "保存失败：{message}",
+  settingsInvalid: "每个字段都要填写整数。",
+  settingsApplyHint: "判断模式从下一次决策起生效；窗口限制从保存后新开的窗口起生效，无需重启。",
+  judgeFilter: "过滤",
+  judgeRoute: "路由",
+  judgeModelTier: "模型层级",
+  judgeNotice: "通知",
+  judgeBroadcast: "广播",
+  judgeActiveSet: "活跃集",
+  settingsWindowContext: "上下文令牌",
+  settingsWindowReserve: "预留令牌",
+  settingsWindowIdle: "空闲秒数",
+  settingsWindowProtection: "保护秒数",
+  settingsRetention: "保留检出目录（小时）",
+  settingsRetentionHint: "0 表示永久保留。",
+  settingsJudgeCandidates: "判断候选数",
+  settingsJudgeShare: "活跃集判断权重",
   searchPlaceholder: "搜索日志与笔记",
   searchButton: "搜索",
   searchEmpty: "没有命中。",
@@ -444,6 +494,52 @@ export const zh: Record<keyof typeof en, string> = {
   tokens: "令牌",
   window: "窗口",
   heroLiveNoBoard: "{window} 正在干活，看板空着。",
+}
+
+/**
+ * The preset copy's own namespace.
+ *
+ * DSH renders a custom preset's name and description verbatim, while its own
+ * presets are localized from its dictionary. This namespace carries the copy
+ * for every language DSH ships, so the mode picker follows the UI in the same
+ * languages DSH's own presets do.
+ */
+export const PRESET_NAMESPACE = 'arborPreset'
+
+/** The mode picker's copy, one entry per language DSH ships. */
+export const presetCopy: Readonly<Record<string, { readonly presetName: string; readonly presetDescription: string }>> = {
+  en: {
+    presetName: 'Arbor mode',
+    presetDescription: 'Runs the session through arbor: one shared journal, one note store and one board, with the reply streamed back as an assistant message.',
+  },
+  zh: {
+    presetName: 'Arbor 模式',
+    presetDescription: '通过 arbor 运行会话：一个共享日志、一个笔记库和一块看板，回复以助手消息流式返回。',
+  },
+  ja: {
+    presetName: 'Arbor モード',
+    presetDescription: 'arbor でセッションを実行します。共有ジャーナル、ノートストア、ボードがそれぞれ 1 つあり、返信はアシスタントメッセージとしてストリーミングされます。',
+  },
+  es: {
+    presetName: 'Modo Arbor',
+    presetDescription: 'Ejecuta la sesión a través de arbor: un diario compartido, un almacén de notas y un tablero, con la respuesta transmitida como mensaje del asistente.',
+  },
+  fr: {
+    presetName: 'Mode Arbor',
+    presetDescription: 'Exécute la session via arbor : un journal partagé, un stockage de notes et un tableau, avec la réponse diffusée en tant que message de l’assistant.',
+  },
+  de: {
+    presetName: 'Arbor-Modus',
+    presetDescription: 'Führt die Sitzung über arbor aus: ein gemeinsames Journal, ein Notizspeicher und ein Board, wobei die Antwort als Assistentenmeldung gestreamt wird.',
+  },
+  ru: {
+    presetName: 'Режим Arbor',
+    presetDescription: 'Запускает сеанс через arbor: один общий журнал, хранилище заметок и доска, а ответ передаётся потоком как сообщение ассистента.',
+  },
+  pt: {
+    presetName: 'Modo Arbor',
+    presetDescription: 'Executa a sessão pelo arbor: um diário compartilhado, um armazenamento de notas e um quadro, com a resposta transmitida como mensagem do assistente.',
+  },
 }
 
 /** One translate function, as `ctx.locale.bind` answers it. */

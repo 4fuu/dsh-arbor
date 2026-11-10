@@ -11,19 +11,20 @@
  *
  * The browser halves are different: `client.js` is a DSH module-loader
  * registration built by esbuild, not a Node module. It is regenerated and copied
- * into `dist`, and the bundle's patch layer and locale are copied beside it.
+ * into `dist`, and each package's locale directory and the bundle's patch layer
+ * are copied beside it.
  *
  * Run: pnpm build
  */
 
 import { spawnSync } from 'node:child_process'
-import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { compilerOf, hasSources, releasePackages } from './release-packages.mjs'
 
 /** Files a package ships beside its compiled output, from the package root. */
 const ASSETS = {
-  '@4fu/dsh-arbor-bundle': ['cordis.patch.yml', 'locale'],
+  '@4fu/dsh-arbor-bundle': ['cordis.patch.yml'],
   '@4fu/dsh-arbor-ui': ['client.js'],
   '@4fu/dsh-arbor-ui-workspace': ['client.js'],
 }
@@ -73,6 +74,12 @@ for (const package_ of packages) {
   }
   for (const asset of ASSETS[package_.name] ?? []) {
     await cp(join(package_.directory, asset), join(package_.dist, asset), { recursive: true })
+  }
+  // DSH reads a plugin's localized display text from its exported locale
+  // directory: `<pkg>/locale/en.json` and its siblings carry the plugin page's
+  // title and description. A package that has one ships it beside the build.
+  if (await stat(join(package_.directory, 'locale')).then(() => true, () => false)) {
+    await cp(join(package_.directory, 'locale'), join(package_.dist, 'locale'), { recursive: true })
   }
   console.log(`${package_.name}: dist`)
 }

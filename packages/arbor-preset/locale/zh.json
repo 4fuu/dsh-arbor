@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 预设",
+    "description": "在 DSH 的预设列表中声明 arbor，让用户为会话选择它。"
+  }
+}

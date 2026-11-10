@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 驱动",
+    "description": "arbor 的 agent 驱动：在内置官方 AgentLoop 上按预设路由，包含 arbor AgentFactory、会话 agent，以及从 arbor 日志恢复。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 环境",
+    "description": "/env：把 DSH 的技能和 MCP 服务器只读挂载到 arbor 的环境中，与设置、内置技能和模型自己安装的条目并列。"
+  }
+}

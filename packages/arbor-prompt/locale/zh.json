@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 提示词桥",
+    "description": "把 DSH 的官方提示词段按名称决定，部署人设写入 <identity>，第三方内容写入 <dsh> 数据块。"
+  }
+}

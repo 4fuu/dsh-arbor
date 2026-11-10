@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 事实",
+    "description": "从一个 DSH 会话读取 arbor 自己在做什么：窗口链、看板、工作区、活跃笔记、/env、定时和设置，并以实时流提供给 Web 客户端。"
+  }
+}

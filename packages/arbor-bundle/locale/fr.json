@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Pilote d’agent Arbor",
+    "description": "Exécute la session via arbor : un journal, un stockage de notes et un tableau partagés par toutes les sessions, avec la réponse diffusée en tant que message de l’assistant. Les sessions ordinaires continuent sur la boucle d’agent officielle intégrée."
+  }
+}

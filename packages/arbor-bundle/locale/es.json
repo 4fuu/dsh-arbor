@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Controlador de agente Arbor",
+    "description": "Ejecuta la sesión a través de arbor: un diario, un almacén de notas y un tablero compartidos por todas las sesiones, con la respuesta transmitida como mensaje del asistente. Las sesiones normales siguen usando el bucle de agente oficial integrado."
+  }
+}

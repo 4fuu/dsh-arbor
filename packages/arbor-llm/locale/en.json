@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor model layer",
+    "description": "arbor AgentBackend that runs each window's turns through DSH's ctx.llm and ctx.tools"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 宿主",
+    "description": "一个 DSH 进程运行的唯一 Arbor 宿主：DSH_HOME/arbor 下持久的 SQLite 日志和笔记库、设置与窗口生命周期。"
+  }
+}

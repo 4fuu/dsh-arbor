@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor environment",
+    "description": "/env for arbor inside DSH: DSH's skills and MCP servers mounted read-only into arbor's environment, beside the settings, built-in skills and the model's own installs under DSH_HOME/arbor"
+  }
+}

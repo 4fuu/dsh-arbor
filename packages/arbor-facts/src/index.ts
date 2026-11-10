@@ -40,7 +40,7 @@ import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { EventInput, Plugin, StreamEvent } from '@4fu/arbor-interfaces'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { sessionOfTarget, type ArborHostService } from '@4fu/dsh-arbor-host'
+import { sessionOfTarget, type ArborHostService, type SettingsUpdate } from '@4fu/dsh-arbor-host'
 import { buildFacts, buildHostFacts } from './facts.ts'
 import type {
   ArborFacts,
@@ -75,6 +75,9 @@ export const HOST_PATH = '/api/arbor/host'
 
 /** The exact route arbor's own search answers on. */
 export const SEARCH_PATH = '/api/arbor/search'
+
+/** The exact route a settings change posts to. */
+export const SETTINGS_PATH = '/api/arbor/settings'
 
 /** How long a burst of journal appends is coalesced before one rebuild. */
 const REBUILD_MS = 120
@@ -232,6 +235,12 @@ export class ArborFactsService extends Service {
         requestBody: 'buffered',
         fetch: (request) => this.searchResponse(request),
       })
+      void connection.fetch.register({
+        path: SETTINGS_PATH,
+        methods: ['POST'],
+        requestBody: 'buffered',
+        fetch: (request) => this.settingsResponse(request),
+      })
     })
   }
 
@@ -337,6 +346,32 @@ export class ArborFactsService extends Service {
       notes: outcome.notes.map(note => ({ ref: note.ref, title: note.title, summary: note.summary })),
       board: outcome.windows.map(line => ({ window: line.window, doing: line.doing })),
       total: outcome.total,
+    }
+  }
+
+  /**
+   * Apply a settings change from the Arbor page.
+   *
+   * The change is arbor's own settings item, installed through the host's
+   * environment path, so a refused or invalid document changes nothing. The
+   * answer carries the settings now in force; the open facts streams are told
+   * separately by the reload bump.
+   * @param request - a JSON {@link SettingsUpdate}.
+   * @returns 200 with the settings, or 400 with the refusal.
+   */
+  private async settingsResponse(request: Request): Promise<Response> {
+    let update: SettingsUpdate
+    try {
+      update = await request.json() as SettingsUpdate
+    } catch {
+      return Response.json({ ok: false, error: 'the request body is not valid JSON' }, { status: 400 })
+    }
+    try {
+      const settings = await this.arborHost().updateSettings(update)
+      this.bump()
+      return Response.json({ ok: true, settings })
+    } catch (error: unknown) {
+      return Response.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, { status: 400 })
     }
   }
 

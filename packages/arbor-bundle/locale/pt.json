@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Driver de agente Arbor",
+    "description": "Executa a sessão pelo arbor: um diário, um armazenamento de notas e um quadro compartilhados por todas as sessões, com a resposta transmitida como mensagem do assistente. Sessões comuns continuam no loop de agente oficial integrado."
+  }
+}

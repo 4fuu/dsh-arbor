@@ -50,8 +50,9 @@
  * user's work, not arbor's to delete.
  */
 
-import { mkdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -96,6 +97,47 @@ export interface Config {
   readonly root?: string
   /** Extra arbor settings, merged over {@link defaultSettings}. */
   readonly settings?: Settings
+}
+
+/**
+ * What a user may change from the Arbor page, as one patch.
+ *
+ * These are the settings arbor reads while it runs: the judge decisions, the
+ * limits a new window opens with, the active-note budget, and how long a
+ * chain's checkout is kept. Facts arbor settles at startup — the workspace
+ * backend, the shared folder, the model catalog the tier mapping resolves
+ * against — are not here: changing one would not move the host that is already
+ * running, and a control that changes nothing is worse than a fact that says so.
+ */
+export interface SettingsUpdate {
+  /** One mode per judge decision; omitted decisions keep their setting. */
+  readonly judgeModes?: Readonly<Record<string, string>>
+  readonly window?: {
+    readonly idleSeconds?: number
+    readonly contextTokens?: number
+    readonly reserveTokens?: number
+    readonly protectionSeconds?: number
+  }
+  readonly notes?: {
+    readonly activeCount?: number
+    readonly activeTokenBudget?: number
+  }
+  /** How long a chain's checkout is kept after its last window ended; 0 keeps it. */
+  readonly retentionMs?: number
+}
+
+/** The judge decisions arbor's settings name. */
+const JUDGE_DECISIONS = new Set(['filter', 'route', 'model_tier', 'notice', 'broadcast', 'active_set'])
+
+/** The three modes a judge decision can be in. */
+const JUDGE_MODES = new Set(['off', 'shadow', 'on'])
+
+/** One integer setting in range, or a refusal naming it. */
+function checkedInteger(name: string, value: unknown, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}`)
+  }
+  return value
 }
 
 /**
@@ -584,6 +626,70 @@ export class ArborHostService extends Service {
   /** The settings this host runs arbor with. */
   get settings(): Settings {
     return this.requireState().settings
+  }
+
+  /**
+   * Install a user's settings change as arbor's own settings item.
+   *
+   * The settings live at `/env/settings.json` like every other environment
+   * item, so the change goes through the environment's own install path: it is
+   * parsed and validated as a whole, lands as one environment revision, and is
+   * refused without changing anything. The host then re-reads the environment,
+   * which is the same `refresh` its own `reload` performs, so the values arbor
+   * reads while it dispatches — judge modes, window limits, note budget,
+   * retention — are the installed ones. No restart is involved.
+   *
+   * Only the fields a person can safely change are accepted; everything else
+   * in the installed document is carried over from the settings currently in
+   * force, so a judge threshold or a model tier the deployment set is never
+   * dropped by a change from this page.
+   *
+   * @param update - the settings the page lets a user change.
+   * @returns the settings now in force, as the environment holds them.
+   * @throws when a value is out of range or the environment refuses the install.
+   */
+  async updateSettings(update: SettingsUpdate): Promise<Settings> {
+    const state = this.requireState()
+    const current: Settings = await state.environment.settings() ?? state.settings
+    const modes: Record<string, string> = { ...current.judge?.modes }
+    for (const [decision, mode] of Object.entries(update.judgeModes ?? {})) {
+      if (!JUDGE_DECISIONS.has(decision)) throw new Error(`unknown judge decision ${JSON.stringify(decision)}`)
+      if (!JUDGE_MODES.has(mode)) throw new Error(`judge decision ${JSON.stringify(decision)} must be off, shadow or on`)
+      modes[decision] = mode
+    }
+    const window = { ...current.window }
+    if (update.window?.idleSeconds !== undefined) window.idleSeconds = checkedInteger('window.idleSeconds', update.window.idleSeconds, 0, 86_400)
+    if (update.window?.contextTokens !== undefined) window.contextTokens = checkedInteger('window.contextTokens', update.window.contextTokens, 1_000, 2_000_000)
+    if (update.window?.reserveTokens !== undefined) window.reserveTokens = checkedInteger('window.reserveTokens', update.window.reserveTokens, 0, 1_000_000)
+    if (update.window?.protectionSeconds !== undefined) window.protectionSeconds = checkedInteger('window.protectionSeconds', update.window.protectionSeconds, 0, 3_600)
+    if (window.contextTokens !== undefined && window.reserveTokens !== undefined && window.reserveTokens >= window.contextTokens) {
+      throw new Error('window.reserveTokens must be smaller than window.contextTokens')
+    }
+    const notes = { ...current.notes }
+    if (update.notes?.activeCount !== undefined) notes.activeCount = checkedInteger('notes.activeCount', update.notes.activeCount, 1, 1_000)
+    if (update.notes?.activeTokenBudget !== undefined) notes.activeTokenBudget = checkedInteger('notes.activeTokenBudget', update.notes.activeTokenBudget, 100, 1_000_000)
+    const workspaces = { ...current.workspaces }
+    if (update.retentionMs !== undefined) workspaces.retentionMs = checkedInteger('workspaces.retentionMs', update.retentionMs, 0, 31_536_000_000)
+    const next: Settings = {
+      ...current,
+      judge: { ...current.judge, modes },
+      window,
+      notes,
+      workspaces,
+    }
+    const draft = await mkdtemp(join(tmpdir(), 'dsh-arbor-settings-'))
+    try {
+      const file = join(draft, 'settings.json')
+      await writeFile(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+      // A settings draft is the JSON file itself: the environment installs a
+      // file at `env/settings.json`, while a directory draft would be copied
+      // as a directory and the settings read would find no file.
+      await state.environment.install([{ kind: 'settings', name: 'settings', path: file }])
+    } finally {
+      await rm(draft, { recursive: true, force: true }).catch(() => undefined)
+    }
+    await (state.host as unknown as { refresh(): Promise<void> }).refresh()
+    return await state.environment.settings() ?? next
   }
 
   /**

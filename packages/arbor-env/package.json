@@ -1,15 +1,17 @@
 {
   "name": "@4fu/dsh-arbor-env",
-  "version": "2026.1110.1",
+  "version": "2026.1110.2",
   "type": "module",
   "description": "/env for arbor inside DSH: DSH's skills and MCP servers mounted read-only into arbor's environment, beside the settings, built-in skills and the model's own installs under DSH_HOME/arbor",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "src",
-    "LICENSE"
+    "LICENSE",
+    "locale"
   ],
   "dependencies": {
     "@4fu/arbor-environment-dir": "2026.1109.1",

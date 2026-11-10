@@ -1,17 +1,19 @@
 {
   "name": "@4fu/dsh-arbor-ui-workspace",
-  "version": "2026.1110.1",
+  "version": "2026.1110.2",
   "type": "module",
   "description": "The dsh-arbor browser package for the project picker: arbor's shared-folder projects are listed for an arbor session only, and a directory outside them is marked external",
   "exports": {
     ".": "./src/index.ts",
     "./client": "./client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "client.js",
     "src",
-    "LICENSE"
+    "LICENSE",
+    "locale"
   ],
   "dsh": {
     "client": {

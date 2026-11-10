@@ -100,6 +100,43 @@ function markState(state) {
   markedCache = { state, result };
   return result;
 }
+var SEAT_FILTERS = /* @__PURE__ */ Symbol.for("@4fu/dsh-arbor-ui-workspace.seat-filters");
+function seatFilters() {
+  const holder = globalThis;
+  const existing = holder[SEAT_FILTERS];
+  if (existing !== void 0) return existing;
+  const filters2 = /* @__PURE__ */ new Map();
+  const listeners = /* @__PURE__ */ new Set();
+  let revision = 0;
+  const store = {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    revision: () => revision,
+    read: (slot) => filters2.get(slot),
+    write(slot, filter) {
+      if (filters2.get(slot) === filter) return;
+      if (filter === void 0) filters2.delete(slot);
+      else filters2.set(slot, filter);
+      revision += 1;
+      for (const listener of [...listeners]) listener();
+    }
+  };
+  holder[SEAT_FILTERS] = store;
+  return store;
+}
+var filters = seatFilters();
+function wrappedSeat(slot, shipped) {
+  return (props) => {
+    (0, import_react.useSyncExternalStore)(filters.subscribe, filters.revision);
+    const filter = filters.read(slot);
+    const component = filter === void 0 ? shipped : filter(shipped);
+    return (0, import_react.createElement)(component, props);
+  };
+}
 function apply(ctx) {
   const slots = ctx.slots;
   let heroInject;
@@ -254,38 +291,55 @@ function apply(ctx) {
       navigation.restoreBlank = original2;
     }, "dsh-arbor-ui-workspace: restore uiWorkspace.restoreBlank");
   };
-  const gate = (shipped) => (props) => {
-    const sessionId = useMainSessionId(props);
-    const preset = usePresetPick(sessionId, useProjectionOf(props));
-    const useWorkspaces = props["useWorkspaces"];
-    const filtered = (selector) => useWorkspaces === void 0 ? void 0 : selector(filterState(useWorkspaces((state) => state), preset));
-    return (0, import_react.createElement)(shipped, {
-      ...props,
-      useWorkspaces: filtered
-    });
+  const pickerCache = /* @__PURE__ */ new WeakMap();
+  const pickerFilter = (shipped) => {
+    const cached2 = pickerCache.get(shipped);
+    if (cached2 !== void 0) return cached2;
+    const Filtered = (props) => {
+      const sessionId = useMainSessionId(props);
+      const preset = usePresetPick(sessionId, useProjectionOf(props));
+      const useWorkspaces = props["useWorkspaces"];
+      const filtered = (selector) => useWorkspaces === void 0 ? void 0 : selector(filterState(useWorkspaces((state) => state), preset));
+      return (0, import_react.createElement)(shipped, { ...props, useWorkspaces: filtered });
+    };
+    pickerCache.set(shipped, Filtered);
+    return Filtered;
   };
-  const marked = (shipped) => (props) => {
-    const useWorkspaces = props["useWorkspaces"];
-    const marking = (selector) => useWorkspaces === void 0 ? void 0 : selector(markState(useWorkspaces((state) => state)));
-    return (0, import_react.createElement)(shipped, {
-      ...props,
-      useWorkspaces: marking
-    });
+  const markedCache2 = /* @__PURE__ */ new WeakMap();
+  const sidebarFilter = (shipped) => {
+    const cached2 = markedCache2.get(shipped);
+    if (cached2 !== void 0) return cached2;
+    const Marked = (props) => {
+      const useWorkspaces = props["useWorkspaces"];
+      const marking = (selector) => useWorkspaces === void 0 ? void 0 : selector(markState(useWorkspaces((state) => state)));
+      return (0, import_react.createElement)(shipped, { ...props, useWorkspaces: marking });
+    };
+    markedCache2.set(shipped, Marked);
+    return Marked;
   };
-  const original = slots.register.bind(slots);
-  const register = (options, component) => {
+  const original = slots.register;
+  const register = function(options, component) {
+    const receiver = this ?? slots;
+    const shipped = component;
     if (options.name === PICKER_SLOT) {
-      return original(options, gate(component));
+      return original.call(receiver, options, wrappedSeat(PICKER_SLOT, shipped));
     }
     if (options.name === SIDEBAR_SLOT) {
-      return original(options, marked(component));
+      return original.call(receiver, options, wrappedSeat(SIDEBAR_SLOT, shipped));
     }
-    return original(options, component);
+    return original.call(receiver, options, component);
   };
+  const previous = Object.getOwnPropertyDescriptor(slots, "register");
   Object.defineProperty(slots, "register", { value: register, configurable: true, writable: true });
+  filters.write(PICKER_SLOT, pickerFilter);
+  filters.write(SIDEBAR_SLOT, sidebarFilter);
   ctx.effect(() => () => {
-    delete slots.register;
-  }, "dsh-arbor-ui-workspace: restore slots.register");
+    if (filters.read(PICKER_SLOT) === pickerFilter) filters.write(PICKER_SLOT, void 0);
+    if (filters.read(SIDEBAR_SLOT) === sidebarFilter) filters.write(SIDEBAR_SLOT, void 0);
+    if (Object.getOwnPropertyDescriptor(slots, "register")?.value !== register) return;
+    if (previous === void 0) delete slots.register;
+    else Object.defineProperty(slots, "register", previous);
+  }, "dsh-arbor-ui-workspace: restore slots.register and the wrapped seats");
 }
 
 		return module.exports;

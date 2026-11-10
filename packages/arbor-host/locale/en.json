@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor host",
+    "description": "The one Arbor host a DSH process runs: the durable SQLite journal and note store under DSH_HOME/arbor, the settings and the window lifecycle"
+  }
+}

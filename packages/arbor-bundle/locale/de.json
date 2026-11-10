@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor-Agent-Treiber",
+    "description": "Führt die Sitzung über arbor aus: ein gemeinsames Journal, ein Notizspeicher und ein Board für alle Sitzungen, wobei die Antwort als Assistentenmeldung gestreamt wird. Normale Sitzungen laufen weiterhin auf der eingebetteten offiziellen Agent-Schleife."
+  }
+}

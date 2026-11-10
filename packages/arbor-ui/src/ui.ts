@@ -1089,14 +1089,104 @@ function WorkspaceCard(props: { readonly workspace: ArborWorkspaceFacts; readonl
       : null)
 }
 
-/** One settings row. */
+/** One read-only settings row. */
 function SettingRow(props: { readonly label: string; readonly children?: ReactNode }): ReactNode {
   return createElement('div', { className: 'arbor-setting-row' },
     createElement('span', { className: 'arbor-setting-key arbor-label' }, props.label),
     createElement('span', { className: 'arbor-setting-value' }, props.children))
 }
 
-/** Arbor's own settings, and which DSH card does not govern a window. */
+/** The judge decisions arbor's settings can switch. */
+const JUDGE_KINDS = ['filter', 'route', 'model_tier', 'notice', 'broadcast', 'active_set'] as const
+
+/** The label key of each judge decision. */
+const JUDGE_LABELS: Readonly<Record<string, string>> = {
+  filter: 'judgeFilter',
+  route: 'judgeRoute',
+  model_tier: 'judgeModelTier',
+  notice: 'judgeNotice',
+  broadcast: 'judgeBroadcast',
+  active_set: 'judgeActiveSet',
+}
+
+/** The three modes a judge decision can be in. */
+const JUDGE_MODES = ['off', 'shadow', 'on'] as const
+
+/** The numbers the settings form edits, as strings so a field can be cleared. */
+interface SettingsDraft {
+  readonly judge: Readonly<Record<string, string>>
+  readonly contextTokens: string
+  readonly reserveTokens: string
+  readonly idleSeconds: string
+  readonly protectionSeconds: string
+  readonly activeCount: string
+  readonly activeTokenBudget: string
+  readonly retentionHours: string
+}
+
+/**
+ * The form's first values: the facts in force, with arbor's own defaults for a
+ * block the deployment left unset. A seed without a window block runs 300 s
+ * idle, 200 000 context tokens and 4 000 reserved; a seed without a notes block
+ * runs 40 active notes and 8 000 tokens. Showing those defaults, rather than an
+ * empty field, is what makes a saved form the settings the user just read.
+ */
+function settingsDraft(settings: ArborSettingsFacts): SettingsDraft {
+  return {
+    judge: Object.fromEntries(JUDGE_KINDS.map(kind => [kind, settings.judge?.modes?.[kind] ?? 'on'])),
+    contextTokens: String(settings.window?.contextTokens ?? 200_000),
+    reserveTokens: String(settings.window?.reserveTokens ?? 4_000),
+    idleSeconds: String(settings.window?.idleSeconds ?? 300),
+    protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
+    activeCount: String(settings.notes?.activeCount ?? 40),
+    activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8_000),
+    retentionHours: String((settings.workspaces?.retentionMs ?? 0) / 3_600_000),
+  }
+}
+
+/** One editable settings row: its label and hint on the left, its control on the right. */
+function EditRow(props: { readonly label: string; readonly hint?: string; readonly children?: ReactNode }): ReactNode {
+  return createElement('label', { className: 'arbor-edit-row' },
+    createElement('span', { className: 'arbor-edit-label' },
+      createElement('span', null, props.label),
+      props.hint === undefined ? null : createElement('span', { className: 'arbor-edit-hint' }, props.hint)),
+    createElement('span', { className: 'arbor-edit-control' }, props.children))
+}
+
+/** One number field in the settings form. */
+function EditNumber(props: {
+  readonly value: string
+  readonly min: number
+  readonly max: number
+  readonly step?: number
+  readonly onChange: (value: string) => void
+}): ReactNode {
+  return createElement('input', {
+    className: 'arbor-input arbor-num',
+    type: 'number',
+    inputMode: 'numeric',
+    min: props.min,
+    max: props.max,
+    step: props.step ?? 1,
+    value: props.value,
+    onChange: (event) => { props.onChange(event.target.value) },
+  })
+}
+
+/**
+ * Arbor's own settings: the part a user can change, backed by arbor's settings
+ * item at `/env/settings.json`, and the facts that are not controls.
+ *
+ * The controls here are the values arbor reads while it runs: the judge modes
+ * its dispatcher consults per decision, the limits a new window opens with, the
+ * active-note budget a prefix is built against, and how long a chain's checkout
+ * is kept. Saving posts them to the facts service, which installs them through
+ * the host's environment path — the same install the model's own `reload` uses
+ * — so a value takes effect without a restart and a refused document changes
+ * nothing. The workspace backend and the shared folder are facts, not controls:
+ * both are settled when the host starts, and a switch would leave the running
+ * host exactly as it is.
+ */
 function SettingsBlock(props: {
   readonly settings: ArborSettingsFacts
   readonly dataRoot: string
@@ -1105,45 +1195,153 @@ function SettingsBlock(props: {
   readonly t: Translate
 }): ReactNode {
   const { settings, dataRoot, backend, shared, t } = props
+  const [draft, setDraft] = useState<SettingsDraft>(() => settingsDraft(settings))
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | { readonly error: string }>('idle')
+  const update = (patch: Partial<SettingsDraft>): void => {
+    setDraft(current => ({ ...current, ...patch }))
+    setStatus('idle')
+  }
+  const updateJudge = (kind: string, mode: string): void => {
+    update({ judge: { ...draft.judge, [kind]: mode } })
+  }
+  const save = async (): Promise<void> => {
+    const values = {
+      contextTokens: Number(draft.contextTokens),
+      reserveTokens: Number(draft.reserveTokens),
+      idleSeconds: Number(draft.idleSeconds),
+      protectionSeconds: Number(draft.protectionSeconds),
+      activeCount: Number(draft.activeCount),
+      activeTokenBudget: Number(draft.activeTokenBudget),
+      retentionHours: Number(draft.retentionHours),
+    }
+    const inRange = (
+      (Number.isInteger(values.contextTokens) && values.contextTokens >= 1_000 && values.contextTokens <= 2_000_000) &&
+      (Number.isInteger(values.reserveTokens) && values.reserveTokens >= 0 && values.reserveTokens < values.contextTokens) &&
+      (Number.isInteger(values.idleSeconds) && values.idleSeconds >= 0 && values.idleSeconds <= 86_400) &&
+      (Number.isInteger(values.protectionSeconds) && values.protectionSeconds >= 0 && values.protectionSeconds <= 3_600) &&
+      (Number.isInteger(values.activeCount) && values.activeCount >= 1 && values.activeCount <= 1_000) &&
+      (Number.isInteger(values.activeTokenBudget) && values.activeTokenBudget >= 100 && values.activeTokenBudget <= 1_000_000) &&
+      (Number.isInteger(values.retentionHours) && values.retentionHours >= 0 && values.retentionHours <= 8_760)
+    )
+    if (!inRange) {
+      setStatus({ error: t('settingsInvalid') })
+      return
+    }
+    setStatus('saving')
+    try {
+      const response = await fetch('/api/arbor/settings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          judgeModes: draft.judge,
+          window: {
+            contextTokens: values.contextTokens,
+            reserveTokens: values.reserveTokens,
+            idleSeconds: values.idleSeconds,
+            protectionSeconds: values.protectionSeconds,
+          },
+          notes: {
+            activeCount: values.activeCount,
+            activeTokenBudget: values.activeTokenBudget,
+          },
+          retentionMs: Math.round(values.retentionHours * 3_600_000),
+        }),
+      })
+      const answer = await response.json().catch(() => undefined) as { ok?: boolean; error?: string } | undefined
+      if (!response.ok || answer?.ok !== true) throw new Error(answer?.error ?? `HTTP ${response.status}`)
+      setStatus('saved')
+    } catch (error: unknown) {
+      setStatus({ error: error instanceof Error ? error.message : String(error) })
+    }
+  }
   const tiers = Object.entries(settings.modelTiers ?? {})
-  const judge = Object.entries(settings.judge?.modes ?? {})
-  const judgeLabel = (mode: string): string => mode === 'off' ? t('settingsJudgeOff') : mode === 'shadow' ? t('settingsJudgeShadow') : t('settingsJudgeOn')
-  const window = settings.window ?? {}
-  const notes = settings.notes ?? {}
-  const windowLine = [
-    window.idleSeconds === undefined ? '' : `${t('settingsIdle')} ${t('seconds', { value: window.idleSeconds })}`,
-    window.contextTokens === undefined ? '' : `${t('settingsContext')} ${compact(window.contextTokens)}`,
-    window.reserveTokens === undefined ? '' : `${t('settingsReserve')} ${compact(window.reserveTokens)}`,
-    window.protectionSeconds === undefined ? '' : `${t('settingsProtection')} ${t('seconds', { value: window.protectionSeconds })}`,
-  ].filter(Boolean).join(' · ')
-  const notesLine = [
-    notes.activeCount === undefined ? '' : `${t('settingsNotesCount')} ${notes.activeCount}`,
-    notes.activeTokenBudget === undefined ? '' : `${t('settingsNotesTokens')} ${compact(notes.activeTokenBudget)}`,
-  ].filter(Boolean).join(' · ')
+  const judge = settings.judge ?? {}
+  const facts: ReactNode[] = [
+    createElement(SettingRow, { key: 'dataRoot', label: t('dataRoot') }, createElement('span', { className: 'arbor-mono' }, dataRoot)),
+    createElement(SettingRow, { key: 'backend', label: t('settingsBackend') }, createElement('span', { className: 'arbor-label' }, backend)),
+    createElement(SettingRow, { key: 'shared', label: t('settingsShared') }, createElement('span', { className: 'arbor-mono' }, shared)),
+  ]
+  if (settings.identity !== undefined) {
+    facts.push(createElement(SettingRow, { key: 'identity', label: t('settingsIdentity') },
+      createElement('span', { className: 'arbor-clamp' }, settings.identity)))
+  }
+  if (settings.generalRules !== undefined && settings.generalRules.length > 0) {
+    facts.push(createElement(SettingRow, { key: 'rules', label: t('settingsRules') },
+      createElement('span', { className: 'arbor-num' }, String(settings.generalRules.length))))
+  }
+  if (tiers.length > 0) {
+    facts.push(createElement(SettingRow, { key: 'tiers', label: t('settingsTiers') },
+      createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, tiers.map(([tier, model]) => `${tier} → ${model}`).join(' · '))))
+  }
+  if (settings.defaultTier !== undefined) {
+    facts.push(createElement(SettingRow, { key: 'defaultTier', label: t('settingsDefaultTier') },
+      createElement('span', { className: 'arbor-label' }, settings.defaultTier)))
+  }
+  if (judge.maxCandidates !== undefined) {
+    facts.push(createElement(SettingRow, { key: 'maxCandidates', label: t('settingsJudgeCandidates') },
+      createElement('span', { className: 'arbor-num' }, String(judge.maxCandidates))))
+  }
+  if (judge.activeSetJudgeShare !== undefined) {
+    facts.push(createElement(SettingRow, { key: 'judgeShare', label: t('settingsJudgeShare') },
+      createElement('span', { className: 'arbor-num' }, `${Math.round(judge.activeSetJudgeShare * 100)}%`)))
+  }
+  if (settings.secrets !== undefined && settings.secrets.length > 0) {
+    facts.push(createElement(SettingRow, { key: 'secrets', label: t('settingsSecrets') },
+      createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, settings.secrets.join(' · '))))
+  }
   return createElement('div', { className: 'arbor-settings' },
-    createElement('div', { className: 'arbor-settings-source arbor-muted' }, t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment')),
+    createElement('div', { className: 'arbor-settings-source arbor-muted' },
+      t(settings.source === 'environment' ? 'settingsSourceEnvironment' : 'settingsSourceDeployment')),
     createElement('div', { className: 'arbor-settings-group' },
-      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, t('settingsHostData')),
-      createElement(SettingRow, { label: t('dataRoot') }, createElement('span', { className: 'arbor-mono' }, dataRoot)),
-      createElement(SettingRow, { label: t('settingsBackend') }, createElement('span', { className: 'arbor-label' }, backend)),
-      createElement(SettingRow, { label: t('settingsShared') }, createElement('span', { className: 'arbor-mono' }, shared))),
-    settings.identity === undefined ? null : createElement(SettingRow, { label: t('settingsIdentity') },
-      createElement('span', { className: 'arbor-clamp' }, settings.identity)),
-    settings.generalRules === undefined || settings.generalRules.length === 0 ? null : createElement(SettingRow, { label: t('settingsRules') },
-      createElement('span', { className: 'arbor-num' }, String(settings.generalRules.length))),
-    tiers.length === 0 ? null : createElement(SettingRow, { label: t('settingsTiers') },
-      createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, tiers.map(([tier, model]) => `${tier} → ${model}`).join(' · '))),
-    settings.defaultTier === undefined ? null : createElement(SettingRow, { label: t('settingsDefaultTier') },
-      createElement('span', { className: 'arbor-label' }, settings.defaultTier)),
-    judge.length === 0 ? null : createElement(SettingRow, { label: t('settingsJudge') },
-      createElement('span', { className: 'arbor-tags' }, judge.map(([kind, mode]) => createElement('span', {
-        key: kind,
-        className: `arbor-tag arbor-tag-${mode === 'off' ? 'plain' : mode === 'shadow' ? 'warn' : 'ok'}`,
-      }, `${kind} ${judgeLabel(mode)}`)))),
-    windowLine === '' ? null : createElement(SettingRow, { label: t('settingsWindow') }, createElement('span', { className: 'arbor-num' }, windowLine)),
-    notesLine === '' ? null : createElement(SettingRow, { label: t('settingsNotes') }, createElement('span', { className: 'arbor-num' }, notesLine)),
-    settings.secrets === undefined || settings.secrets.length === 0 ? null : createElement(SettingRow, { label: t('settingsSecrets') },
-      createElement('span', { className: 'arbor-mono arbor-settings-wrap' }, settings.secrets.join(' · '))),
+      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, t('settingsEditable')),
+      ...JUDGE_KINDS.map(kind => createElement(EditRow, { key: kind, label: t(JUDGE_LABELS[kind] ?? kind) },
+        createElement('select', {
+          className: 'arbor-select',
+          value: draft.judge[kind] ?? 'on',
+          onChange: (event: { target: { value: string } }) => { updateJudge(kind, event.target.value) },
+        }, ...JUDGE_MODES.map(mode => createElement('option', { key: mode, value: mode },
+          t(mode === 'off' ? 'settingsJudgeOff' : mode === 'shadow' ? 'settingsJudgeShadow' : 'settingsJudgeOn')))))),
+      createElement(EditRow, { label: t('settingsWindowContext') }, createElement(EditNumber, {
+        value: draft.contextTokens, min: 1_000, max: 2_000_000,
+        onChange: value => { update({ contextTokens: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsWindowReserve') }, createElement(EditNumber, {
+        value: draft.reserveTokens, min: 0, max: 1_000_000,
+        onChange: value => { update({ reserveTokens: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsWindowIdle') }, createElement(EditNumber, {
+        value: draft.idleSeconds, min: 0, max: 86_400,
+        onChange: value => { update({ idleSeconds: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsWindowProtection') }, createElement(EditNumber, {
+        value: draft.protectionSeconds, min: 0, max: 3_600,
+        onChange: value => { update({ protectionSeconds: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsNotesCount') }, createElement(EditNumber, {
+        value: draft.activeCount, min: 1, max: 1_000,
+        onChange: value => { update({ activeCount: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsNotesTokens') }, createElement(EditNumber, {
+        value: draft.activeTokenBudget, min: 100, max: 1_000_000,
+        onChange: value => { update({ activeTokenBudget: value }) },
+      })),
+      createElement(EditRow, { label: t('settingsRetention'), hint: t('settingsRetentionHint') }, createElement(EditNumber, {
+        value: draft.retentionHours, min: 0, max: 8_760,
+        onChange: value => { update({ retentionHours: value }) },
+      }))),
+    createElement('div', { className: 'arbor-settings-actions' },
+      createElement('button', {
+        type: 'button',
+        className: 'arbor-save',
+        disabled: status === 'saving',
+        onClick: () => { void save() },
+      }, t(status === 'saving' ? 'settingsSaving' : 'settingsSave')),
+      status === 'saved' ? createElement('span', { className: 'arbor-save-state' }, t('settingsSaved')) : null,
+      typeof status === 'object' ? createElement('span', { className: 'arbor-save-error' }, t('settingsSaveError', { message: status.error })) : null),
+    createElement('div', { className: 'arbor-settings-hint' }, t('settingsApplyHint')),
+    createElement('div', { className: 'arbor-settings-group' },
+      createElement('div', { className: 'arbor-settings-group-title arbor-label', 'data-arbor-text': 'display' }, t('settingsFacts')),
+      ...facts),
     createElement('div', { className: 'arbor-settings-note' }, t('settingsDsh')))
 }
 
@@ -1620,7 +1818,11 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
             node: createElement(Card, { className: 'arbor-loading-card' },
               createElement('div', { className: 'arbor-card-title', 'data-arbor-text': 'display' }, t('loading')),
               host.status === 'error' && host.error !== undefined
-                ? createElement('div', { className: 'arbor-error' }, t('error', { message: host.error }))
+                ? createElement('div', { className: 'arbor-error' },
+                  t('error', { message: host.error }),
+                  host.error.includes('404')
+                    ? createElement('div', { className: 'arbor-error-hint' }, t('restartHint'))
+                    : null)
                 : null),
           }],
         })

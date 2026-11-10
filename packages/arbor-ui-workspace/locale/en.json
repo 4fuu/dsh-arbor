@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor workspace picker",
+    "description": "The dsh-arbor browser package for the project picker: arbor's shared-folder projects are listed for an arbor session only, and a directory outside them is marked external"
+  }
+}

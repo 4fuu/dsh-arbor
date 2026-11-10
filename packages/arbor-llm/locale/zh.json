@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Arbor 模型层",
+    "description": "arbor 的 AgentBackend：每个窗口的回合都通过 DSH 的 ctx.llm 和 ctx.tools 运行。"
+  }
+}

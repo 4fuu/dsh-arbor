@@ -53,6 +53,24 @@
 #      cannot arrive. The registration shape is pinned by proof 18, since this
 #      row is what makes the wrapper responsible for it.
 #
+#      The wrapper keeps each caller's own context. A registration's disposer
+#      is an effect on the context it was made through, and `ctx.slots` is a
+#      traceable proxy that binds that context per caller: forwarding through a
+#      pre-bound `register` would put every registration made while this plugin
+#      is live — DSH's sidebar, its panel list, the workspace browser — on this
+#      plugin's fiber, and disabling the bundle would then tear down DSH's own
+#      seats. The wrapped seats also read their filter from a page-wide store,
+#      so a disposed package leaves the shipped picker and sidebar exactly as
+#      they were, and a later enable filters them again without a reload.
+#
+#      What a live change can and cannot do: disabling and uninstalling restore
+#      every client seat. Enabling re-applies the client half, but DSH's host
+#      loader cannot provide the `agents` service again while the base row's
+#      registry is still registered, so the arbor host rows wait and the Arbor
+#      page tells the user to restart DSH. A version update disposes the old
+#      package first; the client repair in `@4fu/dsh-arbor-ui` reloads the page
+#      once when that old dispose removed DSH's sidebar (2026.1110.1 did).
+#
 # Row order carries no load semantics: activation is service-availability
 # driven, so the insert position does not matter.
 

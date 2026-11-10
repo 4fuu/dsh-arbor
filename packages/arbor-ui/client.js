@@ -316,6 +316,9 @@ var en = {
   notArbor: "This session does not run on arbor.",
   loading: "Reading arbor\u2026",
   error: "The arbor channel is unavailable: {message}",
+  reloadNotice: "Arbor was updated. Reloading the page to restore the DSH sidebar\u2026",
+  restartHint: "If Arbor was just enabled, restart DSH to load its host plugins.",
+  enableRestartNotice: "Arbor is enabled. Restart DSH before using arbor sessions; its host side loads at startup.",
   retry: "Retrying\u2026",
   statusRunning: "Running",
   statusIdle: "Idle",
@@ -414,6 +417,28 @@ var en = {
   settingsJudgeShadow: "shadow",
   settingsDsh: "DSH's Agent loop page configures ordinary sessions; an arbor window runs under the tier and window limits above.",
   settingsEmpty: "Arbor runs on its own defaults.",
+  settingsEditable: "Settings",
+  settingsFacts: "Facts",
+  settingsSave: "Save",
+  settingsSaving: "Saving\u2026",
+  settingsSaved: "Saved",
+  settingsSaveError: "Could not save: {message}",
+  settingsInvalid: "Enter a whole number in every field.",
+  settingsApplyHint: "Judge modes apply to the next decision; window limits apply to windows opened after saving. No restart is needed.",
+  judgeFilter: "Filter",
+  judgeRoute: "Route",
+  judgeModelTier: "Model tier",
+  judgeNotice: "Notice",
+  judgeBroadcast: "Broadcast",
+  judgeActiveSet: "Active set",
+  settingsWindowContext: "Context tokens",
+  settingsWindowReserve: "Reserved tokens",
+  settingsWindowIdle: "Idle seconds",
+  settingsWindowProtection: "Protection seconds",
+  settingsRetention: "Keep checkouts (hours)",
+  settingsRetentionHint: "0 keeps them forever.",
+  settingsJudgeCandidates: "Judge candidates",
+  settingsJudgeShare: "Active-set judge share",
   searchPlaceholder: "Search the journal and notes",
   searchButton: "Search",
   searchEmpty: "Nothing matched.",
@@ -532,6 +557,9 @@ var zh = {
   notArbor: "\u8FD9\u4E2A\u4F1A\u8BDD\u4E0D\u662F arbor \u4F1A\u8BDD\u3002",
   loading: "\u6B63\u5728\u8BFB\u53D6 arbor\u2026",
   error: "arbor \u901A\u9053\u4E0D\u53EF\u7528\uFF1A{message}",
+  reloadNotice: "Arbor \u5DF2\u66F4\u65B0\uFF0C\u6B63\u5728\u5237\u65B0\u9875\u9762\u4EE5\u6062\u590D DSH \u4FA7\u8FB9\u680F\u2026",
+  restartHint: "\u5982\u679C\u521A\u521A\u542F\u7528 Arbor\uFF0C\u8BF7\u91CD\u542F DSH \u4EE5\u52A0\u8F7D\u5B83\u7684\u5BBF\u4E3B\u63D2\u4EF6\u3002",
+  enableRestartNotice: "Arbor \u5DF2\u542F\u7528\u3002\u8BF7\u91CD\u542F DSH \u540E\u518D\u4F7F\u7528 Arbor \u4F1A\u8BDD\uFF1B\u5B83\u7684\u5BBF\u4E3B\u90E8\u5206\u5728\u542F\u52A8\u65F6\u52A0\u8F7D\u3002",
   retry: "\u6B63\u5728\u91CD\u8BD5\u2026",
   statusRunning: "\u8FD0\u884C\u4E2D",
   statusIdle: "\u7A7A\u95F2",
@@ -630,6 +658,28 @@ var zh = {
   settingsJudgeShadow: "\u5F71\u5B50",
   settingsDsh: "DSH \u7684 Agent loop \u63D2\u4EF6\u9875\u9762\u7BA1\u7684\u662F\u666E\u901A\u4F1A\u8BDD\uFF1Barbor \u7A97\u53E3\u6309\u4E0A\u9762\u7684\u5C42\u7EA7\u548C\u7A97\u53E3\u9650\u5236\u8FD0\u884C\u3002",
   settingsEmpty: "arbor \u4F7F\u7528\u81EA\u5DF1\u7684\u9ED8\u8BA4\u503C\u3002",
+  settingsEditable: "\u8BBE\u7F6E",
+  settingsFacts: "\u4E8B\u5B9E",
+  settingsSave: "\u4FDD\u5B58",
+  settingsSaving: "\u6B63\u5728\u4FDD\u5B58\u2026",
+  settingsSaved: "\u5DF2\u4FDD\u5B58",
+  settingsSaveError: "\u4FDD\u5B58\u5931\u8D25\uFF1A{message}",
+  settingsInvalid: "\u6BCF\u4E2A\u5B57\u6BB5\u90FD\u8981\u586B\u5199\u6574\u6570\u3002",
+  settingsApplyHint: "\u5224\u65AD\u6A21\u5F0F\u4ECE\u4E0B\u4E00\u6B21\u51B3\u7B56\u8D77\u751F\u6548\uFF1B\u7A97\u53E3\u9650\u5236\u4ECE\u4FDD\u5B58\u540E\u65B0\u5F00\u7684\u7A97\u53E3\u8D77\u751F\u6548\uFF0C\u65E0\u9700\u91CD\u542F\u3002",
+  judgeFilter: "\u8FC7\u6EE4",
+  judgeRoute: "\u8DEF\u7531",
+  judgeModelTier: "\u6A21\u578B\u5C42\u7EA7",
+  judgeNotice: "\u901A\u77E5",
+  judgeBroadcast: "\u5E7F\u64AD",
+  judgeActiveSet: "\u6D3B\u8DC3\u96C6",
+  settingsWindowContext: "\u4E0A\u4E0B\u6587\u4EE4\u724C",
+  settingsWindowReserve: "\u9884\u7559\u4EE4\u724C",
+  settingsWindowIdle: "\u7A7A\u95F2\u79D2\u6570",
+  settingsWindowProtection: "\u4FDD\u62A4\u79D2\u6570",
+  settingsRetention: "\u4FDD\u7559\u68C0\u51FA\u76EE\u5F55\uFF08\u5C0F\u65F6\uFF09",
+  settingsRetentionHint: "0 \u8868\u793A\u6C38\u4E45\u4FDD\u7559\u3002",
+  settingsJudgeCandidates: "\u5224\u65AD\u5019\u9009\u6570",
+  settingsJudgeShare: "\u6D3B\u8DC3\u96C6\u5224\u65AD\u6743\u91CD",
   searchPlaceholder: "\u641C\u7D22\u65E5\u5FD7\u4E0E\u7B14\u8BB0",
   searchButton: "\u641C\u7D22",
   searchEmpty: "\u6CA1\u6709\u547D\u4E2D\u3002",
@@ -646,6 +696,41 @@ var zh = {
   tokens: "\u4EE4\u724C",
   window: "\u7A97\u53E3",
   heroLiveNoBoard: "{window} \u6B63\u5728\u5E72\u6D3B\uFF0C\u770B\u677F\u7A7A\u7740\u3002"
+};
+var PRESET_NAMESPACE = "arborPreset";
+var presetCopy = {
+  en: {
+    presetName: "Arbor mode",
+    presetDescription: "Runs the session through arbor: one shared journal, one note store and one board, with the reply streamed back as an assistant message."
+  },
+  zh: {
+    presetName: "Arbor \u6A21\u5F0F",
+    presetDescription: "\u901A\u8FC7 arbor \u8FD0\u884C\u4F1A\u8BDD\uFF1A\u4E00\u4E2A\u5171\u4EAB\u65E5\u5FD7\u3001\u4E00\u4E2A\u7B14\u8BB0\u5E93\u548C\u4E00\u5757\u770B\u677F\uFF0C\u56DE\u590D\u4EE5\u52A9\u624B\u6D88\u606F\u6D41\u5F0F\u8FD4\u56DE\u3002"
+  },
+  ja: {
+    presetName: "Arbor \u30E2\u30FC\u30C9",
+    presetDescription: "arbor \u3067\u30BB\u30C3\u30B7\u30E7\u30F3\u3092\u5B9F\u884C\u3057\u307E\u3059\u3002\u5171\u6709\u30B8\u30E3\u30FC\u30CA\u30EB\u3001\u30CE\u30FC\u30C8\u30B9\u30C8\u30A2\u3001\u30DC\u30FC\u30C9\u304C\u305D\u308C\u305E\u308C 1 \u3064\u3042\u308A\u3001\u8FD4\u4FE1\u306F\u30A2\u30B7\u30B9\u30BF\u30F3\u30C8\u30E1\u30C3\u30BB\u30FC\u30B8\u3068\u3057\u3066\u30B9\u30C8\u30EA\u30FC\u30DF\u30F3\u30B0\u3055\u308C\u307E\u3059\u3002"
+  },
+  es: {
+    presetName: "Modo Arbor",
+    presetDescription: "Ejecuta la sesi\xF3n a trav\xE9s de arbor: un diario compartido, un almac\xE9n de notas y un tablero, con la respuesta transmitida como mensaje del asistente."
+  },
+  fr: {
+    presetName: "Mode Arbor",
+    presetDescription: "Ex\xE9cute la session via arbor : un journal partag\xE9, un stockage de notes et un tableau, avec la r\xE9ponse diffus\xE9e en tant que message de l\u2019assistant."
+  },
+  de: {
+    presetName: "Arbor-Modus",
+    presetDescription: "F\xFChrt die Sitzung \xFCber arbor aus: ein gemeinsames Journal, ein Notizspeicher und ein Board, wobei die Antwort als Assistentenmeldung gestreamt wird."
+  },
+  ru: {
+    presetName: "\u0420\u0435\u0436\u0438\u043C Arbor",
+    presetDescription: "\u0417\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u0442 \u0441\u0435\u0430\u043D\u0441 \u0447\u0435\u0440\u0435\u0437 arbor: \u043E\u0434\u0438\u043D \u043E\u0431\u0449\u0438\u0439 \u0436\u0443\u0440\u043D\u0430\u043B, \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0438 \u0434\u043E\u0441\u043A\u0430, \u0430 \u043E\u0442\u0432\u0435\u0442 \u043F\u0435\u0440\u0435\u0434\u0430\u0451\u0442\u0441\u044F \u043F\u043E\u0442\u043E\u043A\u043E\u043C \u043A\u0430\u043A \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u0430\u0441\u0441\u0438\u0441\u0442\u0435\u043D\u0442\u0430."
+  },
+  pt: {
+    presetName: "Modo Arbor",
+    presetDescription: "Executa a sess\xE3o pelo arbor: um di\xE1rio compartilhado, um armazenamento de notas e um quadro, com a resposta transmitida como mensagem do assistente."
+  }
 };
 function format(template, args) {
   if (args === void 0) return template;
@@ -803,6 +888,7 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-workspace-item{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0;font-size:11px}
 .arbor-page .arbor-muted{color:var(--dsw-alias-label-tertiary,#81858c);font-size:11px}
 .arbor-page .arbor-error{color:var(--dsw-alias-state-error-primary,#ef4444);font-size:11px;line-height:1.5}
+.arbor-page .arbor-error-hint{margin-top:3px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-mono{font-family:var(--arbor-font-code);font-size:10.5px;overflow-wrap:anywhere}
 .arbor-page .arbor-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .arbor-page .arbor-label{letter-spacing:.02em}
@@ -813,9 +899,9 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-pill{height:30px;padding:0 13px;border:none;border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
 .arbor-page .arbor-pill:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-pill.is-active{background:var(--dsw-alias-label-primary,#0f1115);color:var(--dsw-alias-label-primary-foreground,#fff)}
-.arbor-page .arbor-sheet-layer{position:fixed;inset:0;z-index:60;display:flex;justify-content:flex-end}
+.arbor-page .arbor-sheet-layer{position:fixed;inset:var(--dsh-frame-chrome-top,0px) 0 0;z-index:60;display:flex;justify-content:flex-end}
 .arbor-page .arbor-sheet-backdrop{position:absolute;inset:0;background:var(--dsw-alias-bg-mask-2,#0000001f);backdrop-filter:blur(1px)}
-.arbor-page .arbor-sheet{position:relative;width:min(560px,100%);height:100%;overflow:auto;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-1,#fff));border-left:1px solid var(--dsw-alias-border-l1,#0000000a);box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);padding:18px 20px 28px;display:flex;flex-direction:column;gap:14px}
+.arbor-page .arbor-sheet{position:relative;width:min(560px,100%);height:100%;overflow:auto;background:var(--dsw-alias-bg-layer-2,var(--dsw-alias-bg-base,#fff));border-left:1px solid var(--dsw-alias-border-l1,#0000000a);box-shadow:var(--dsw-elevation-prominent,0 3px 8px #0000000a);padding:18px 20px 28px;display:flex;flex-direction:column;gap:14px}
 .arbor-page .arbor-sheet-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:10px;padding-bottom:10px;background:inherit;border-bottom:1px solid var(--dsw-alias-border-l1,#0000000a)}
 .arbor-page .arbor-sheet-title{flex:1;margin:0;font-size:16px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-sheet-body{display:flex;flex-direction:column;gap:12px}
@@ -828,6 +914,20 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-setting-key{flex:none;width:98px;font-size:9.5px;line-height:1.45;letter-spacing:.02em;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-setting-value{flex:1;min-width:0;font-size:11.5px;line-height:1.55;color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-settings-wrap{overflow-wrap:anywhere}
+.arbor-page .arbor-edit-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:3px 0}
+.arbor-page .arbor-edit-label{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+.arbor-page .arbor-edit-hint{font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.arbor-page .arbor-edit-control{flex:none;display:flex;align-items:center;gap:6px}
+.arbor-page .arbor-input,.arbor-page .arbor-select{height:27px;border:1px solid var(--dsw-alias-border-l2,#00000014);border-radius:7px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:11.5px;padding:0 7px;outline:none}
+.arbor-page .arbor-input{width:92px;text-align:right}
+.arbor-page .arbor-select{min-width:86px}
+.arbor-page .arbor-input:focus,.arbor-page .arbor-select:focus{border-color:var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary,#4176e6))}
+.arbor-page .arbor-settings-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.arbor-page .arbor-save{height:30px;padding:0 15px;border:none;border-radius:8px;background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#0f1115));color:var(--dsw-alias-label-primary-foreground,#fff);font:inherit;font-size:12px;cursor:pointer}
+.arbor-page .arbor-save:disabled{opacity:.6;cursor:default}
+.arbor-page .arbor-save-state{font-size:11.5px;color:var(--dsw-alias-state-success-primary,#22c55e)}
+.arbor-page .arbor-save-error{font-size:11px;line-height:1.5;color:var(--dsw-alias-state-error-primary,#ef4444);overflow-wrap:anywhere}
+.arbor-page .arbor-settings-hint{font-size:10.5px;line-height:1.55;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-settings-note{padding:10px 12px;border-radius:11px;border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 22%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 7%,var(--dsw-alias-bg-layer-1,#fff));font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-search{display:flex;flex-direction:column;gap:8px}
 .arbor-page .arbor-search-row{display:flex;gap:7px;align-items:center}
@@ -1812,69 +1912,268 @@ function SettingRow(props) {
     (0, import_react.createElement)("span", { className: "arbor-setting-value" }, props.children)
   );
 }
+var JUDGE_KINDS = ["filter", "route", "model_tier", "notice", "broadcast", "active_set"];
+var JUDGE_LABELS = {
+  filter: "judgeFilter",
+  route: "judgeRoute",
+  model_tier: "judgeModelTier",
+  notice: "judgeNotice",
+  broadcast: "judgeBroadcast",
+  active_set: "judgeActiveSet"
+};
+var JUDGE_MODES = ["off", "shadow", "on"];
+function settingsDraft(settings) {
+  return {
+    judge: Object.fromEntries(JUDGE_KINDS.map((kind) => [kind, settings.judge?.modes?.[kind] ?? "on"])),
+    contextTokens: String(settings.window?.contextTokens ?? 2e5),
+    reserveTokens: String(settings.window?.reserveTokens ?? 4e3),
+    idleSeconds: String(settings.window?.idleSeconds ?? 300),
+    protectionSeconds: String(settings.window?.protectionSeconds ?? 60),
+    activeCount: String(settings.notes?.activeCount ?? 40),
+    activeTokenBudget: String(settings.notes?.activeTokenBudget ?? 8e3),
+    retentionHours: String((settings.workspaces?.retentionMs ?? 0) / 36e5)
+  };
+}
+function EditRow(props) {
+  return (0, import_react.createElement)(
+    "label",
+    { className: "arbor-edit-row" },
+    (0, import_react.createElement)(
+      "span",
+      { className: "arbor-edit-label" },
+      (0, import_react.createElement)("span", null, props.label),
+      props.hint === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-edit-hint" }, props.hint)
+    ),
+    (0, import_react.createElement)("span", { className: "arbor-edit-control" }, props.children)
+  );
+}
+function EditNumber(props) {
+  return (0, import_react.createElement)("input", {
+    className: "arbor-input arbor-num",
+    type: "number",
+    inputMode: "numeric",
+    min: props.min,
+    max: props.max,
+    step: props.step ?? 1,
+    value: props.value,
+    onChange: (event) => {
+      props.onChange(event.target.value);
+    }
+  });
+}
 function SettingsBlock(props) {
   const { settings, dataRoot, backend, shared, t } = props;
+  const [draft, setDraft] = (0, import_react.useState)(() => settingsDraft(settings));
+  const [status, setStatus] = (0, import_react.useState)("idle");
+  const update = (patch) => {
+    setDraft((current) => ({ ...current, ...patch }));
+    setStatus("idle");
+  };
+  const updateJudge = (kind, mode) => {
+    update({ judge: { ...draft.judge, [kind]: mode } });
+  };
+  const save = async () => {
+    const values = {
+      contextTokens: Number(draft.contextTokens),
+      reserveTokens: Number(draft.reserveTokens),
+      idleSeconds: Number(draft.idleSeconds),
+      protectionSeconds: Number(draft.protectionSeconds),
+      activeCount: Number(draft.activeCount),
+      activeTokenBudget: Number(draft.activeTokenBudget),
+      retentionHours: Number(draft.retentionHours)
+    };
+    const inRange = Number.isInteger(values.contextTokens) && values.contextTokens >= 1e3 && values.contextTokens <= 2e6 && (Number.isInteger(values.reserveTokens) && values.reserveTokens >= 0 && values.reserveTokens < values.contextTokens) && (Number.isInteger(values.idleSeconds) && values.idleSeconds >= 0 && values.idleSeconds <= 86400) && (Number.isInteger(values.protectionSeconds) && values.protectionSeconds >= 0 && values.protectionSeconds <= 3600) && (Number.isInteger(values.activeCount) && values.activeCount >= 1 && values.activeCount <= 1e3) && (Number.isInteger(values.activeTokenBudget) && values.activeTokenBudget >= 100 && values.activeTokenBudget <= 1e6) && (Number.isInteger(values.retentionHours) && values.retentionHours >= 0 && values.retentionHours <= 8760);
+    if (!inRange) {
+      setStatus({ error: t("settingsInvalid") });
+      return;
+    }
+    setStatus("saving");
+    try {
+      const response = await fetch("/api/arbor/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          judgeModes: draft.judge,
+          window: {
+            contextTokens: values.contextTokens,
+            reserveTokens: values.reserveTokens,
+            idleSeconds: values.idleSeconds,
+            protectionSeconds: values.protectionSeconds
+          },
+          notes: {
+            activeCount: values.activeCount,
+            activeTokenBudget: values.activeTokenBudget
+          },
+          retentionMs: Math.round(values.retentionHours * 36e5)
+        })
+      });
+      const answer = await response.json().catch(() => void 0);
+      if (!response.ok || answer?.ok !== true) throw new Error(answer?.error ?? `HTTP ${response.status}`);
+      setStatus("saved");
+    } catch (error) {
+      setStatus({ error: error instanceof Error ? error.message : String(error) });
+    }
+  };
   const tiers = Object.entries(settings.modelTiers ?? {});
-  const judge = Object.entries(settings.judge?.modes ?? {});
-  const judgeLabel = (mode) => mode === "off" ? t("settingsJudgeOff") : mode === "shadow" ? t("settingsJudgeShadow") : t("settingsJudgeOn");
-  const window2 = settings.window ?? {};
-  const notes = settings.notes ?? {};
-  const windowLine = [
-    window2.idleSeconds === void 0 ? "" : `${t("settingsIdle")} ${t("seconds", { value: window2.idleSeconds })}`,
-    window2.contextTokens === void 0 ? "" : `${t("settingsContext")} ${compact(window2.contextTokens)}`,
-    window2.reserveTokens === void 0 ? "" : `${t("settingsReserve")} ${compact(window2.reserveTokens)}`,
-    window2.protectionSeconds === void 0 ? "" : `${t("settingsProtection")} ${t("seconds", { value: window2.protectionSeconds })}`
-  ].filter(Boolean).join(" \xB7 ");
-  const notesLine = [
-    notes.activeCount === void 0 ? "" : `${t("settingsNotesCount")} ${notes.activeCount}`,
-    notes.activeTokenBudget === void 0 ? "" : `${t("settingsNotesTokens")} ${compact(notes.activeTokenBudget)}`
-  ].filter(Boolean).join(" \xB7 ");
+  const judge = settings.judge ?? {};
+  const facts = [
+    (0, import_react.createElement)(SettingRow, { key: "dataRoot", label: t("dataRoot") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, dataRoot)),
+    (0, import_react.createElement)(SettingRow, { key: "backend", label: t("settingsBackend") }, (0, import_react.createElement)("span", { className: "arbor-label" }, backend)),
+    (0, import_react.createElement)(SettingRow, { key: "shared", label: t("settingsShared") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, shared))
+  ];
+  if (settings.identity !== void 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "identity", label: t("settingsIdentity") },
+      (0, import_react.createElement)("span", { className: "arbor-clamp" }, settings.identity)
+    ));
+  }
+  if (settings.generalRules !== void 0 && settings.generalRules.length > 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "rules", label: t("settingsRules") },
+      (0, import_react.createElement)("span", { className: "arbor-num" }, String(settings.generalRules.length))
+    ));
+  }
+  if (tiers.length > 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "tiers", label: t("settingsTiers") },
+      (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, tiers.map(([tier, model]) => `${tier} \u2192 ${model}`).join(" \xB7 "))
+    ));
+  }
+  if (settings.defaultTier !== void 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "defaultTier", label: t("settingsDefaultTier") },
+      (0, import_react.createElement)("span", { className: "arbor-label" }, settings.defaultTier)
+    ));
+  }
+  if (judge.maxCandidates !== void 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "maxCandidates", label: t("settingsJudgeCandidates") },
+      (0, import_react.createElement)("span", { className: "arbor-num" }, String(judge.maxCandidates))
+    ));
+  }
+  if (judge.activeSetJudgeShare !== void 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "judgeShare", label: t("settingsJudgeShare") },
+      (0, import_react.createElement)("span", { className: "arbor-num" }, `${Math.round(judge.activeSetJudgeShare * 100)}%`)
+    ));
+  }
+  if (settings.secrets !== void 0 && settings.secrets.length > 0) {
+    facts.push((0, import_react.createElement)(
+      SettingRow,
+      { key: "secrets", label: t("settingsSecrets") },
+      (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, settings.secrets.join(" \xB7 "))
+    ));
+  }
   return (0, import_react.createElement)(
     "div",
     { className: "arbor-settings" },
-    (0, import_react.createElement)("div", { className: "arbor-settings-source arbor-muted" }, t(settings.source === "environment" ? "settingsSourceEnvironment" : "settingsSourceDeployment")),
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-source arbor-muted" },
+      t(settings.source === "environment" ? "settingsSourceEnvironment" : "settingsSourceDeployment")
+    ),
     (0, import_react.createElement)(
       "div",
       { className: "arbor-settings-group" },
-      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, t("settingsHostData")),
-      (0, import_react.createElement)(SettingRow, { label: t("dataRoot") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, dataRoot)),
-      (0, import_react.createElement)(SettingRow, { label: t("settingsBackend") }, (0, import_react.createElement)("span", { className: "arbor-label" }, backend)),
-      (0, import_react.createElement)(SettingRow, { label: t("settingsShared") }, (0, import_react.createElement)("span", { className: "arbor-mono" }, shared))
+      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, t("settingsEditable")),
+      ...JUDGE_KINDS.map((kind) => (0, import_react.createElement)(
+        EditRow,
+        { key: kind, label: t(JUDGE_LABELS[kind] ?? kind) },
+        (0, import_react.createElement)("select", {
+          className: "arbor-select",
+          value: draft.judge[kind] ?? "on",
+          onChange: (event) => {
+            updateJudge(kind, event.target.value);
+          }
+        }, ...JUDGE_MODES.map((mode) => (0, import_react.createElement)(
+          "option",
+          { key: mode, value: mode },
+          t(mode === "off" ? "settingsJudgeOff" : mode === "shadow" ? "settingsJudgeShadow" : "settingsJudgeOn")
+        )))
+      )),
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowContext") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.contextTokens,
+        min: 1e3,
+        max: 2e6,
+        onChange: (value) => {
+          update({ contextTokens: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowReserve") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.reserveTokens,
+        min: 0,
+        max: 1e6,
+        onChange: (value) => {
+          update({ reserveTokens: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowIdle") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.idleSeconds,
+        min: 0,
+        max: 86400,
+        onChange: (value) => {
+          update({ idleSeconds: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsWindowProtection") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.protectionSeconds,
+        min: 0,
+        max: 3600,
+        onChange: (value) => {
+          update({ protectionSeconds: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsNotesCount") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.activeCount,
+        min: 1,
+        max: 1e3,
+        onChange: (value) => {
+          update({ activeCount: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsNotesTokens") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.activeTokenBudget,
+        min: 100,
+        max: 1e6,
+        onChange: (value) => {
+          update({ activeTokenBudget: value });
+        }
+      })),
+      (0, import_react.createElement)(EditRow, { label: t("settingsRetention"), hint: t("settingsRetentionHint") }, (0, import_react.createElement)(EditNumber, {
+        value: draft.retentionHours,
+        min: 0,
+        max: 8760,
+        onChange: (value) => {
+          update({ retentionHours: value });
+        }
+      }))
     ),
-    settings.identity === void 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsIdentity") },
-      (0, import_react.createElement)("span", { className: "arbor-clamp" }, settings.identity)
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-actions" },
+      (0, import_react.createElement)("button", {
+        type: "button",
+        className: "arbor-save",
+        disabled: status === "saving",
+        onClick: () => {
+          void save();
+        }
+      }, t(status === "saving" ? "settingsSaving" : "settingsSave")),
+      status === "saved" ? (0, import_react.createElement)("span", { className: "arbor-save-state" }, t("settingsSaved")) : null,
+      typeof status === "object" ? (0, import_react.createElement)("span", { className: "arbor-save-error" }, t("settingsSaveError", { message: status.error })) : null
     ),
-    settings.generalRules === void 0 || settings.generalRules.length === 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsRules") },
-      (0, import_react.createElement)("span", { className: "arbor-num" }, String(settings.generalRules.length))
-    ),
-    tiers.length === 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsTiers") },
-      (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, tiers.map(([tier, model]) => `${tier} \u2192 ${model}`).join(" \xB7 "))
-    ),
-    settings.defaultTier === void 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsDefaultTier") },
-      (0, import_react.createElement)("span", { className: "arbor-label" }, settings.defaultTier)
-    ),
-    judge.length === 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsJudge") },
-      (0, import_react.createElement)("span", { className: "arbor-tags" }, judge.map(([kind, mode]) => (0, import_react.createElement)("span", {
-        key: kind,
-        className: `arbor-tag arbor-tag-${mode === "off" ? "plain" : mode === "shadow" ? "warn" : "ok"}`
-      }, `${kind} ${judgeLabel(mode)}`)))
-    ),
-    windowLine === "" ? null : (0, import_react.createElement)(SettingRow, { label: t("settingsWindow") }, (0, import_react.createElement)("span", { className: "arbor-num" }, windowLine)),
-    notesLine === "" ? null : (0, import_react.createElement)(SettingRow, { label: t("settingsNotes") }, (0, import_react.createElement)("span", { className: "arbor-num" }, notesLine)),
-    settings.secrets === void 0 || settings.secrets.length === 0 ? null : (0, import_react.createElement)(
-      SettingRow,
-      { label: t("settingsSecrets") },
-      (0, import_react.createElement)("span", { className: "arbor-mono arbor-settings-wrap" }, settings.secrets.join(" \xB7 "))
+    (0, import_react.createElement)("div", { className: "arbor-settings-hint" }, t("settingsApplyHint")),
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-settings-group" },
+      (0, import_react.createElement)("div", { className: "arbor-settings-group-title arbor-label", "data-arbor-text": "display" }, t("settingsFacts")),
+      ...facts
     ),
     (0, import_react.createElement)("div", { className: "arbor-settings-note" }, t("settingsDsh"))
   );
@@ -2362,7 +2661,12 @@ function ArborPage(props) {
             Card,
             { className: "arbor-loading-card" },
             (0, import_react.createElement)("div", { className: "arbor-card-title", "data-arbor-text": "display" }, t("loading")),
-            host.status === "error" && host.error !== void 0 ? (0, import_react.createElement)("div", { className: "arbor-error" }, t("error", { message: host.error })) : null
+            host.status === "error" && host.error !== void 0 ? (0, import_react.createElement)(
+              "div",
+              { className: "arbor-error" },
+              t("error", { message: host.error }),
+              host.error.includes("404") ? (0, import_react.createElement)("div", { className: "arbor-error-hint" }, t("restartHint")) : null
+            ) : null
           )
         }]
       }) : activeSession === null ? (0, import_react.createElement)(Overview, {
@@ -2449,6 +2753,15 @@ var inject = ["slots"];
 function apply(ctx) {
   const slots = ctx.slots;
   const service = (name) => ctx.get(name);
+  let live = true;
+  const owned = [];
+  const own = (dispose2) => {
+    if (!live) {
+      dispose2();
+      return;
+    }
+    owned.push(dispose2);
+  };
   let dispose;
   let poll;
   let attempts = 0;
@@ -2460,19 +2773,92 @@ function apply(ctx) {
       poll = void 0;
     }
   };
+  ctx.effect(() => () => {
+    live = false;
+    stop();
+    for (const dispose2 of owned.splice(0).reverse()) {
+      try {
+        dispose2();
+      } catch {
+      }
+    }
+  }, "arbor-ui: slot entries, timers and assets");
   let bound;
+  let presetBound;
+  const localeListeners = /* @__PURE__ */ new Set();
   ctx.inject(["locale"], () => {
     const locale = service("locale");
     if (locale === void 0) return;
-    try {
-      locale.register(NAMESPACE, { zh, en });
-      bound = locale.bind(NAMESPACE);
-    } catch (error) {
-      ctx.logger.warn(`arbor-ui: the arbor locale did not register: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    ctx.effect(() => {
+      let unregister;
+      let unregisterPreset;
+      try {
+        unregister = locale.register(NAMESPACE, { zh, en });
+        unregisterPreset = locale.register(PRESET_NAMESPACE, presetCopy);
+        bound = locale.bind(NAMESPACE);
+        presetBound = locale.bind(PRESET_NAMESPACE);
+      } catch (error) {
+        ctx.logger.warn(`arbor-ui: the arbor locale did not register: ${error instanceof Error ? error.message : String(error)}`);
+        return () => {
+        };
+      }
+      const stop2 = locale.subscribe(() => {
+        for (const listener of [...localeListeners]) listener();
+      });
+      return () => {
+        stop2();
+        bound = void 0;
+        presetBound = void 0;
+        unregister?.();
+        unregisterPreset?.();
+      };
+    }, "arbor-ui: locale");
   });
   const t = (key, args) => (bound ?? fallbackTranslate)(key, args);
-  installStyles();
+  const presetT = (key, args) => {
+    if (presetBound !== void 0) return presetBound(key, args);
+    const english = presetCopy["en"]?.[key] ?? key;
+    return format(english, args);
+  };
+  const localizedSeats = /* @__PURE__ */ new WeakMap();
+  const localizeSeat = (store) => {
+    const cached = localizedSeats.get(store);
+    if (cached !== void 0) return cached;
+    let memo;
+    let revision = 0;
+    const listeners = /* @__PURE__ */ new Set();
+    const changed = () => {
+      revision += 1;
+      for (const listener of [...listeners]) listener();
+    };
+    const localized = {
+      subscribe(listener) {
+        listeners.add(listener);
+        localeListeners.add(changed);
+        const stop2 = store.subscribe(listener);
+        return () => {
+          listeners.delete(listener);
+          stop2();
+          if (listeners.size === 0) localeListeners.delete(changed);
+        };
+      },
+      getSnapshot() {
+        const base = store.getSnapshot();
+        if (memo !== void 0 && memo.base === base && memo.revision === revision) return memo.value;
+        const value = {
+          ...base,
+          ...base.options === void 0 ? {} : {
+            options: base.options.map((option) => option.id === ARBOR_PRESET ? { ...option, name: presetT("presetName"), description: presetT("presetDescription") } : option)
+          }
+        };
+        memo = { base, revision, value };
+        return value;
+      }
+    };
+    localizedSeats.set(store, localized);
+    return localized;
+  };
+  own(installStyles());
   ctx.effect(() => () => {
     closeChannels();
   }, "arbor-ui: channels");
@@ -2508,19 +2894,78 @@ function apply(ctx) {
       stop2?.();
     };
   };
-  registerSeat({
+  own(registerSeat({
     name: "main",
     key: PANEL_ID,
     locale: NAMESPACE,
     inject: () => ({ openDshSession })
-  }, ArborPage);
-  registerSeat({
+  }, ArborPage));
+  own(registerSeat({
     name: "sidebar.panellist",
     id: PANEL_ID,
     order: 10,
     locale: NAMESPACE,
     label: () => t("panelLabel")
-  }, ArborPanelIcon);
+  }, ArborPanelIcon));
+  const showNotice = (text, attribute) => {
+    if (typeof document === "undefined") return () => {
+    };
+    const notice = document.createElement("div");
+    notice.setAttribute(attribute, "");
+    notice.textContent = text;
+    notice.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;padding:10px 16px;border-radius:10px;background:#1f2329;color:#fff;font:13px/1.5 system-ui,sans-serif;box-shadow:0 8px 24px #0008;max-width:min(560px,calc(100vw - 32px))";
+    document.body.append(notice);
+    const timer = setTimeout(() => notice.remove(), 2e4);
+    return () => {
+      clearTimeout(timer);
+      notice.remove();
+    };
+  };
+  const REPAIR_FLAG = "dsh-arbor.sidebar-repair";
+  const watchSidebar = () => {
+    if (typeof window === "undefined" || typeof performance === "undefined") return;
+    const started = performance.now();
+    const timer = setInterval(() => {
+      if (slots.entriesOfSlot("sidebar").length > 0) {
+        clearInterval(timer);
+        window.sessionStorage.removeItem(REPAIR_FLAG);
+        return;
+      }
+      if (performance.now() - started < 2e3) return;
+      clearInterval(timer);
+      if (performance.now() < 1e4) return;
+      if (window.sessionStorage.getItem(REPAIR_FLAG) !== null) return;
+      window.sessionStorage.setItem(REPAIR_FLAG, "1");
+      showNotice(t("reloadNotice"), "data-arbor-reload-notice");
+      setTimeout(() => window.location.reload(), 1500);
+    }, 200);
+    own(() => clearInterval(timer));
+  };
+  watchSidebar();
+  const announceRestartNeeded = () => {
+    if (typeof window === "undefined" || typeof performance === "undefined") return;
+    if (performance.now() < 1e4) return;
+    let attempts2 = 0;
+    let announced = false;
+    const timer = setInterval(() => {
+      if (announced) return;
+      if (++attempts2 > 6) {
+        clearInterval(timer);
+        return;
+      }
+      void fetch("/api/arbor/settings").then((response) => {
+        if (response.status !== 404) {
+          clearInterval(timer);
+          return;
+        }
+        clearInterval(timer);
+        announced = true;
+        own(showNotice(t("enableRestartNotice"), "data-arbor-enable-notice"));
+      }).catch(() => void 0);
+    }, 1500);
+    own(() => clearInterval(timer));
+  };
+  announceRestartNeeded();
   let heroInject;
   let unboundSeat;
   const heroSeatFor = (sessionId) => {
@@ -2640,10 +3085,12 @@ function apply(ctx) {
     if (typeof shipped !== "function") return;
     const wrapped = (sessionId) => {
       const face = shipped(sessionId);
-      const select = face.select;
-      if (typeof select !== "function") return face;
+      const seat = face.hooks?.agentPresetSeat;
+      const withCopy = seat === void 0 ? face : { ...face, hooks: { ...face.hooks, agentPresetSeat: localizeSeat(seat) } };
+      const select = withCopy.select;
+      if (typeof select !== "function") return withCopy;
       return {
-        ...face,
+        ...withCopy,
         select: (id) => {
           if (!crossesArbor(id)) return select(id);
           void mintUnderPreset(id).then((taken) => {
@@ -2660,6 +3107,7 @@ function apply(ctx) {
       locale: entry.locale,
       inject: wrapped
     }, entry.component);
+    own(heroDispose);
   };
   const tryRegister = () => {
     if (dispose !== void 0) {
@@ -2684,6 +3132,7 @@ function apply(ctx) {
       locale: seat.locale,
       inject: seat.inject
     }, gate(seat));
+    own(dispose);
     tryShadowHeroSeat();
     stop();
   };
