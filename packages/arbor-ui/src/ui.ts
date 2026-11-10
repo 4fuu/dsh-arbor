@@ -26,6 +26,7 @@ import {
   createElement,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -178,6 +179,79 @@ function chainSummary(t: Translate, windows: readonly ArborWindowFacts[]): strin
     window: last?.ref ?? '—',
     state: last === undefined ? t('statusIdle') : stateLabel(t, last),
   })
+}
+
+/**
+ * How a window entered the chain: the link from the window before it.
+ *
+ * `restart` is arbor's own record — the predecessor ended with
+ * `host_restart` and this window names it as its continuation. `handoff` is
+ * every other continuation. `start` is the first window, or a window whose
+ * predecessor the journal does not name, so the reader never invents a link.
+ */
+type ChainLink = 'start' | 'restart' | 'handoff'
+
+/** One window with the link that carried it in, in arbor's chain order. */
+interface ChainStep {
+  readonly window: ArborWindowFacts
+  readonly link: ChainLink
+}
+
+/** A maximal run of windows carrying the same link. */
+interface ChainSegment {
+  readonly link: ChainLink
+  readonly windows: readonly ArborWindowFacts[]
+}
+
+/** Pair each window with the link that carried it in. */
+function chainSteps(windows: readonly ArborWindowFacts[]): ChainStep[] {
+  return windows.map((window, index) => {
+    const previous = windows[index - 1]
+    const link: ChainLink = previous === undefined || window.continuationOf !== previous.ref
+      ? 'start'
+      : previous.endReason === 'host_restart' ? 'restart' : 'handoff'
+    return { window, link }
+  })
+}
+
+/** Group adjacent windows that carry the same link, so a run is one segment. */
+function chainSegments(steps: readonly ChainStep[]): ChainSegment[] {
+  const segments: Array<{ link: ChainLink; windows: ArborWindowFacts[] }> = []
+  for (const step of steps) {
+    const last = segments.at(-1)
+    if (last !== undefined && last.link === step.link && step.link !== 'start') last.windows.push(step.window)
+    else segments.push({ link: step.link, windows: [step.window] })
+  }
+  return segments
+}
+
+/** How many windows end the restart run that reaches this step; 0 when it is not one. */
+function restartRunEndingAt(steps: readonly ChainStep[], index: number): number {
+  let count = 0
+  for (let at = index; at >= 0 && steps[at]?.link === 'restart'; at -= 1) count += 1
+  return count
+}
+
+/** From the first window's start to the last window's end, when both are known. */
+function chainSpan(t: Translate, windows: readonly ArborWindowFacts[]): string | undefined {
+  const first = windows[0]?.startedAt
+  const last = windows.at(-1)
+  const end = last?.endedAt ?? last?.startedAt
+  if (first === undefined || end === undefined) return undefined
+  return `${clock(first, t)} → ${clock(end, t)}`
+}
+
+/** A handoff's visible parts as one line, in arbor's order. */
+function handoffSummary(window: ArborWindowFacts): string | undefined {
+  const handoff = window.handoff
+  if (handoff === undefined) return undefined
+  const parts = [...(handoff.topics ?? []), ...(handoff.progress ?? []), ...(handoff.pending ?? [])]
+  return parts.length === 0 ? undefined : parts.join(' · ')
+}
+
+/** One translator-backed chain section label. */
+function ChainLabel(props: { readonly text: string }): ReactNode {
+  return createElement('span', { className: 'arbor-chain-label arbor-label', 'data-arbor-text': 'display' }, props.text)
 }
 
 function sessionTitle(session: ArborHostSessionFacts): string {
@@ -339,7 +413,7 @@ function MarkdownText(props: { readonly text: string }): ReactNode {
 /** What a card is, for its width and its paper treatment. */
 type SkyKind = 'window' | 'chain' | 'session' | 'workspace' | 'board' | 'note' | 'env' | 'schedule' | 'empty' | 'loading'
 
-/** One card on the scatter. `nodes` sizes a chain; `text` sizes a note. */
+/** One card on the scatter. `nodes` marks a chain's size; `text` sizes a note. */
 interface SkyItem {
   readonly key: string
   readonly kind: SkyKind
@@ -355,13 +429,23 @@ const SKY_GUTTER = 20
 const SKY_NARROW = 640
 
 /**
+ * The width of a chain card, whatever the chain's length.
+ *
+ * It used to grow with the node count (`nodes * 150 + 50`), which made a
+ * session with hundreds of windows wider than any screen. The card now shows
+ * the live end, the last few windows and one earlier-windows summary, so it
+ * reads as one column: wide enough for the current window's ref and a row's
+ * doing, and no wider. `nodes` only tells the packer to re-measure when the
+ * count changes.
+ */
+const CHAIN_WIDTH = 420
+
+/**
  * The narrowest a chain card may be.
  *
- * One node needs about 162 px of card, but the header also carries the kicker
- * and the session title: the kicker is about 72 px, the gap 8 px and the title
- * is capped at 170 px, so 250 px of content plus the card's 34 px padding is
- * the header's bound. Below 300 px the kicker is the part that gets ellipsized
- * first, which is how a one-node chain came to read "W...".
+ * The header carries the kicker and the session title; below it the current
+ * window's ref and state sit side by side. 300 px keeps the kicker from
+ * ellipsizing to "W..." while the scaled card shrinks on a small page.
  */
 const CHAIN_MIN_WIDTH = 300
 
@@ -398,7 +482,7 @@ function cardWidth(item: SkyItem, surface: number): number {
   const base = (() => {
     switch (item.kind) {
       case 'window': return 560
-      case 'chain': return Math.max(CHAIN_MIN_WIDTH, (item.nodes ?? 1) * 150 + 50)
+      case 'chain': return CHAIN_WIDTH
       case 'session':
       case 'workspace': return 360
       case 'env': return 320
@@ -612,6 +696,8 @@ function samePlacements(left: readonly SkyPlacement[], right: readonly SkyPlacem
 function Skyline(props: { readonly items: readonly SkyItem[] }): ReactNode {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
+  const [, setRevision] = useState(0)
+  const cellHeights = useRef(new Map<string, number>())
   const [layout, setLayout] = useState<{
     readonly key: string
     readonly placements: readonly SkyPlacement[]
@@ -632,6 +718,30 @@ function Skyline(props: { readonly items: readonly SkyItem[] }): ReactNode {
     observer.observe(surface)
     return () => { observer.disconnect() }
   }, [])
+
+  // A card can grow after the skyline's own render — a chain opens its
+  // earlier list, a stream uncollapses — without this component rendering
+  // again. Observe each cell's height and re-pack when one changes, so the
+  // cards below move instead of being covered.
+  useEffect(() => {
+    const surface = ref.current
+    if (surface === null || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(entries => {
+      let changed = false
+      for (const entry of entries) {
+        const cell = entry.target as HTMLElement
+        const name = cell.dataset['skyKey']
+        if (name === undefined) continue
+        const height = cell.offsetHeight
+        if (cellHeights.current.get(name) === height) continue
+        cellHeights.current.set(name, height)
+        changed = true
+      }
+      if (changed) setRevision(value => value + 1)
+    })
+    for (const cell of Array.from(surface.querySelectorAll<HTMLElement>('[data-sky-key]'))) observer.observe(cell)
+    return () => { observer.disconnect() }
+  }, [key])
 
   useLayoutEffect(() => {
     const surface = ref.current
@@ -877,7 +987,254 @@ function WindowCard(props: {
       window.startedAt === undefined ? null : createElement('span', null, ' · ', clock(window.startedAt, t))))
 }
 
-/** The chain as a row of nodes, with the link that carried each continuation. */
+/** How many windows before the current one stay in full. */
+const CHAIN_RECENT = 3
+
+/** One row of the earlier list, in pixels. A fixed height is what lets it virtualize. */
+const CHAIN_ROW_HEIGHT = 30
+
+/** How much of the earlier list is visible at once. */
+const CHAIN_LIST_HEIGHT = 240
+
+/** One recent window as a one-line card that opens its details. */
+function ChainStepRow(props: {
+  readonly step: ChainStep
+  readonly t: Translate
+  readonly onOpen: (window: ArborWindowFacts) => void
+}): ReactNode {
+  const { window, link } = props.step
+  return createElement('button', {
+    type: 'button',
+    className: `arbor-chain-step arbor-chain-step-${window.state}`,
+    onClick: () => { props.onOpen(window) },
+    'aria-label': props.t('openWindowDetails', { window: window.ref }),
+    'data-arbor-window': window.ref,
+  },
+    createElement('span', { className: 'arbor-chain-step-ref arbor-num', 'data-arbor-text': 'numeric' }, window.ref),
+    createElement('span', { className: 'arbor-chain-step-state arbor-label', 'data-arbor-text': 'display' }, stateLabel(props.t, window)),
+    window.doing === undefined ? null : createElement('span', { className: 'arbor-chain-step-doing', 'data-arbor-text': 'body' }, window.doing),
+    window.startedAt === undefined ? null : createElement('span', { className: 'arbor-chain-step-time arbor-num', 'data-arbor-text': 'numeric' }, clock(window.startedAt, props.t)),
+    link !== 'restart' ? null : createElement('span', { className: 'arbor-chain-step-link arbor-label', 'data-arbor-text': 'display' }, props.t('chainRestart')),
+    window.handoff === undefined ? null : createElement('span', { className: 'arbor-chain-step-handoff arbor-tag arbor-tag-warn' }, props.t('handoff')))
+}
+
+/**
+ * A run of restarted windows as one row.
+ *
+ * A restart storm is the case the chain has to survive: each window is one
+ * line here, not one card, and the row says how many there were. Every ref is
+ * still a button, so every window keeps its way into its details.
+ */
+function ChainRunRow(props: {
+  readonly steps: readonly ChainStep[]
+  readonly t: Translate
+  readonly onOpen: (window: ArborWindowFacts) => void
+}): ReactNode {
+  const first = props.steps[0]?.window
+  const last = props.steps[props.steps.length - 1]?.window
+  const span = first === undefined || last === undefined ? undefined : chainSpan(props.t, [first, last])
+  return createElement('div', { className: 'arbor-chain-run' },
+    createElement('span', { className: 'arbor-chain-run-kind arbor-tag arbor-tag-warn arbor-label', 'data-arbor-text': 'display' }, props.t('chainRestartCount', { count: props.steps.length })),
+    createElement('span', { className: 'arbor-chain-run-refs' },
+      props.steps.map(step => createElement('button', {
+        key: step.window.ref,
+        type: 'button',
+        className: 'arbor-chain-chip arbor-num',
+        'data-arbor-text': 'numeric',
+        'data-arbor-window': step.window.ref,
+        'aria-label': props.t('openWindowDetails', { window: step.window.ref }),
+        onClick: () => { props.onOpen(step.window) },
+      }, step.window.ref))),
+    span === undefined ? null : createElement('span', { className: 'arbor-chain-run-time arbor-num', 'data-arbor-text': 'numeric' }, span))
+}
+
+/** One row of the earlier list: a window entry or a restart run. */
+interface ChainListRow {
+  readonly kind: 'window' | 'run'
+  readonly step?: ChainStep
+  readonly segment?: ChainSegment
+  readonly key: string
+  readonly child: boolean
+}
+
+/** One window entry in the earlier list. */
+function ChainListWindow(props: {
+  readonly step: ChainStep
+  readonly t: Translate
+  readonly onOpen: (window: ArborWindowFacts) => void
+  readonly child: boolean
+  readonly top: number
+}): ReactNode {
+  const { window, link } = props.step
+  return createElement('button', {
+    type: 'button',
+    className: `arbor-chain-row${props.child ? ' is-child' : ''}`,
+    style: { top: props.top },
+    'aria-label': props.t('openWindowDetails', { window: window.ref }),
+    'data-arbor-window': window.ref,
+    onClick: () => { props.onOpen(window) },
+  },
+    createElement('span', { className: 'arbor-chain-row-caret', 'aria-hidden': true }, props.child ? '↳' : ''),
+    createElement('span', { className: 'arbor-chain-row-ref arbor-num', 'data-arbor-text': 'numeric' }, window.ref),
+    createElement('span', { className: 'arbor-chain-row-state arbor-label', 'data-arbor-text': 'display' }, stateLabel(props.t, window)),
+    link !== 'restart' ? null : createElement('span', { className: 'arbor-chain-row-link arbor-label', 'data-arbor-text': 'display' }, props.t('chainRestart')),
+    window.doing === undefined ? null : createElement('span', { className: 'arbor-chain-row-doing', 'data-arbor-text': 'body' }, window.doing),
+    window.startedAt === undefined ? null : createElement('span', { className: 'arbor-chain-row-time arbor-num', 'data-arbor-text': 'numeric' }, clock(window.startedAt, props.t)))
+}
+
+/**
+ * The earlier windows, virtualized.
+ *
+ * Its scroll position is this component's own state: scrolling re-renders the
+ * visible rows, not the whole chain card (and not the skyline that measures
+ * it). At 30 px a row, a 2000-window list stays a two-hundredth of its DOM.
+ */
+function WindowList(props: {
+  readonly rows: readonly ChainListRow[]
+  readonly openRuns: readonly string[]
+  readonly t: Translate
+  readonly onOpen: (window: ArborWindowFacts) => void
+  readonly onToggleRun: (key: string) => void
+}): ReactNode {
+  const [scrollTop, setScrollTop] = useState(0)
+  const view = Math.min(CHAIN_LIST_HEIGHT, props.rows.length * CHAIN_ROW_HEIGHT)
+  const top = Math.min(scrollTop, Math.max(0, props.rows.length * CHAIN_ROW_HEIGHT - view))
+  const first = Math.max(0, Math.floor(top / CHAIN_ROW_HEIGHT) - 2)
+  const last = Math.min(props.rows.length, Math.ceil((top + view) / CHAIN_ROW_HEIGHT) + 2)
+  return createElement('div', {
+    className: 'arbor-chain-list',
+    style: { height: view },
+    onScroll: (event: { currentTarget: { scrollTop: number } }) => { setScrollTop(event.currentTarget.scrollTop) },
+  },
+    createElement('div', { className: 'arbor-chain-list-inner', style: { height: props.rows.length * CHAIN_ROW_HEIGHT } },
+      props.rows.slice(first, last).map((row, index) => {
+        const at = (first + index) * CHAIN_ROW_HEIGHT
+        if (row.kind === 'run' && row.segment !== undefined) {
+          const windowsInRun = row.segment.windows
+          const runFirst = windowsInRun[0]
+          const runLast = windowsInRun[windowsInRun.length - 1]
+          const open = props.openRuns.includes(row.key)
+          const span = runFirst === undefined || runLast === undefined ? undefined : chainSpan(props.t, [runFirst, runLast])
+          return createElement('button', {
+            key: row.key,
+            type: 'button',
+            className: 'arbor-chain-row is-group',
+            style: { top: at },
+            'aria-expanded': open,
+            onClick: () => { props.onToggleRun(row.key) },
+          },
+            createElement('span', { className: 'arbor-chain-row-caret', 'aria-hidden': true }, open ? '▾' : '▸'),
+            createElement('span', { className: 'arbor-chain-row-group arbor-label', 'data-arbor-text': 'display' }, props.t('chainRestartCount', { count: windowsInRun.length })),
+            runFirst === undefined ? null : createElement('span', { className: 'arbor-chain-row-ref arbor-num', 'data-arbor-text': 'numeric' }, runFirst.ref === runLast?.ref ? runFirst.ref : `${runFirst.ref} → ${runLast?.ref ?? runFirst.ref}`),
+            span === undefined ? null : createElement('span', { className: 'arbor-chain-row-time arbor-num', 'data-arbor-text': 'numeric' }, span))
+        }
+        return row.step === undefined
+          ? null
+          : createElement(ChainListWindow, { key: row.key, step: row.step, t: props.t, onOpen: props.onOpen, child: row.child, top: at })
+      })))
+}
+
+/** One labelled row of the window-details sheet. */
+function DetailRow(props: { readonly label: string; readonly children?: ReactNode }): ReactNode {
+  return createElement('div', { className: 'arbor-detail-row' },
+    createElement('span', { className: 'arbor-detail-label arbor-label', 'data-arbor-text': 'display' }, props.label),
+    createElement('span', { className: 'arbor-detail-value', 'data-arbor-text': 'body' }, props.children))
+}
+
+/**
+ * One window's details, opened from the chain.
+ *
+ * The old chain only marked a node with `data-arbor-window`; it had no detail
+ * surface of its own. Every entry in the new chain — the current window, a
+ * recent row, a restart chip or an earlier-list row — opens this sheet, so a
+ * compressed chain never hides a window's facts.
+ */
+function WindowDetail(props: {
+  readonly window: ArborWindowFacts
+  readonly t: Translate
+  readonly onClose: () => void
+}): ReactNode {
+  const { window, t } = props
+  const handoff = window.handoff
+  const spent = window.startedAt === undefined || window.endedAt === undefined
+    ? undefined
+    : duration(t, window.endedAt - window.startedAt)
+  const end = window.endReason === undefined ? undefined : endLabel(t, window.endReason)
+  const rows: ReactNode[] = []
+  if (window.startedAt !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'started', label: t('windowDetailStarted') },
+      createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, clock(window.startedAt, t))))
+  }
+  if (window.endedAt !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'ended', label: t('windowDetailEnded') },
+      createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, clock(window.endedAt, t))))
+  }
+  if (spent !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'duration', label: t('windowDetailDuration') }, spent))
+  }
+  if (end !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'end', label: t('windowDetailEndReason') }, end))
+  }
+  if (window.used !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'usage', label: t('tokens') },
+      createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, `${compact(window.used)} / ${compact(window.limit)}`)))
+  }
+  if (window.continuationOf !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'continues', label: t('windowDetailContinues') },
+      createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, window.continuationOf)))
+  }
+  if (window.continuedBy !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'continued', label: t('windowDetailContinuedBy') },
+      createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, window.continuedBy)))
+  }
+  if (window.refused !== undefined) {
+    rows.push(createElement(DetailRow, { key: 'refused', label: t('windowDetailRefused') }, window.refused))
+  }
+  if (window.targets.length > 0) {
+    rows.push(createElement(DetailRow, { key: 'targets', label: t('boardTargets') },
+      createElement('span', { className: 'arbor-tags' }, window.targets.map(target => createElement('span', { className: 'arbor-tag', key: target }, target)))))
+  }
+  if (window.openWork !== undefined && window.openWork.length > 0) {
+    rows.push(createElement(DetailRow, { key: 'open', label: t('workspaceOpenWork') },
+      createElement('span', { className: 'arbor-tags' }, window.openWork.map(item => createElement('span', { className: 'arbor-tag arbor-tag-warn', key: item }, item)))))
+  }
+  const handoffRows = handoff === undefined ? [] : ([
+    ['handoffTopics', handoff.topics],
+    ['handoffProgress', handoff.progress],
+    ['handoffPending', handoff.pending],
+    ['handoffAgreements', handoff.agreements],
+  ] as const).flatMap(([key, values]) => values === undefined || values.length === 0 ? [] : [
+    createElement('div', { className: 'arbor-detail-part', key },
+      createElement('span', { className: 'arbor-detail-part-label arbor-label', 'data-arbor-text': 'display' }, t(key)),
+      createElement('span', { className: 'arbor-detail-part-text', 'data-arbor-text': 'body' }, values.join(' · '))),
+  ])
+  return createElement(Sheet, {
+    title: t('windowDetailTitle', { window: window.ref }),
+    close: t('closeSheet'),
+    onClose: props.onClose,
+  },
+    createElement('div', { className: 'arbor-detail' },
+      createElement('div', { className: 'arbor-detail-head' },
+        createElement(StateChip, { state: window.state, t }),
+        window.handoff === undefined ? null : createElement('span', { className: 'arbor-tag arbor-tag-warn' }, t('handoff'))),
+      window.doing === undefined ? null : createElement('div', { className: 'arbor-detail-doing', 'data-arbor-text': 'body' }, window.doing),
+      ...rows,
+      handoffRows.length === 0 ? null : createElement('div', { className: 'arbor-detail-handoff' },
+        createElement('div', { className: 'arbor-detail-handoff-title arbor-label', 'data-arbor-text': 'display' }, t('handoff')),
+        ...handoffRows)),
+    window.endRefused === undefined ? null : createElement(EndRefusal, { refusal: window.endRefused, t }))
+}
+
+/**
+ * The chain, read from the live end backwards.
+ *
+ * A chain grows without bound, so the card cannot be one card per window.
+ * The current window is the hero; the last few windows stay in full as
+ * one-line rows; everything earlier becomes one summary with its count and
+ * time span. The summary expands into a virtualized list (only the visible
+ * rows are mounted, so thousands of entries stay cheap). Adjacent restarts
+ * are one run in both places, with the number of windows it holds.
+ */
 function ChainCard(props: {
   readonly session: ArborHostSessionFacts | undefined
   readonly windows: readonly ArborWindowFacts[]
@@ -885,45 +1242,135 @@ function ChainCard(props: {
   readonly t: Translate
 }): ReactNode {
   const { session, windows, t } = props
-  if (windows.length === 0) return null
-  const shown = shownWindows(windows, props.streams)
-  const handoffs = windows.filter(window => window.handoff !== undefined && (
-    window.handoff.topics !== undefined || window.handoff.progress !== undefined ||
-    window.handoff.pending !== undefined || window.handoff.agreements !== undefined))
-  return createElement(Card, { className: 'arbor-chain-card' },
+  const [detail, setDetail] = useState<ArborWindowFacts>()
+  const [earlierOpen, setEarlierOpen] = useState(false)
+  const [openRuns, setOpenRuns] = useState<readonly string[]>([])
+  const shown = useMemo(() => shownWindows(windows, props.streams), [windows, props.streams])
+  const steps = useMemo(() => chainSteps(shown), [shown])
+  useEffect(() => {
+    if (detail === undefined) return
+    const close = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setDetail(undefined)
+    }
+    window.addEventListener('keydown', close)
+    return () => { window.removeEventListener('keydown', close) }
+  }, [detail])
+  if (shown.length === 0) return null
+
+  const live = liveWindowOf(shown)
+  const current = live ?? shown[shown.length - 1]!
+  const currentIndex = shown.indexOf(current)
+  const before = shown.filter((_, index) => index !== currentIndex)
+  const recentWindows = before.slice(-CHAIN_RECENT)
+  const earlierWindows = before.slice(0, Math.max(0, before.length - CHAIN_RECENT))
+  const stepOf = new Map(steps.map(step => [step.window.ref, step]))
+  const recentSteps = recentWindows.flatMap(window => {
+    const step = stepOf.get(window.ref)
+    return step === undefined ? [] : [step]
+  })
+  const earlierSteps = earlierWindows.flatMap(window => {
+    const step = stepOf.get(window.ref)
+    return step === undefined ? [] : [step]
+  })
+  // A restart run inside the recent strip is one row, not one row per window.
+  const recentItems: Array<{ readonly kind: 'step'; readonly step: ChainStep } | { readonly kind: 'run'; readonly steps: ChainStep[] }> = []
+  for (const step of recentSteps) {
+    const last = recentItems.at(-1)
+    if (step.link === 'restart' && last?.kind === 'run') last.steps.push(step)
+    else if (step.link === 'restart') recentItems.push({ kind: 'run', steps: [step] })
+    else recentItems.push({ kind: 'step', step })
+  }
+  const segments = chainSegments(earlierSteps)
+  const runEndingNow = restartRunEndingAt(steps, currentIndex)
+  const latestHandoff = [...recentSteps.map(step => step.window), current]
+    .reverse()
+    .find(window => handoffSummary(window) !== undefined)
+  const latestHandoffText = latestHandoff === undefined ? undefined : handoffSummary(latestHandoff)
+
+  const listRows: ChainListRow[] = []
+  for (const segment of segments) {
+    const first = segment.windows[0]
+    if (first === undefined) continue
+    if (segment.link === 'restart' && segment.windows.length > 1) {
+      const key = first.ref
+      listRows.push({ kind: 'run', segment, key, child: false })
+      if (openRuns.includes(key)) {
+        for (const window of segment.windows) {
+          const step = stepOf.get(window.ref)
+          if (step !== undefined) listRows.push({ kind: 'window', step, key: `w-${window.ref}`, child: true })
+        }
+      }
+    } else {
+      for (const window of segment.windows) {
+        const step = stepOf.get(window.ref)
+        if (step !== undefined) listRows.push({ kind: 'window', step, key: `w-${window.ref}`, child: false })
+      }
+    }
+  }
+  const earlierSpan = chainSpan(t, earlierSteps.map(step => step.window))
+  const earlierText = earlierSteps.length === 1
+    ? t('chainEarlierOne')
+    : t('chainEarlier', { count: earlierSteps.length })
+
+  return createElement(Card, { className: 'arbor-chain-card', attrs: { 'data-arbor-chain': current.ref } },
     createElement(CardHead, {
       kicker: t('cardChain'),
       aside: session === undefined ? undefined : createElement('span', { className: 'arbor-card-session arbor-label' }, sessionTitle(session)),
     }),
-    createElement('div', { className: 'arbor-chain-scroll' },
-      createElement('div', { className: 'arbor-chain' },
-        shown.flatMap((window, index) => {
-          const next = shown[index + 1]
-          const link = next?.continuationOf === window.ref && window.endReason === 'host_restart'
-            ? t('chainRestart')
-            : undefined
-          const node = createElement('div', {
-            className: `arbor-node arbor-node-${window.state}`,
-            key: `node-${window.ref}`,
-            'data-arbor-window': window.ref,
-          },
-            createElement('span', { className: 'arbor-node-ref arbor-num' }, window.ref),
-            createElement('span', { className: 'arbor-node-state arbor-label' }, stateLabel(t, window)),
-            window.handoff === undefined ? null : createElement('span', { className: 'arbor-node-handoff arbor-tag arbor-tag-warn' }, t('handoff')))
-          if (next === undefined) return [node]
-          return [node, createElement('div', { className: 'arbor-connector', key: `edge-${window.ref}` },
-            createElement('span', { className: 'arbor-connector-line', 'aria-hidden': true }),
-            link === undefined ? null : createElement('span', { className: 'arbor-connector-label arbor-label' }, link),
-            createElement('span', { className: 'arbor-connector-arrow', 'aria-hidden': true }, '→'))]
-        })),
-    ),
-    handoffs.length === 0 ? null : createElement('div', { className: 'arbor-handoffs' },
-      handoffs.map(window => createElement('div', { className: 'arbor-handoff-row', key: `h-${window.ref}` },
-        createElement('span', { className: 'arbor-handoff-ref arbor-num' }, `${window.ref} ${t('handoff')}`),
-        createElement('span', { className: 'arbor-handoff-text', 'data-arbor-text': 'body' },
-          [...(window.handoff?.topics ?? []), ...(window.handoff?.progress ?? []), ...(window.handoff?.pending ?? [])].join(' · '))))),
+    createElement('button', {
+      type: 'button',
+      className: `arbor-chain-now arbor-chain-now-${current.state}`,
+      onClick: () => { setDetail(current) },
+      'aria-label': t('openWindowDetails', { window: current.ref }),
+      'data-arbor-window': current.ref,
+    },
+      createElement('span', { className: 'arbor-chain-now-top' },
+        createElement(ChainLabel, { text: t('chainNow') }),
+        createElement(StateChip, { state: current.state, t }),
+        runEndingNow === 0 ? null : createElement('span', { className: 'arbor-chain-run-kind arbor-tag arbor-tag-warn arbor-label', 'data-arbor-text': 'display' }, t('chainRestartRun', { count: runEndingNow }))),
+      createElement('span', { className: 'arbor-chain-now-ref arbor-num', 'data-arbor-text': 'numeric' }, current.ref),
+      current.handoff === undefined ? null : createElement('span', { className: 'arbor-tag arbor-tag-warn' }, t('handoff')),
+      current.doing === undefined ? null : createElement('span', { className: 'arbor-chain-now-doing', 'data-arbor-text': 'body' }, current.doing),
+      createElement('span', { className: 'arbor-chain-now-meta' },
+        createElement('span', { 'data-arbor-text': 'body' }, current.continuationOf === undefined ? t('chainStart') : t('continuesFrom', { window: current.continuationOf })),
+        current.startedAt === undefined ? null : createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, clock(current.startedAt, t)),
+        current.used === undefined ? null : createElement('span', { className: 'arbor-num', 'data-arbor-text': 'numeric' }, `${compact(current.used)} / ${compact(current.limit)}`))),
+    recentItems.length === 0 ? null : createElement('div', { className: 'arbor-chain-recent' },
+      createElement(ChainLabel, { text: t('chainRecent') }),
+      ...recentItems.map(item => item.kind === 'run' && item.steps.length > 1
+        ? createElement(ChainRunRow, { key: `run-${item.steps[0]?.window.ref ?? ''}`, steps: item.steps, t, onOpen: setDetail })
+        : createElement(ChainStepRow, { key: item.kind === 'step' ? item.step.window.ref : item.steps[0]?.window.ref, step: item.kind === 'step' ? item.step : item.steps[0]!, t, onOpen: setDetail }))),
+    latestHandoff === undefined || latestHandoffText === undefined ? null : createElement('div', { className: 'arbor-handoffs' },
+      createElement(ChainLabel, { text: t('handoff') }),
+      createElement('div', { className: 'arbor-handoff-row', key: `h-${latestHandoff.ref}` },
+        createElement('span', { className: 'arbor-handoff-ref arbor-num' }, latestHandoff.ref),
+        createElement('span', { className: 'arbor-handoff-text', 'data-arbor-text': 'body' }, latestHandoffText))),
+    earlierSteps.length === 0 ? null : createElement('div', { className: 'arbor-chain-earlier' },
+      createElement('div', { className: 'arbor-chain-earlier-head' },
+        createElement('span', { className: 'arbor-chain-earlier-summary arbor-num', 'data-arbor-text': 'numeric' }, earlierSpan === undefined ? earlierText : `${earlierText} · ${earlierSpan}`),
+        createElement('button', {
+          type: 'button',
+          className: 'arbor-chain-earlier-toggle arbor-card-link arbor-label',
+          'data-arbor-text': 'display',
+          'aria-expanded': earlierOpen,
+          onClick: () => { setEarlierOpen(value => !value) },
+        }, earlierOpen ? t('chainHideEarlier') : t('chainShowEarlier'))),
+      !earlierOpen ? null : createElement(WindowList, {
+        rows: listRows,
+        openRuns,
+        t,
+        onOpen: setDetail,
+        onToggleRun: (key: string) => {
+          setOpenRuns(value => value.includes(key) ? value.filter(one => one !== key) : [...value, key])
+        },
+      })),
     createElement(CardFoot, null,
-      createElement('span', { className: 'arbor-num' }, chainSummary(t, shown))))
+      createElement('span', { className: 'arbor-num' }, chainSummary(t, shown))),
+    detail === undefined ? null : createElement(WindowDetail, {
+      window: shown.find(window => window.ref === detail.ref) ?? detail,
+      t,
+      onClose: () => { setDetail(undefined) },
+    }))
 }
 
 /** One session, as the card that opens its own tab. */
@@ -1998,9 +2445,9 @@ export function ArborPage(props: ArborSlotProps & ArborPageInjected): ReactNode 
         if (!element.hasAttribute('data-arbor-text')) element.setAttribute('data-arbor-text', role)
       }
     }
-    mark('.arbor-num,.arbor-hero-num,.arbor-date,.arbor-node-ref,.arbor-handoff-ref,.arbor-env-big,.arbor-search-total,.arbor-hit-ref,.arbor-hit-window', 'numeric')
+    mark('.arbor-num,.arbor-hero-num,.arbor-date,.arbor-handoff-ref,.arbor-env-big,.arbor-search-total,.arbor-hit-ref,.arbor-hit-window', 'numeric')
     mark('.arbor-mono,.arbor-card-project,.arbor-md-code,.arbor-md-pre,.arbor-md-pre code', 'code')
-    mark('.arbor-card-kicker,.arbor-card-title,.arbor-tab,.arbor-pill,.arbor-state,.arbor-tag,.arbor-empty-title,.arbor-card-link,.arbor-stream-label,.arbor-sheet-title,.arbor-search-group-title,.arbor-search-go,.arbor-settings-group-title,.arbor-node-state,.arbor-hero-name,.arbor-env-group-title,.arbor-workspace-row > .arbor-label,.arbor-hit-kind,.arbor-env-count > .arbor-label,.arbor-tab-close,.arbor-connector-label,.arbor-connector-arrow', 'display')
+    mark('.arbor-card-kicker,.arbor-card-title,.arbor-tab,.arbor-pill,.arbor-state,.arbor-tag,.arbor-empty-title,.arbor-card-link,.arbor-stream-label,.arbor-sheet-title,.arbor-search-group-title,.arbor-search-go,.arbor-settings-group-title,.arbor-hero-name,.arbor-env-group-title,.arbor-workspace-row > .arbor-label,.arbor-hit-kind,.arbor-env-count > .arbor-label,.arbor-tab-close', 'display')
     // A role must sit on the text node itself, not only on an ancestor: the
     // font plugin sets its properties on the role nodes, so an untagged leaf
     // would keep inheriting the root's body face. Anything left with direct

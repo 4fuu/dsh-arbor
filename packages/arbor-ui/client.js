@@ -24,7 +24,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// src/client.ts
+// packages/arbor-ui/src/client.ts
 var client_exports = {};
 __export(client_exports, {
   apply: () => apply,
@@ -33,7 +33,7 @@ __export(client_exports, {
 module.exports = __toCommonJS(client_exports);
 var import_react2 = require("react");
 
-// src/channel.ts
+// packages/arbor-ui/src/channel.ts
 var TEXT_LIMIT = 6e3;
 var SEND_LIMIT = 1500;
 var ACTIVITY_MS = 1600;
@@ -213,7 +213,7 @@ function closeChannels() {
   channels.clear();
 }
 
-// src/i18n.ts
+// packages/arbor-ui/src/i18n.ts
 var NAMESPACE = "arborUi";
 var en = {
   expandStream: "Show more",
@@ -255,6 +255,23 @@ var en = {
   sessionHeroEmpty: "This session has no window yet.",
   sessionHeroEmptyHint: "Send the first message and arbor will open its first window.",
   cardChain: "Window chain",
+  chainNow: "Now",
+  chainRecent: "Recent",
+  chainEarlier: "{count} earlier windows",
+  chainEarlierOne: "1 earlier window",
+  chainShowEarlier: "Show",
+  chainHideEarlier: "Hide",
+  chainRestartCount: "restart \xD7{count}",
+  chainRestartRun: "restart run \xD7{count}",
+  openWindowDetails: "Details of {window}",
+  windowDetailTitle: "Window {window}",
+  windowDetailStarted: "Started",
+  windowDetailEnded: "Ended",
+  windowDetailDuration: "Duration",
+  windowDetailEndReason: "End reason",
+  windowDetailContinues: "Continues",
+  windowDetailContinuedBy: "Continued by",
+  windowDetailRefused: "Refused",
   cardWorkspace: "Workspace",
   cardEnvironment: "Environment",
   cardSchedules: "Schedules",
@@ -548,6 +565,23 @@ var zh = {
   sessionHeroEmpty: "\u8FD9\u4E2A\u4F1A\u8BDD\u8FD8\u6CA1\u6709\u7A97\u53E3\u3002",
   sessionHeroEmptyHint: "\u53D1\u7B2C\u4E00\u6761\u6D88\u606F\uFF0Carbor \u4F1A\u4E3A\u5B83\u5F00\u7B2C\u4E00\u4E2A\u7A97\u53E3\u3002",
   cardChain: "\u7A97\u53E3\u94FE",
+  chainNow: "\u5F53\u524D",
+  chainRecent: "\u6700\u8FD1",
+  chainEarlier: "\u66F4\u65E9 {count} \u4E2A\u7A97\u53E3",
+  chainEarlierOne: "\u66F4\u65E9 1 \u4E2A\u7A97\u53E3",
+  chainShowEarlier: "\u5C55\u5F00",
+  chainHideEarlier: "\u6536\u8D77",
+  chainRestartCount: "\u91CD\u542F \xD7{count}",
+  chainRestartRun: "\u8FDE\u7EED\u91CD\u542F \xD7{count}",
+  openWindowDetails: "\u67E5\u770B {window} \u7684\u8BE6\u60C5",
+  windowDetailTitle: "\u7A97\u53E3 {window}",
+  windowDetailStarted: "\u5F00\u59CB",
+  windowDetailEnded: "\u7ED3\u675F",
+  windowDetailDuration: "\u65F6\u957F",
+  windowDetailEndReason: "\u7ED3\u675F\u539F\u56E0",
+  windowDetailContinues: "\u63A5\u7EED",
+  windowDetailContinuedBy: "\u63A5\u7740",
+  windowDetailRefused: "\u88AB\u62D2\u7EDD",
   cardWorkspace: "\u5DE5\u4F5C\u533A",
   cardEnvironment: "\u73AF\u5883",
   cardSchedules: "\u65E5\u7A0B",
@@ -845,7 +879,7 @@ function fallbackTranslate(key, args) {
   return value === void 0 ? key : format(value, args);
 }
 
-// src/styles.ts
+// packages/arbor-ui/src/styles.ts
 var STYLE_ID = "arbor-ui-panel-style";
 var CSS = `.arbor-page{
   --arbor-font-body:var(--dsw-font-family);
@@ -944,24 +978,68 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-stream-toggle:hover{color:var(--dsw-alias-label-primary,#0f1115)}
 .arbor-page .arbor-stream-empty{font-size:12px;line-height:1.6;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-stream-send{margin-top:4px;padding-top:6px;border-top:1px dashed var(--dsw-alias-border-l1,#0000000a);display:flex;flex-direction:column;gap:3px}
-.arbor-page .arbor-chain-scroll{overflow-x:auto;padding:3px 0 7px;scrollbar-width:thin}
 .arbor-page .arbor-chain-card{container-type:inline-size}
-.arbor-page .arbor-chain{display:flex;align-items:center;min-width:max-content}
-.arbor-page .arbor-node{min-width:112px;max-width:166px;padding:9px 10px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:12px;background:var(--dsw-alias-interactive-bg-hover,#2631480f);display:flex;flex-direction:column;gap:1px;min-height:72px}
-.arbor-page .arbor-node-running{border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 35%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 7%,var(--dsw-alias-bg-layer-1,#fff))}
-.arbor-page .arbor-node-idle{border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 28%,var(--dsw-alias-border-l1,#0000000a))}
-.arbor-page .arbor-node-ref{font-family:var(--arbor-font-numeric);font-size:15px;line-height:19px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
-.arbor-page .arbor-node-state{font-size:9px;line-height:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
-.arbor-page .arbor-node-running .arbor-node-state{color:var(--dsw-alias-state-success-primary,#22c55e)}
-.arbor-page .arbor-node-doing{font-size:10.5px;line-height:1.45;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
-.arbor-page .arbor-connector{width:52px;flex:none;height:72px;display:flex;align-items:center;justify-content:center;position:relative}
-.arbor-page .arbor-connector-line{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--dsw-alias-border-l2,#0000001a)}
-.arbor-page .arbor-connector-label{position:relative;z-index:1;padding:0 4px;background:var(--dsw-alias-bg-layer-1,#fff);font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c);white-space:nowrap}
-.arbor-page .arbor-connector-arrow{position:relative;z-index:1;padding-left:2px;background:var(--dsw-alias-bg-layer-1,#fff);font-size:12px;color:var(--dsw-alias-label-tertiary,#81858c);line-height:1}
+.arbor-page .arbor-chain-now{display:flex;flex-direction:column;gap:3px;width:100%;min-width:0;padding:10px 11px 9px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:13px;background:var(--dsw-alias-interactive-bg-hover,#2631480f);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color 120ms ease,background 120ms ease}
+.arbor-page .arbor-chain-now:hover{border-color:var(--dsw-alias-border-l3,#0000001f);background:var(--dsw-alias-bg-layer-2,#fff)}
+.arbor-page .arbor-chain-now:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#0f1115);outline-offset:1px}
+.arbor-page .arbor-chain-now-running{border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 35%,var(--dsw-alias-border-l1,#0000000a));background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#22c55e) 7%,var(--dsw-alias-bg-layer-1,#fff))}
+.arbor-page .arbor-chain-now-idle{border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 28%,var(--dsw-alias-border-l1,#0000000a))}
+.arbor-page .arbor-chain-now-top{display:flex;align-items:center;flex-wrap:wrap;gap:5px;min-width:0}
+.arbor-page .arbor-chain-label{font-size:9px;line-height:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-now-ref{font-family:var(--arbor-font-numeric);font-size:31px;line-height:1.05;font-weight:500;letter-spacing:-.02em;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
+.arbor-page .arbor-chain-now-doing{font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.arbor-page .arbor-chain-now-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:1px 8px;min-width:0;font-size:10px;line-height:1.5;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-now-meta>span+span::before{content:'\xB7';margin-right:8px;color:var(--dsw-alias-label-tertiary,#81858c);opacity:.7}
+.arbor-page .arbor-chain-recent{display:flex;flex-direction:column;gap:2px;min-width:0;padding-top:5px}
+.arbor-page .arbor-chain-step{display:flex;align-items:center;gap:6px;min-width:0;min-height:28px;padding:4px 7px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:8px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.arbor-page .arbor-chain-step:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.arbor-page .arbor-chain-step:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#0f1115);outline-offset:1px}
+.arbor-page .arbor-chain-step-ref{flex:none;font-family:var(--arbor-font-numeric);font-size:12px;line-height:16px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
+.arbor-page .arbor-chain-step-state{flex:none;font-size:9px;line-height:13px;letter-spacing:.04em;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-step-running .arbor-chain-step-state{color:var(--dsw-alias-state-success-primary,#22c55e)}
+.arbor-page .arbor-chain-step-handoff{flex:none;height:16px;padding:0 4px;font-size:8.5px;line-height:16px}
+.arbor-page .arbor-chain-step-doing{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:1.4;color:var(--dsw-alias-label-secondary,#61666b)}
+.arbor-page .arbor-chain-step-link{flex:none;font-size:8.5px;line-height:13px;letter-spacing:.04em;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-step-time{flex:none;font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-run{display:flex;align-items:center;flex-wrap:wrap;gap:3px 5px;min-width:0;min-height:28px;padding:4px 7px;border:1px dashed color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 26%,var(--dsw-alias-border-l1,#0000000a));border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 5%,transparent)}
+.arbor-page .arbor-chain-run-kind{flex:none;height:16px;padding:0 4px;font-size:8.5px;line-height:16px}
+.arbor-page .arbor-chain-run-refs{display:flex;align-items:center;flex-wrap:wrap;gap:3px;min-width:0}
+.arbor-page .arbor-chain-chip{height:19px;padding:0 5px;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:5px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#61666b);font:inherit;font-size:9.5px;line-height:17px;font-variant-numeric:tabular-nums;cursor:pointer}
+.arbor-page .arbor-chain-chip:hover{color:var(--dsw-alias-label-primary,#0f1115);border-color:var(--dsw-alias-border-l3,#0000001f)}
+.arbor-page .arbor-chain-run-time{font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-earlier{display:flex;flex-direction:column;gap:3px;min-width:0;margin-top:3px;padding-top:6px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a)}
+.arbor-page .arbor-chain-earlier-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+.arbor-page .arbor-chain-earlier-summary{flex:1;min-width:0;font-size:10px;line-height:1.5;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-earlier-toggle{flex:none;margin-left:0}
+.arbor-page .arbor-chain-list{position:relative;height:240px;margin-top:4px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;border:1px solid var(--dsw-alias-border-l1,#0000000a);border-radius:9px;background:var(--dsw-alias-bg-layer-2,#fff)}
+.arbor-page .arbor-chain-list-inner{position:relative;width:100%}
+.arbor-page .arbor-chain-row{position:absolute;left:0;right:0;height:30px;display:flex;align-items:center;gap:6px;min-width:0;padding:0 8px;border:none;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.arbor-page .arbor-chain-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}
+.arbor-page .arbor-chain-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#0f1115);outline-offset:-2px}
+.arbor-page .arbor-chain-row.is-child{padding-left:22px;color:var(--dsw-alias-label-secondary,#61666b)}
+.arbor-page .arbor-chain-row.is-group{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 4%,transparent)}
+.arbor-page .arbor-chain-row.is-group:hover{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#f59e0b) 9%,transparent)}
+.arbor-page .arbor-chain-row-caret{flex:none;width:10px;font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-row-ref{flex:none;font-family:var(--arbor-font-numeric);font-size:10.5px;line-height:14px;font-weight:500;color:var(--dsw-alias-label-primary,#0f1115);font-variant-numeric:tabular-nums}
+.arbor-page .arbor-chain-row-state, .arbor-page .arbor-chain-row-link{flex:none;font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-row-doing{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.4;color:var(--dsw-alias-label-secondary,#61666b)}
+.arbor-page .arbor-chain-row-time{flex:none;font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-chain-row-group{flex:none;font-size:8.5px;line-height:13px;letter-spacing:.04em;color:var(--dsw-alias-state-warn-primary,#f59e0b)}
+.arbor-page .arbor-detail{display:flex;flex-direction:column;gap:9px;min-width:0}
+.arbor-page .arbor-detail-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.arbor-page .arbor-detail-doing{font-size:13px;line-height:1.6;color:var(--dsw-alias-label-primary,#0f1115);overflow-wrap:anywhere}
+.arbor-page .arbor-detail-row{display:flex;align-items:baseline;gap:10px;min-width:0;font-size:11.5px;line-height:1.6}
+.arbor-page .arbor-detail-label{flex:none;width:76px;font-size:9px;line-height:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-detail-value{flex:1;min-width:0;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
+.arbor-page .arbor-detail-handoff{display:flex;flex-direction:column;gap:4px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a)}
+.arbor-page .arbor-detail-handoff-title{font-size:9px;line-height:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-detail-part{display:flex;align-items:baseline;gap:8px;min-width:0;font-size:11px;line-height:1.55}
+.arbor-page .arbor-detail-part-label{flex:none;width:60px;font-size:9px;line-height:13px;color:var(--dsw-alias-label-tertiary,#81858c)}
+.arbor-page .arbor-detail-part-text{flex:1;min-width:0;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-handoffs{display:flex;flex-direction:column;gap:3px;padding-top:7px;border-top:1px solid var(--dsw-alias-border-l1,#0000000a)}
 .arbor-page .arbor-handoff-row{display:flex;gap:8px;align-items:baseline;min-width:0;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-handoff-ref{flex:none;font-size:9.5px;color:var(--dsw-alias-label-tertiary,#81858c);letter-spacing:.04em}
-.arbor-page .arbor-handoff-text{min-width:0;overflow-wrap:anywhere}
+.arbor-page .arbor-handoff-text{min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .arbor-page .arbor-note-sum{font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary,#61666b);overflow-wrap:anywhere}
 .arbor-page .arbor-tags{display:flex;flex-wrap:wrap;gap:4px}
 .arbor-page .arbor-tag{display:inline-flex;align-items:center;height:19px;padding:0 6px;border-radius:6px;font-size:9.5px;line-height:19px;white-space:nowrap;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-secondary,#61666b)}
@@ -1077,20 +1155,11 @@ var CSS = `.arbor-page{
 .arbor-page .arbor-hit-kind{font-size:9.5px;color:var(--dsw-alias-label-secondary,#61666b)}
 .arbor-page .arbor-hit-window{font-size:9.5px;color:var(--dsw-alias-label-tertiary,#81858c)}
 .arbor-page .arbor-hit-sum{font-size:11.5px;line-height:1.55;color:var(--dsw-alias-label-secondary,#61666b);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-@container (max-width:460px){
-.arbor-page .arbor-node{min-width:90px;max-width:130px;padding:8px 9px}
-.arbor-page .arbor-connector{width:28px}
-}
 @container (max-width:360px){
-.arbor-page .arbor-node{min-width:76px;max-width:120px;padding:7px 8px}
-.arbor-page .arbor-connector{width:20px}
-.arbor-page .arbor-node-ref{font-size:13px;line-height:17px}
-.arbor-page .arbor-node-handoff{font-size:8px;padding:0 4px}
-}
-@container (max-width:260px){
-.arbor-page .arbor-node{min-width:70px;max-width:100px;padding:6px 7px}
-.arbor-page .arbor-connector{width:16px}
-.arbor-page .arbor-node-handoff{display:none}
+.arbor-page .arbor-chain-now-ref{font-size:26px}
+.arbor-page .arbor-chain-step-doing{font-size:10px}
+.arbor-page .arbor-chain-step-link{display:none}
+.arbor-page .arbor-chain-earlier-summary{font-size:9.5px}
 }
 @keyframes arbor-pulse{0%,100%{opacity:.45;transform:scale(.86)}50%{opacity:1;transform:scale(1)}}
 @media (prefers-reduced-motion: reduce){
@@ -1126,7 +1195,7 @@ function installStyles() {
   };
 }
 
-// src/ui.ts
+// packages/arbor-ui/src/ui.ts
 var import_react = require("react");
 var PANEL_ID = "arbor";
 var FILTERS = ["all", "windows", "board", "notes", "env", "schedules"];
@@ -1212,6 +1281,43 @@ function chainSummary(t, windows) {
     window: last?.ref ?? "\u2014",
     state: last === void 0 ? t("statusIdle") : stateLabel(t, last)
   });
+}
+function chainSteps(windows) {
+  return windows.map((window2, index) => {
+    const previous = windows[index - 1];
+    const link = previous === void 0 || window2.continuationOf !== previous.ref ? "start" : previous.endReason === "host_restart" ? "restart" : "handoff";
+    return { window: window2, link };
+  });
+}
+function chainSegments(steps) {
+  const segments = [];
+  for (const step of steps) {
+    const last = segments.at(-1);
+    if (last !== void 0 && last.link === step.link && step.link !== "start") last.windows.push(step.window);
+    else segments.push({ link: step.link, windows: [step.window] });
+  }
+  return segments;
+}
+function restartRunEndingAt(steps, index) {
+  let count = 0;
+  for (let at = index; at >= 0 && steps[at]?.link === "restart"; at -= 1) count += 1;
+  return count;
+}
+function chainSpan(t, windows) {
+  const first = windows[0]?.startedAt;
+  const last = windows.at(-1);
+  const end = last?.endedAt ?? last?.startedAt;
+  if (first === void 0 || end === void 0) return void 0;
+  return `${clock(first, t)} \u2192 ${clock(end, t)}`;
+}
+function handoffSummary(window2) {
+  const handoff = window2.handoff;
+  if (handoff === void 0) return void 0;
+  const parts = [...handoff.topics ?? [], ...handoff.progress ?? [], ...handoff.pending ?? []];
+  return parts.length === 0 ? void 0 : parts.join(" \xB7 ");
+}
+function ChainLabel(props) {
+  return (0, import_react.createElement)("span", { className: "arbor-chain-label arbor-label", "data-arbor-text": "display" }, props.text);
 }
 function sessionTitle(session) {
   if (session.title !== void 0 && session.title !== "") return session.title;
@@ -1339,6 +1445,7 @@ function MarkdownText(props) {
 }
 var SKY_GUTTER = 20;
 var SKY_NARROW = 640;
+var CHAIN_WIDTH = 420;
 var CHAIN_MIN_WIDTH = 300;
 function hashOf(value) {
   let hash = 2166136261;
@@ -1368,7 +1475,7 @@ function cardWidth(item, surface) {
       case "window":
         return 560;
       case "chain":
-        return Math.max(CHAIN_MIN_WIDTH, (item.nodes ?? 1) * 150 + 50);
+        return CHAIN_WIDTH;
       case "session":
       case "workspace":
         return 360;
@@ -1511,6 +1618,8 @@ function samePlacements(left, right) {
 function Skyline(props) {
   const ref = (0, import_react.useRef)(null);
   const [width, setWidth] = (0, import_react.useState)(0);
+  const [, setRevision] = (0, import_react.useState)(0);
+  const cellHeights = (0, import_react.useRef)(/* @__PURE__ */ new Map());
   const [layout, setLayout] = (0, import_react.useState)(void 0);
   const signature = props.items.map((item) => `${item.key}:${item.kind}:${item.nodes ?? ""}:${item.text?.length ?? 0}`).join("|");
   const key = `${width}:${signature}`;
@@ -1530,6 +1639,27 @@ function Skyline(props) {
       observer.disconnect();
     };
   }, []);
+  (0, import_react.useEffect)(() => {
+    const surface = ref.current;
+    if (surface === null || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const cell = entry.target;
+        const name = cell.dataset["skyKey"];
+        if (name === void 0) continue;
+        const height = cell.offsetHeight;
+        if (cellHeights.current.get(name) === height) continue;
+        cellHeights.current.set(name, height);
+        changed = true;
+      }
+      if (changed) setRevision((value) => value + 1);
+    });
+    for (const cell of Array.from(surface.querySelectorAll("[data-sky-key]"))) observer.observe(cell);
+    return () => {
+      observer.disconnect();
+    };
+  }, [key]);
   (0, import_react.useLayoutEffect)(() => {
     const surface = ref.current;
     if (surface === null || width === 0) return;
@@ -1753,68 +1883,398 @@ function WindowCard(props) {
     )
   );
 }
+var CHAIN_RECENT = 3;
+var CHAIN_ROW_HEIGHT = 30;
+var CHAIN_LIST_HEIGHT = 240;
+function ChainStepRow(props) {
+  const { window: window2, link } = props.step;
+  return (0, import_react.createElement)(
+    "button",
+    {
+      type: "button",
+      className: `arbor-chain-step arbor-chain-step-${window2.state}`,
+      onClick: () => {
+        props.onOpen(window2);
+      },
+      "aria-label": props.t("openWindowDetails", { window: window2.ref }),
+      "data-arbor-window": window2.ref
+    },
+    (0, import_react.createElement)("span", { className: "arbor-chain-step-ref arbor-num", "data-arbor-text": "numeric" }, window2.ref),
+    (0, import_react.createElement)("span", { className: "arbor-chain-step-state arbor-label", "data-arbor-text": "display" }, stateLabel(props.t, window2)),
+    window2.doing === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-step-doing", "data-arbor-text": "body" }, window2.doing),
+    window2.startedAt === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-step-time arbor-num", "data-arbor-text": "numeric" }, clock(window2.startedAt, props.t)),
+    link !== "restart" ? null : (0, import_react.createElement)("span", { className: "arbor-chain-step-link arbor-label", "data-arbor-text": "display" }, props.t("chainRestart")),
+    window2.handoff === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-step-handoff arbor-tag arbor-tag-warn" }, props.t("handoff"))
+  );
+}
+function ChainRunRow(props) {
+  const first = props.steps[0]?.window;
+  const last = props.steps[props.steps.length - 1]?.window;
+  const span = first === void 0 || last === void 0 ? void 0 : chainSpan(props.t, [first, last]);
+  return (0, import_react.createElement)(
+    "div",
+    { className: "arbor-chain-run" },
+    (0, import_react.createElement)("span", { className: "arbor-chain-run-kind arbor-tag arbor-tag-warn arbor-label", "data-arbor-text": "display" }, props.t("chainRestartCount", { count: props.steps.length })),
+    (0, import_react.createElement)(
+      "span",
+      { className: "arbor-chain-run-refs" },
+      props.steps.map((step) => (0, import_react.createElement)("button", {
+        key: step.window.ref,
+        type: "button",
+        className: "arbor-chain-chip arbor-num",
+        "data-arbor-text": "numeric",
+        "data-arbor-window": step.window.ref,
+        "aria-label": props.t("openWindowDetails", { window: step.window.ref }),
+        onClick: () => {
+          props.onOpen(step.window);
+        }
+      }, step.window.ref))
+    ),
+    span === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-run-time arbor-num", "data-arbor-text": "numeric" }, span)
+  );
+}
+function ChainListWindow(props) {
+  const { window: window2, link } = props.step;
+  return (0, import_react.createElement)(
+    "button",
+    {
+      type: "button",
+      className: `arbor-chain-row${props.child ? " is-child" : ""}`,
+      style: { top: props.top },
+      "aria-label": props.t("openWindowDetails", { window: window2.ref }),
+      "data-arbor-window": window2.ref,
+      onClick: () => {
+        props.onOpen(window2);
+      }
+    },
+    (0, import_react.createElement)("span", { className: "arbor-chain-row-caret", "aria-hidden": true }, props.child ? "\u21B3" : ""),
+    (0, import_react.createElement)("span", { className: "arbor-chain-row-ref arbor-num", "data-arbor-text": "numeric" }, window2.ref),
+    (0, import_react.createElement)("span", { className: "arbor-chain-row-state arbor-label", "data-arbor-text": "display" }, stateLabel(props.t, window2)),
+    link !== "restart" ? null : (0, import_react.createElement)("span", { className: "arbor-chain-row-link arbor-label", "data-arbor-text": "display" }, props.t("chainRestart")),
+    window2.doing === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-row-doing", "data-arbor-text": "body" }, window2.doing),
+    window2.startedAt === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-row-time arbor-num", "data-arbor-text": "numeric" }, clock(window2.startedAt, props.t))
+  );
+}
+function WindowList(props) {
+  const [scrollTop, setScrollTop] = (0, import_react.useState)(0);
+  const view = Math.min(CHAIN_LIST_HEIGHT, props.rows.length * CHAIN_ROW_HEIGHT);
+  const top = Math.min(scrollTop, Math.max(0, props.rows.length * CHAIN_ROW_HEIGHT - view));
+  const first = Math.max(0, Math.floor(top / CHAIN_ROW_HEIGHT) - 2);
+  const last = Math.min(props.rows.length, Math.ceil((top + view) / CHAIN_ROW_HEIGHT) + 2);
+  return (0, import_react.createElement)(
+    "div",
+    {
+      className: "arbor-chain-list",
+      style: { height: view },
+      onScroll: (event) => {
+        setScrollTop(event.currentTarget.scrollTop);
+      }
+    },
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-chain-list-inner", style: { height: props.rows.length * CHAIN_ROW_HEIGHT } },
+      props.rows.slice(first, last).map((row, index) => {
+        const at = (first + index) * CHAIN_ROW_HEIGHT;
+        if (row.kind === "run" && row.segment !== void 0) {
+          const windowsInRun = row.segment.windows;
+          const runFirst = windowsInRun[0];
+          const runLast = windowsInRun[windowsInRun.length - 1];
+          const open = props.openRuns.includes(row.key);
+          const span = runFirst === void 0 || runLast === void 0 ? void 0 : chainSpan(props.t, [runFirst, runLast]);
+          return (0, import_react.createElement)(
+            "button",
+            {
+              key: row.key,
+              type: "button",
+              className: "arbor-chain-row is-group",
+              style: { top: at },
+              "aria-expanded": open,
+              onClick: () => {
+                props.onToggleRun(row.key);
+              }
+            },
+            (0, import_react.createElement)("span", { className: "arbor-chain-row-caret", "aria-hidden": true }, open ? "\u25BE" : "\u25B8"),
+            (0, import_react.createElement)("span", { className: "arbor-chain-row-group arbor-label", "data-arbor-text": "display" }, props.t("chainRestartCount", { count: windowsInRun.length })),
+            runFirst === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-row-ref arbor-num", "data-arbor-text": "numeric" }, runFirst.ref === runLast?.ref ? runFirst.ref : `${runFirst.ref} \u2192 ${runLast?.ref ?? runFirst.ref}`),
+            span === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-row-time arbor-num", "data-arbor-text": "numeric" }, span)
+          );
+        }
+        return row.step === void 0 ? null : (0, import_react.createElement)(ChainListWindow, { key: row.key, step: row.step, t: props.t, onOpen: props.onOpen, child: row.child, top: at });
+      })
+    )
+  );
+}
+function DetailRow(props) {
+  return (0, import_react.createElement)(
+    "div",
+    { className: "arbor-detail-row" },
+    (0, import_react.createElement)("span", { className: "arbor-detail-label arbor-label", "data-arbor-text": "display" }, props.label),
+    (0, import_react.createElement)("span", { className: "arbor-detail-value", "data-arbor-text": "body" }, props.children)
+  );
+}
+function WindowDetail(props) {
+  const { window: window2, t } = props;
+  const handoff = window2.handoff;
+  const spent = window2.startedAt === void 0 || window2.endedAt === void 0 ? void 0 : duration(t, window2.endedAt - window2.startedAt);
+  const end = window2.endReason === void 0 ? void 0 : endLabel(t, window2.endReason);
+  const rows = [];
+  if (window2.startedAt !== void 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "started", label: t("windowDetailStarted") },
+      (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, clock(window2.startedAt, t))
+    ));
+  }
+  if (window2.endedAt !== void 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "ended", label: t("windowDetailEnded") },
+      (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, clock(window2.endedAt, t))
+    ));
+  }
+  if (spent !== void 0) {
+    rows.push((0, import_react.createElement)(DetailRow, { key: "duration", label: t("windowDetailDuration") }, spent));
+  }
+  if (end !== void 0) {
+    rows.push((0, import_react.createElement)(DetailRow, { key: "end", label: t("windowDetailEndReason") }, end));
+  }
+  if (window2.used !== void 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "usage", label: t("tokens") },
+      (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, `${compact(window2.used)} / ${compact(window2.limit)}`)
+    ));
+  }
+  if (window2.continuationOf !== void 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "continues", label: t("windowDetailContinues") },
+      (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, window2.continuationOf)
+    ));
+  }
+  if (window2.continuedBy !== void 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "continued", label: t("windowDetailContinuedBy") },
+      (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, window2.continuedBy)
+    ));
+  }
+  if (window2.refused !== void 0) {
+    rows.push((0, import_react.createElement)(DetailRow, { key: "refused", label: t("windowDetailRefused") }, window2.refused));
+  }
+  if (window2.targets.length > 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "targets", label: t("boardTargets") },
+      (0, import_react.createElement)("span", { className: "arbor-tags" }, window2.targets.map((target) => (0, import_react.createElement)("span", { className: "arbor-tag", key: target }, target)))
+    ));
+  }
+  if (window2.openWork !== void 0 && window2.openWork.length > 0) {
+    rows.push((0, import_react.createElement)(
+      DetailRow,
+      { key: "open", label: t("workspaceOpenWork") },
+      (0, import_react.createElement)("span", { className: "arbor-tags" }, window2.openWork.map((item) => (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn", key: item }, item)))
+    ));
+  }
+  const handoffRows = handoff === void 0 ? [] : [
+    ["handoffTopics", handoff.topics],
+    ["handoffProgress", handoff.progress],
+    ["handoffPending", handoff.pending],
+    ["handoffAgreements", handoff.agreements]
+  ].flatMap(([key, values]) => values === void 0 || values.length === 0 ? [] : [
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-detail-part", key },
+      (0, import_react.createElement)("span", { className: "arbor-detail-part-label arbor-label", "data-arbor-text": "display" }, t(key)),
+      (0, import_react.createElement)("span", { className: "arbor-detail-part-text", "data-arbor-text": "body" }, values.join(" \xB7 "))
+    )
+  ]);
+  return (0, import_react.createElement)(
+    Sheet,
+    {
+      title: t("windowDetailTitle", { window: window2.ref }),
+      close: t("closeSheet"),
+      onClose: props.onClose
+    },
+    (0, import_react.createElement)(
+      "div",
+      { className: "arbor-detail" },
+      (0, import_react.createElement)(
+        "div",
+        { className: "arbor-detail-head" },
+        (0, import_react.createElement)(StateChip, { state: window2.state, t }),
+        window2.handoff === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn" }, t("handoff"))
+      ),
+      window2.doing === void 0 ? null : (0, import_react.createElement)("div", { className: "arbor-detail-doing", "data-arbor-text": "body" }, window2.doing),
+      ...rows,
+      handoffRows.length === 0 ? null : (0, import_react.createElement)(
+        "div",
+        { className: "arbor-detail-handoff" },
+        (0, import_react.createElement)("div", { className: "arbor-detail-handoff-title arbor-label", "data-arbor-text": "display" }, t("handoff")),
+        ...handoffRows
+      )
+    ),
+    window2.endRefused === void 0 ? null : (0, import_react.createElement)(EndRefusal, { refusal: window2.endRefused, t })
+  );
+}
 function ChainCard(props) {
   const { session, windows, t } = props;
-  if (windows.length === 0) return null;
-  const shown = shownWindows(windows, props.streams);
-  const handoffs = windows.filter((window2) => window2.handoff !== void 0 && (window2.handoff.topics !== void 0 || window2.handoff.progress !== void 0 || window2.handoff.pending !== void 0 || window2.handoff.agreements !== void 0));
+  const [detail, setDetail] = (0, import_react.useState)();
+  const [earlierOpen, setEarlierOpen] = (0, import_react.useState)(false);
+  const [openRuns, setOpenRuns] = (0, import_react.useState)([]);
+  const shown = (0, import_react.useMemo)(() => shownWindows(windows, props.streams), [windows, props.streams]);
+  const steps = (0, import_react.useMemo)(() => chainSteps(shown), [shown]);
+  (0, import_react.useEffect)(() => {
+    if (detail === void 0) return;
+    const close = (event) => {
+      if (event.key === "Escape") setDetail(void 0);
+    };
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("keydown", close);
+    };
+  }, [detail]);
+  if (shown.length === 0) return null;
+  const live = liveWindowOf(shown);
+  const current = live ?? shown[shown.length - 1];
+  const currentIndex = shown.indexOf(current);
+  const before = shown.filter((_, index) => index !== currentIndex);
+  const recentWindows = before.slice(-CHAIN_RECENT);
+  const earlierWindows = before.slice(0, Math.max(0, before.length - CHAIN_RECENT));
+  const stepOf = new Map(steps.map((step) => [step.window.ref, step]));
+  const recentSteps = recentWindows.flatMap((window2) => {
+    const step = stepOf.get(window2.ref);
+    return step === void 0 ? [] : [step];
+  });
+  const earlierSteps = earlierWindows.flatMap((window2) => {
+    const step = stepOf.get(window2.ref);
+    return step === void 0 ? [] : [step];
+  });
+  const recentItems = [];
+  for (const step of recentSteps) {
+    const last = recentItems.at(-1);
+    if (step.link === "restart" && last?.kind === "run") last.steps.push(step);
+    else if (step.link === "restart") recentItems.push({ kind: "run", steps: [step] });
+    else recentItems.push({ kind: "step", step });
+  }
+  const segments = chainSegments(earlierSteps);
+  const runEndingNow = restartRunEndingAt(steps, currentIndex);
+  const latestHandoff = [...recentSteps.map((step) => step.window), current].reverse().find((window2) => handoffSummary(window2) !== void 0);
+  const latestHandoffText = latestHandoff === void 0 ? void 0 : handoffSummary(latestHandoff);
+  const listRows = [];
+  for (const segment of segments) {
+    const first = segment.windows[0];
+    if (first === void 0) continue;
+    if (segment.link === "restart" && segment.windows.length > 1) {
+      const key = first.ref;
+      listRows.push({ kind: "run", segment, key, child: false });
+      if (openRuns.includes(key)) {
+        for (const window2 of segment.windows) {
+          const step = stepOf.get(window2.ref);
+          if (step !== void 0) listRows.push({ kind: "window", step, key: `w-${window2.ref}`, child: true });
+        }
+      }
+    } else {
+      for (const window2 of segment.windows) {
+        const step = stepOf.get(window2.ref);
+        if (step !== void 0) listRows.push({ kind: "window", step, key: `w-${window2.ref}`, child: false });
+      }
+    }
+  }
+  const earlierSpan = chainSpan(t, earlierSteps.map((step) => step.window));
+  const earlierText = earlierSteps.length === 1 ? t("chainEarlierOne") : t("chainEarlier", { count: earlierSteps.length });
   return (0, import_react.createElement)(
     Card,
-    { className: "arbor-chain-card" },
+    { className: "arbor-chain-card", attrs: { "data-arbor-chain": current.ref } },
     (0, import_react.createElement)(CardHead, {
       kicker: t("cardChain"),
       aside: session === void 0 ? void 0 : (0, import_react.createElement)("span", { className: "arbor-card-session arbor-label" }, sessionTitle(session))
     }),
     (0, import_react.createElement)(
-      "div",
-      { className: "arbor-chain-scroll" },
+      "button",
+      {
+        type: "button",
+        className: `arbor-chain-now arbor-chain-now-${current.state}`,
+        onClick: () => {
+          setDetail(current);
+        },
+        "aria-label": t("openWindowDetails", { window: current.ref }),
+        "data-arbor-window": current.ref
+      },
       (0, import_react.createElement)(
-        "div",
-        { className: "arbor-chain" },
-        shown.flatMap((window2, index) => {
-          const next = shown[index + 1];
-          const link = next?.continuationOf === window2.ref && window2.endReason === "host_restart" ? t("chainRestart") : void 0;
-          const node = (0, import_react.createElement)(
-            "div",
-            {
-              className: `arbor-node arbor-node-${window2.state}`,
-              key: `node-${window2.ref}`,
-              "data-arbor-window": window2.ref
-            },
-            (0, import_react.createElement)("span", { className: "arbor-node-ref arbor-num" }, window2.ref),
-            (0, import_react.createElement)("span", { className: "arbor-node-state arbor-label" }, stateLabel(t, window2)),
-            window2.handoff === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-node-handoff arbor-tag arbor-tag-warn" }, t("handoff"))
-          );
-          if (next === void 0) return [node];
-          return [node, (0, import_react.createElement)(
-            "div",
-            { className: "arbor-connector", key: `edge-${window2.ref}` },
-            (0, import_react.createElement)("span", { className: "arbor-connector-line", "aria-hidden": true }),
-            link === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-connector-label arbor-label" }, link),
-            (0, import_react.createElement)("span", { className: "arbor-connector-arrow", "aria-hidden": true }, "\u2192")
-          )];
-        })
+        "span",
+        { className: "arbor-chain-now-top" },
+        (0, import_react.createElement)(ChainLabel, { text: t("chainNow") }),
+        (0, import_react.createElement)(StateChip, { state: current.state, t }),
+        runEndingNow === 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-run-kind arbor-tag arbor-tag-warn arbor-label", "data-arbor-text": "display" }, t("chainRestartRun", { count: runEndingNow }))
+      ),
+      (0, import_react.createElement)("span", { className: "arbor-chain-now-ref arbor-num", "data-arbor-text": "numeric" }, current.ref),
+      current.handoff === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-tag arbor-tag-warn" }, t("handoff")),
+      current.doing === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-chain-now-doing", "data-arbor-text": "body" }, current.doing),
+      (0, import_react.createElement)(
+        "span",
+        { className: "arbor-chain-now-meta" },
+        (0, import_react.createElement)("span", { "data-arbor-text": "body" }, current.continuationOf === void 0 ? t("chainStart") : t("continuesFrom", { window: current.continuationOf })),
+        current.startedAt === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, clock(current.startedAt, t)),
+        current.used === void 0 ? null : (0, import_react.createElement)("span", { className: "arbor-num", "data-arbor-text": "numeric" }, `${compact(current.used)} / ${compact(current.limit)}`)
       )
     ),
-    handoffs.length === 0 ? null : (0, import_react.createElement)(
+    recentItems.length === 0 ? null : (0, import_react.createElement)(
+      "div",
+      { className: "arbor-chain-recent" },
+      (0, import_react.createElement)(ChainLabel, { text: t("chainRecent") }),
+      ...recentItems.map((item) => item.kind === "run" && item.steps.length > 1 ? (0, import_react.createElement)(ChainRunRow, { key: `run-${item.steps[0]?.window.ref ?? ""}`, steps: item.steps, t, onOpen: setDetail }) : (0, import_react.createElement)(ChainStepRow, { key: item.kind === "step" ? item.step.window.ref : item.steps[0]?.window.ref, step: item.kind === "step" ? item.step : item.steps[0], t, onOpen: setDetail }))
+    ),
+    latestHandoff === void 0 || latestHandoffText === void 0 ? null : (0, import_react.createElement)(
       "div",
       { className: "arbor-handoffs" },
-      handoffs.map((window2) => (0, import_react.createElement)(
+      (0, import_react.createElement)(ChainLabel, { text: t("handoff") }),
+      (0, import_react.createElement)(
         "div",
-        { className: "arbor-handoff-row", key: `h-${window2.ref}` },
-        (0, import_react.createElement)("span", { className: "arbor-handoff-ref arbor-num" }, `${window2.ref} ${t("handoff")}`),
-        (0, import_react.createElement)(
-          "span",
-          { className: "arbor-handoff-text", "data-arbor-text": "body" },
-          [...window2.handoff?.topics ?? [], ...window2.handoff?.progress ?? [], ...window2.handoff?.pending ?? []].join(" \xB7 ")
-        )
-      ))
+        { className: "arbor-handoff-row", key: `h-${latestHandoff.ref}` },
+        (0, import_react.createElement)("span", { className: "arbor-handoff-ref arbor-num" }, latestHandoff.ref),
+        (0, import_react.createElement)("span", { className: "arbor-handoff-text", "data-arbor-text": "body" }, latestHandoffText)
+      )
+    ),
+    earlierSteps.length === 0 ? null : (0, import_react.createElement)(
+      "div",
+      { className: "arbor-chain-earlier" },
+      (0, import_react.createElement)(
+        "div",
+        { className: "arbor-chain-earlier-head" },
+        (0, import_react.createElement)("span", { className: "arbor-chain-earlier-summary arbor-num", "data-arbor-text": "numeric" }, earlierSpan === void 0 ? earlierText : `${earlierText} \xB7 ${earlierSpan}`),
+        (0, import_react.createElement)("button", {
+          type: "button",
+          className: "arbor-chain-earlier-toggle arbor-card-link arbor-label",
+          "data-arbor-text": "display",
+          "aria-expanded": earlierOpen,
+          onClick: () => {
+            setEarlierOpen((value) => !value);
+          }
+        }, earlierOpen ? t("chainHideEarlier") : t("chainShowEarlier"))
+      ),
+      !earlierOpen ? null : (0, import_react.createElement)(WindowList, {
+        rows: listRows,
+        openRuns,
+        t,
+        onOpen: setDetail,
+        onToggleRun: (key) => {
+          setOpenRuns((value) => value.includes(key) ? value.filter((one) => one !== key) : [...value, key]);
+        }
+      })
     ),
     (0, import_react.createElement)(
       CardFoot,
       null,
       (0, import_react.createElement)("span", { className: "arbor-num" }, chainSummary(t, shown))
-    )
+    ),
+    detail === void 0 ? null : (0, import_react.createElement)(WindowDetail, {
+      window: shown.find((window2) => window2.ref === detail.ref) ?? detail,
+      t,
+      onClose: () => {
+        setDetail(void 0);
+      }
+    })
   );
 }
 function SessionCard(props) {
@@ -2973,9 +3433,9 @@ function ArborPage(props) {
         if (!element.hasAttribute("data-arbor-text")) element.setAttribute("data-arbor-text", role);
       }
     };
-    mark(".arbor-num,.arbor-hero-num,.arbor-date,.arbor-node-ref,.arbor-handoff-ref,.arbor-env-big,.arbor-search-total,.arbor-hit-ref,.arbor-hit-window", "numeric");
+    mark(".arbor-num,.arbor-hero-num,.arbor-date,.arbor-handoff-ref,.arbor-env-big,.arbor-search-total,.arbor-hit-ref,.arbor-hit-window", "numeric");
     mark(".arbor-mono,.arbor-card-project,.arbor-md-code,.arbor-md-pre,.arbor-md-pre code", "code");
-    mark(".arbor-card-kicker,.arbor-card-title,.arbor-tab,.arbor-pill,.arbor-state,.arbor-tag,.arbor-empty-title,.arbor-card-link,.arbor-stream-label,.arbor-sheet-title,.arbor-search-group-title,.arbor-search-go,.arbor-settings-group-title,.arbor-node-state,.arbor-hero-name,.arbor-env-group-title,.arbor-workspace-row > .arbor-label,.arbor-hit-kind,.arbor-env-count > .arbor-label,.arbor-tab-close,.arbor-connector-label,.arbor-connector-arrow", "display");
+    mark(".arbor-card-kicker,.arbor-card-title,.arbor-tab,.arbor-pill,.arbor-state,.arbor-tag,.arbor-empty-title,.arbor-card-link,.arbor-stream-label,.arbor-sheet-title,.arbor-search-group-title,.arbor-search-go,.arbor-settings-group-title,.arbor-hero-name,.arbor-env-group-title,.arbor-workspace-row > .arbor-label,.arbor-hit-kind,.arbor-env-count > .arbor-label,.arbor-tab-close", "display");
     for (const element of Array.from(root.querySelectorAll("*"))) {
       if (element.namespaceURI === "http://www.w3.org/2000/svg") continue;
       if (element.tagName === "SCRIPT" || element.tagName === "STYLE") continue;
@@ -3122,7 +3582,7 @@ function ArborPanelIcon(props) {
   );
 }
 
-// src/client.ts
+// packages/arbor-ui/src/client.ts
 var SEAT_SLOT = "conversation.input.permission";
 var HERO_SEAT_SLOT = "conversation.hero.agentPreset";
 var ARBOR_PRESET = "arbor";
