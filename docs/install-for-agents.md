@@ -26,7 +26,7 @@ Pins, and do not change them without being asked:
 - arbor `@4fu/arbor-*` `2026.1109.1`, from npm. `@4fu/arbor-errors` is
   `2026.1107.0`, the only published version.
 - This repository's published packages are `@4fu/dsh-arbor-*` at
-  `2026.1110.0`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.0`.
+  `2026.1110.1`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.1`.
   Install the bundle from npm; a checkout is only needed for the proofs or for
   development. `@4fu/dsh-arbor-testkit` and the root package stay private.
 - The optional font plugin is `@4fu/dsh-arbor-fonts@2026.1110.0` from
@@ -55,7 +55,7 @@ exactly, so install it and let npm fetch them:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home       # any empty directory
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.0
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.1
 dsh web
 ```
 
@@ -398,13 +398,18 @@ From npm, one command does the wiring:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.0
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.1
 dsh web
 ```
 
 The plugin command installs the bundle and its exact dependencies into
 `$DSH_HOME/profiles/web/node_modules` and adds `@4fu/dsh-arbor-bundle` to that
-profile's `dsh.profile.bundles`. The bundle carries the two `dsh.client`
+profile's `dsh.profile.bundles`. The arbor packages declare every DSH runtime
+package they import — Cordis and each `@deepseek-ai/dsh-*` package — as a peer
+dependency, so the profile holds no second copy of them and DSH's profile
+resolver hands arbor the installation's own modules. Only private libraries
+(`@deepseek-ai/schemastery`, `zod`) and arbor's own `@4fu/arbor-*` packages are
+plain dependencies. The bundle carries the two `dsh.client`
 packages and the facts route registers on DSH's browser connection.
 
 For a checkout, create a profile from a shipped template and link the package
@@ -480,7 +485,7 @@ path the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
 ## 9. Release notes
 
 The bundle and its 11 dependencies are published under `@4fu` at
-`2026.1110.0`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
+`2026.1110.1`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
 testkit and the root package stay private.
 
 - The published packages ship JavaScript and `.d.ts` declarations. Development
@@ -489,8 +494,9 @@ testkit and the root package stay private.
   `workspace:*` dependency specs are the exact release version.
 - `pnpm build` rebuilds the browser entries, compiles every package, copies the
   bundle's patch and locale, and rewrites `.ts` specifiers in declarations.
-- `node scripts/publish.mjs` is the dry run; `--publish` publishes all packages
-  at the release version. Every package ships its MIT `LICENSE`, and the font
+- `node scripts/publish.mjs` is the dry run; `--pack-dir <dir>` writes the
+  tarballs a profile install receives, and `--publish` publishes all packages at
+  the release version. Every package ships its MIT `LICENSE`, and the font
   package also ships the OFL text, attribution and per-file hashes.
 - The packages name each other exactly. Install or upgrade the bundle as one
   unit; a partial install leaves a package at the old version.

@@ -11,6 +11,7 @@
   "packageManager": "pnpm@11.28.5",
   "scripts": {
     "check:pin": "node scripts/check-dsh-pin.mjs",
+    "check:profile": "node scripts/check-profile.mjs",
     "proof:boot": "node --experimental-strip-types --no-warnings proofs/00-boot.ts",
     "proof:routing": "node --experimental-strip-types --no-warnings proofs/01-routing.ts",
     "proof:roundtrip": "node --experimental-strip-types --no-warnings proofs/02-roundtrip.ts",

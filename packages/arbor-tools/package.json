@@ -1,17 +1,28 @@
 {
   "name": "@4fu/dsh-arbor-tools",
-  "version": "2026.1110.0",
+  "version": "2026.1110.1",
   "type": "module",
   "description": "Tool bridge: DSH tools enter arbor as external tools with their own JSON Schema, the ones arbor replaces are restricted away, and calls run through ctx.tools.execute",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
   "dependencies": {
-    "@4fu/arbor-interfaces": "2026.1109.1",
+    "@4fu/arbor-interfaces": "2026.1109.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
     "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-agent": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1"
   },
   "license": "MIT",
   "repository": {
@@ -25,9 +36,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "files": [
-    "src",
-    "LICENSE"
-  ]
+  }
 }

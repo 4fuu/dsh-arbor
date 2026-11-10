@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-driver",
-  "version": "2026.1110.0",
+  "version": "2026.1110.1",
   "type": "module",
   "description": "The arbor agent driver: per-preset routing over the embedded official AgentLoop, the arbor AgentFactory, the session agent, and resume from the arbor journal",
   "exports": {
@@ -9,6 +9,10 @@
     "./relay": "./src/relay.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
   "dependencies": {
     "@4fu/arbor-core": "2026.1109.1",
     "@4fu/arbor-interfaces": "2026.1109.1",
@@ -17,6 +21,10 @@
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",
     "@4fu/dsh-arbor-tools": "workspace:*",
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "zod": "~4.4.3"
+  },
+  "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
     "@deepseek-ai/dsh-brand": "0.2.2-rc.1",
@@ -27,9 +35,20 @@
     "@deepseek-ai/dsh-session-projection": "0.2.2-rc.1",
     "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
-    "@deepseek-ai/schemastery": "~3.19.0",
-    "zod": "~4.4.3"
+    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-brand": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-scope": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-persistence": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1"
   },
   "license": "MIT",
   "repository": {
@@ -43,9 +62,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "files": [
-    "src",
-    "LICENSE"
-  ]
+  }
 }

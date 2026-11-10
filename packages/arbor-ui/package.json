@@ -1,6 +1,6 @@
 {
   "name": "@4fu/dsh-arbor-ui",
-  "version": "2026.1110.0",
+  "version": "2026.1110.1",
   "type": "module",
   "description": "The dsh-arbor browser package: the permanent left-sidebar arbor page, its per-session tabs and live window streams, and for arbor sessions the sandbox access-mode gate; ordinary sessions keep their controls unchanged",
   "exports": {
@@ -25,17 +25,24 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "4.1.0",
-    "@deepseek-ai/dsh-client-ui-permission-presets": "0.2.2-rc.1",
-    "@4fu/dsh-arbor-facts": "workspace:*",
-    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.1"
+    "@4fu/dsh-arbor-facts": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-permission-presets": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.2-rc.1",
     "@types/react": "^18.3.0",
     "esbuild": "0.28.2",
     "react": "^18.2.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-permission-presets": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.2.2-rc.1"
   },
   "license": "MIT",
   "repository": {

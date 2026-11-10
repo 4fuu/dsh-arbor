@@ -1,9 +1,11 @@
 /**
  * Pack every release package, or publish the release's packages, from `dist`.
  *
- *   node scripts/publish.mjs              `npm pack --dry-run` for every package
- *   node scripts/publish.mjs --publish    `npm publish` for each package at the
- *                                         release version
+ *   node scripts/publish.mjs                   `npm pack --dry-run` for every package
+ *   node scripts/publish.mjs --pack-dir <dir>  write real tarballs into <dir>, as
+ *                                              a profile install would receive them
+ *   node scripts/publish.mjs --publish         `npm publish` for each package at
+ *                                              the release version
  *
  * Development points the package manifests' `exports` at the TypeScript sources
  * because that is what the proofs run. A published package cannot do that:
@@ -16,13 +18,17 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { copyFile, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { filesUnder, releasePackages } from './release-packages.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const publish = process.argv.includes('--publish')
+const packDirAt = process.argv.indexOf('--pack-dir')
+const packDir = packDirAt === -1 ? undefined : process.argv[packDirAt + 1]
+if (packDirAt !== -1 && (packDir === undefined || packDir.startsWith('--'))) throw new Error('--pack-dir needs a directory')
+if (publish && packDir !== undefined) throw new Error('--publish and --pack-dir are exclusive')
 const packages = await releasePackages()
 const version = packages[0]?.manifest.version
 
@@ -139,7 +145,8 @@ async function copyDocuments(package_) {
 }
 
 if (publish) checkDate(version)
-console.log(`${publish ? 'publishing' : 'packing'} ${packages.length} packages at ${version}`)
+if (packDir !== undefined) await mkdir(resolve(packDir), { recursive: true })
+console.log(`${publish ? 'publishing' : packDir === undefined ? 'packing' : `packing into ${resolve(packDir)}`} ${packages.length} packages at ${version}`)
 
 for (const package_ of packages) {
   await checkBuild(package_)
@@ -147,7 +154,7 @@ for (const package_ of packages) {
   const files = (await filesUnder(package_.dist)).filter(file => !['package.json', 'README.md', 'LICENSE'].includes(file))
   const manifest = await publishManifest(package_, files)
   await writeFile(join(package_.dist, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-  const args = publish ? ['publish', '--access', 'public'] : ['pack', '--dry-run']
+  const args = publish ? ['publish', '--access', 'public'] : packDir === undefined ? ['pack', '--dry-run'] : ['pack', '--pack-destination', resolve(packDir)]
   const result = spawnSync('npm', args, { cwd: package_.dist, stdio: 'inherit' })
   if (result.status !== 0) throw new Error(`${package_.name}: npm exited with ${result.status}`)
 }

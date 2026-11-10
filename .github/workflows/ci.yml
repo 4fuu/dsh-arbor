@@ -28,6 +28,24 @@ jobs:
       - name: Proofs
         run: pnpm proofs
 
+  # What a user actually installs: the packed tarballs into a fresh DSH web
+  # profile, then both kinds of session through the RPC the web UI uses. The
+  # checkout resolves one copy of every DSH package, so only this job can see a
+  # published package that adds a second copy to a profile.
+  profile-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Profile install
+        run: pnpm check:profile
+
   # Four proofs against the real DeepSeek model, including the B3 closed loop.
   # The job is skipped
   # unless the repository variable ARBOR_PROOF_LIVE is set to 1, because a run

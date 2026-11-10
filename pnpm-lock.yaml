@@ -68,6 +68,13 @@ importers:
       '@4fu/dsh-arbor-tools':
         specifier: workspace:*
         version: link:../arbor-tools
+      '@deepseek-ai/schemastery':
+        specifier: ~3.19.0
+        version: 3.19.0
+      zod:
+        specifier: ~4.4.3
+        version: 4.4.3
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -101,12 +108,6 @@ importers:
       '@deepseek-ai/dsh-working-directory':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(2e93c6a6b6944e263e4a70a777c66b49)
-      '@deepseek-ai/schemastery':
-        specifier: ~3.19.0
-        version: 3.19.0
-      zod:
-        specifier: ~4.4.3
-        version: 4.4.3
 
   packages/arbor-env:
     dependencies:
@@ -122,6 +123,7 @@ importers:
       '@4fu/arbor-prompt':
         specifier: 2026.1109.1
         version: 2026.1109.1
+    devDependencies:
       '@deepseek-ai/dsh-skill':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-llm@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
@@ -140,6 +142,7 @@ importers:
       '@4fu/dsh-arbor-host':
         specifier: workspace:*
         version: link:../arbor-host
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -182,6 +185,10 @@ importers:
       '@4fu/dsh-arbor-workspace':
         specifier: workspace:*
         version: link:../arbor-workspace
+      '@deepseek-ai/schemastery':
+        specifier: ~3.19.0
+        version: 3.19.0
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -218,9 +225,6 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-session-persistence@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-brand@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-session@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-timeout@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-session@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage-domain@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-storage@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)))(@deepseek-ai/dsh-storage@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-typert-protocol@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
-      '@deepseek-ai/schemastery':
-        specifier: ~3.19.0
-        version: 3.19.0
 
   packages/arbor-llm:
     dependencies:
@@ -233,6 +237,7 @@ importers:
       '@4fu/dsh-arbor-tools':
         specifier: workspace:*
         version: link:../arbor-tools
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -251,6 +256,10 @@ importers:
 
   packages/arbor-preset:
     dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: ~3.19.0
+        version: 3.19.0
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -260,9 +269,6 @@ importers:
       '@deepseek-ai/dsh-agent-preset-registry':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(7137409e0258bf069afa9a47c7e154d1)
-      '@deepseek-ai/schemastery':
-        specifier: ~3.19.0
-        version: 3.19.0
 
   packages/arbor-prompt:
     dependencies:
@@ -272,6 +278,7 @@ importers:
       '@4fu/arbor-prompt':
         specifier: 2026.1109.1
         version: 2026.1109.1
+    devDependencies:
       '@deepseek-ai/dsh-agent':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(d9740b81bf2b48fd86b0c38a41e906a0)
@@ -338,6 +345,7 @@ importers:
       '@4fu/arbor-interfaces':
         specifier: 2026.1109.1
         version: 2026.1109.1
+    devDependencies:
       '@deepseek-ai/dsh-agent':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(d9740b81bf2b48fd86b0c38a41e906a0)
@@ -353,6 +361,7 @@ importers:
       '@4fu/dsh-arbor-facts':
         specifier: workspace:*
         version: link:../arbor-facts
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
@@ -368,7 +377,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-sidebar-right':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
-    devDependencies:
       '@types/react':
         specifier: ^18.3.0
         version: 18.3.31
@@ -380,11 +388,10 @@ importers:
         version: 18.3.1
 
   packages/arbor-ui-workspace:
-    dependencies:
+    devDependencies:
       '@deepseek-ai/cordis':
         specifier: 4.1.0
         version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
-    devDependencies:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)
@@ -406,6 +413,7 @@ importers:
       '@4fu/arbor-interfaces':
         specifier: 2026.1109.1
         version: 2026.1109.1
+    devDependencies:
       '@deepseek-ai/dsh-session':
         specifier: 0.2.2-rc.1
         version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))

@@ -1,12 +1,16 @@
 {
   "name": "@4fu/dsh-arbor-host",
-  "version": "2026.1110.0",
+  "version": "2026.1110.1",
   "type": "module",
   "description": "The one Arbor host a DSH process runs: the durable SQLite journal and note store under DSH_HOME/arbor, the settings and the window lifecycle",
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "src",
+    "LICENSE"
+  ],
   "dependencies": {
     "@4fu/arbor-core": "2026.1109.1",
     "@4fu/arbor-environment-dir": "2026.1109.1",
@@ -19,6 +23,9 @@
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",
     "@4fu/dsh-arbor-workspace": "workspace:*",
+    "@deepseek-ai/schemastery": "~3.19.0"
+  },
+  "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
     "@deepseek-ai/dsh-home-paths": "0.2.2-rc.1",
@@ -30,8 +37,21 @@
     "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
     "@deepseek-ai/dsh-user-approval": "0.2.2-rc.1",
     "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-workspace": "0.2.2-rc.1",
-    "@deepseek-ai/schemastery": "~3.19.0"
+    "@deepseek-ai/dsh-workspace": "0.2.2-rc.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-plan-mode": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-skill": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-user-approval": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-working-directory": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-workspace": "0.2.2-rc.1"
   },
   "license": "MIT",
   "repository": {
@@ -45,9 +65,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "files": [
-    "src",
-    "LICENSE"
-  ]
+  }
 }
