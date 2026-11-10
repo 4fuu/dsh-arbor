@@ -85,7 +85,8 @@ export const DSH_SECTION_DECISIONS: Readonly<Record<string, SectionDecision>> = 
   'plan:policy': 'plan',
 
   // ---- tools arbor's own replace ------------------------------------------
-  // bash / pwsh: arbor's `bash`, `bash_output`, `bash_stop`.
+  // bash / pwsh: arbor's shell tool (`bash`/`bash_output`/`bash_stop` on
+  // POSIX, `pwsh`/`pwsh_output`/`pwsh_stop` on Windows).
   'tool:bash': 'drop',
   'tool:pwsh': 'drop',
   // read / write / edit / apply_patch: arbor's file tools.
@@ -96,7 +97,7 @@ export const DSH_SECTION_DECISIONS: Readonly<Record<string, SectionDecision>> = 
   // glob / grep: arbor's `workspace` module.
   'tool:glob': 'drop',
   'tool:grep': 'drop',
-  // job_*: arbor's `bash_output` / `bash_stop`.
+  // job_*: arbor's shell output and stop tools.
   'tool:jobs': 'drop',
   // schedule_*: arbor's own `schedule` module. DSH's scheduler opens another
   // DSH session, which fights arbor's source model.

@@ -66,6 +66,49 @@ export interface DshEnvironmentOptions {
    * replaces them the moment it makes one.
    */
   readonly seedSettings?: Settings
+  /**
+   * The window budget DSH's selected model implies, read whenever the settings
+   * are read. The bridge supplies the model's real context window here so a
+   * window's limit and reserve follow the model rather than arbor's 200k
+   * default; an explicit `window.contextTokens` or `window.reserveTokens`
+   * installed in the settings still wins.
+   *
+   * Absent leaves arbor's own defaults, which is what a deployment without DSH,
+   * or a session whose model reports no capacity, uses.
+   */
+  readonly windowLimits?: () => WindowLimits | undefined
+}
+
+/** The part of a window's limits a model can imply. */
+export interface WindowLimits {
+  readonly contextTokens?: number
+  readonly reserveTokens?: number
+}
+
+/**
+ * One settings object with the model's live window budget under `window`.
+ *
+ * The getter is read at the moment a window opens, so a budget the bridge
+ * computed for the session whose turn is running is what that window records;
+ * a value the model installed at `/env/settings.json` is spread last and wins.
+ */
+function withWindowLimits(settings: Settings, limits: () => WindowLimits | undefined): Settings {
+  // Property descriptors, not a spread: the deployment's identity is a getter
+  // that resolves DSH's per-session persona on every render, and a spread would
+  // freeze the value the host was built with.
+  const wrapped = Object.create(
+    Object.getPrototypeOf(settings) as object | null,
+    Object.getOwnPropertyDescriptors(settings),
+  ) as Settings
+  Object.defineProperty(wrapped, 'window', {
+    enumerable: true,
+    configurable: true,
+    get: () => {
+      const merged = { ...limits(), ...settings.window }
+      return Object.keys(merged).length === 0 ? undefined : merged
+    },
+  })
+  return wrapped
 }
 
 export class DshEnvironment implements Environment {
@@ -74,6 +117,7 @@ export class DshEnvironment implements Environment {
   private readonly toolNames: () => readonly string[]
   private readonly cwd: () => string
   private readonly seed: Settings | undefined
+  private readonly windowLimits: (() => WindowLimits | undefined) | undefined
 
   /** The mounted DSH skills and MCP servers, read the last time `list` ran. */
   private mounted: { skills: readonly DshSkill[]; servers: readonly DshServer[] } = { skills: [], servers: [] }
@@ -88,6 +132,7 @@ export class DshEnvironment implements Environment {
     this.toolNames = options.toolNames
     this.cwd = options.cwd ?? (() => process.cwd())
     this.seed = options.seedSettings
+    this.windowLimits = options.windowLimits
     // DSH's catalog moving re-reads it, so a skill a plugin adds or removes
     // reaches `/env` without a restart.
     this.skills.onChange(() => {
@@ -178,7 +223,12 @@ export class DshEnvironment implements Environment {
    * one, and the deployment's seed until then.
    */
   async settings(): Promise<Settings | undefined> {
-    return (await this.inner.settings()) ?? this.seed
+    const settings = (await this.inner.settings()) ?? this.seed
+    if (settings === undefined || this.windowLimits === undefined) return settings
+    // Always wrap: arbor caches this object when it loads, and the budget for
+    // the first window is only known later, when that window opens. The getter
+    // answers undefined until then, so arbor's own defaults apply.
+    return withWindowLimits(settings, this.windowLimits)
   }
 
   /**

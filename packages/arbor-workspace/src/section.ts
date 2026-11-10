@@ -24,7 +24,7 @@
  * No tool documentation is restated and no general advice is added. The paths
  * are absolute and arbor's own file tools take an absolute path wherever it
  * names (`@4fu/arbor-tools`, `groups/files.js`, `hostPath`: "itself when it is
- * absolute, under the workspace when it is not"), and `bash` runs on the host,
+ * absolute, under the workspace when it is not"), and the shell tool runs on the host,
  * so the line promises only what a tool does.
  *
  * The lines are rendered as blocks of this module's own kinds, the way arbor
@@ -86,7 +86,7 @@ export const POINTER_TEXT: TextTable = {
   // by its absolute path.
   'workspace.project.item': '当前项目 {name}：{path}',
   // Arbor's own ovnfs lines already say where the shared folder is, that every
-  // window reads from it, that bash runs there by default and that a change
+  // window reads from it, that the shell tool runs there by default and that a change
   // goes through a checkout (`workspace.method.shared`, `workspace.method.open`,
   // `workspace.method.readonly`), so this line adds only what they cannot say
   // about one project: that it is a subdirectory of that same place, so the

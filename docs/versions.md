@@ -11,13 +11,32 @@ README and the install guide summarize it.
 | --- | --- | --- |
 | DeepSeek Harness | tag `dsh-v0.2.2-rc.1`, commit `66491b05e3` of `deepseek-ai/deepseek-harness` | npm packages `@deepseek-ai/dsh@0.2.2-rc.1` and the companion `@deepseek-ai/dsh-*` packages at `0.2.2-rc.1` |
 | arbor | `2026.1110.0` | npm packages `@4fu/arbor-*`; `@4fu/arbor-errors` is `2026.1107.0`, the only published version |
-| dsh-arbor packages | `2026.1110.2` | npm packages `@4fu/dsh-arbor-*`; the bundle and its 11 dependencies are published together |
+| dsh-arbor packages | `2026.1110.3` | npm packages `@4fu/dsh-arbor-*`; the bundle and its 11 dependencies are published together |
 | dsh-arbor-fonts | `2026.1110.0` | npm package `@4fu/dsh-arbor-fonts`, a separate repository |
 | Node.js | `>=24.9.0` (developed on Node 26) | `engines` in the root `package.json`; the checkout runs the TypeScript sources, while the published packages ship JavaScript and declarations |
 | pnpm | `11.28.5` | `packageManager` in the root `package.json`; `.agents/setup` installs that exact version |
 
 `@deepseek-ai/cordis` is pinned separately at `4.1.0`. It is the Cordis runtime,
 not a DSH package, and DSH's own packages pin it the same way.
+
+## The arbor release comes first
+
+`2026.1110.3` needs an arbor release that carries the PowerShell shell.
+arbor `2026.1110.0` does not: it is the version this branch pins, and a Windows
+command there still runs through `/bin/sh`. The PowerShell replacement lives in
+`@4fu/arbor-tools`, which a profile gets through `@4fu/arbor-core`, and every
+package here names `@4fu/arbor-*` at an exact version. Depending on an
+unreleased version would fail `check:profile` and every install, so this branch
+stays on the newest published core until the shell fix is released.
+
+Publish the arbor release containing the shell fix first, then bump every
+`@4fu/arbor-*` dependency in `packages/*/package.json` to the versions that
+release published and refresh `pnpm-lock.yaml` in the same commit. arbor's own
+`windows-shell` CI job proves the shell tool on `windows-latest` before that
+release; this repository's `windows-tools` job proves the preset allowlist, the
+window budget and the profile install, and reports which shell the installed
+core gives the window. After the dependency bump it must report `pwsh`, not
+`bash`.
 
 ## What a published package depends on
 
@@ -119,6 +138,11 @@ A different version is unsupported and may fail in any of these ways:
   DSH's registered names and fails when the table does not decide one. A newer
   DSH that registers a new section would fail that proof rather than let the
   section reach a window undecided.
+- **The preset allowlist is pinned.** `packages/arbor-preset/src/plugins.ts`
+  names DSH's preset rows and copies their ids and configuration from this
+  version. A different DSH may rename a row, move it to another preset, or add a
+  service it needs; `proofs/26-windows-tools.ts` checks the composition and the
+  prompt/tool-set equality against the installed preset packages.
 - **The browser surface can stop registering.** The Arbor page and the
   composer's preset gate are pinned to DSH's client slot and preset
   registration shapes. `proofs/18-picker-pin.ts` fails when the shipped

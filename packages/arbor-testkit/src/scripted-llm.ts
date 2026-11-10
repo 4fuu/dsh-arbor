@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk, TokenUsage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk, TokenUsage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { ToolCallId as brandToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 
@@ -39,6 +39,11 @@ export class ScriptedLlm {
   gate: Promise<void> | undefined
   /** Every assembled request, in call order. */
   readonly seen: GenerateOptions[] = []
+  /**
+   * The context window the scripted route reports, for the window-budget proof.
+   * Absent means the adapter reports no capacity, which is the fallback case.
+   */
+  contextWindow: number | undefined
 }
 
 /** The scripted provider route's id. */
@@ -77,10 +82,18 @@ function* chunksOf(response: ScriptedResponse): Generator<StreamChunk> {
 /** The scripted adapter: one response per stream call, in script order. */
 export class ScriptedAdapter extends LlmAdapter {
   private readonly script: ScriptedLlm
+  private readonly contextWindow: number | undefined
 
-  constructor(script: ScriptedLlm) {
+  /**
+   * @param script - the response script every route shares.
+   * @param contextWindow - the capacity this route reports; `null` reports none
+   *   even when the script sets one, which is how the fallback proof gets a
+   *   second route on the same script.
+   */
+  constructor(script: ScriptedLlm, contextWindow: number | null | undefined = undefined) {
     super()
     this.script = script
+    this.contextWindow = contextWindow === null ? undefined : contextWindow ?? script.contextWindow
   }
 
   override providerInfo(provider: string): LlmProviderInfo {
@@ -89,6 +102,15 @@ export class ScriptedAdapter extends LlmAdapter {
 
   override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
     return [{ provider, id: SCRIPTED_MODEL, name: `${provider}/${SCRIPTED_MODEL}` }]
+  }
+
+  override async resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return {
+      provider,
+      id: model,
+      name: `${provider}/${model}`,
+      ...this.contextWindow === undefined ? {} : { context: { contextWindow: this.contextWindow } },
+    }
   }
 
   override stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

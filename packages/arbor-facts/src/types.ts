@@ -81,6 +81,13 @@ export interface ArborWindowFacts {
   readonly used?: number
   readonly limit?: number
   readonly reserve?: number
+  /**
+   * Where the window's limit came from: `model` when DSH reported the selected
+   * model's real context window, `default` when it reported none and arbor's
+   * 200k/4k default applied. A reader shows the default as a fallback rather
+   * than as the model's capacity.
+   */
+  readonly limitSource?: 'model' | 'default'
   /** The board's line: what this window is doing, or last did. */
   readonly doing?: string
   /** The task ref the window was opened for. */
@@ -232,6 +239,12 @@ export interface ArborSettingsFacts {
     readonly protectionSeconds?: number
     /** The share below which a handoff with nothing unfinished is refused. */
     readonly handoffFloor?: number
+    /**
+     * `model` when the context budget is the selected model's real window,
+     * `default` when DSH reported none and arbor's default applies. Absent when
+     * the settings name no window block at all.
+     */
+    readonly contextTokensSource?: 'model' | 'default'
   }
   readonly notes?: {
     readonly activeCount?: number

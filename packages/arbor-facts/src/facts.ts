@@ -200,6 +200,7 @@ async function windowsOf(host: ArborHostService, sessionId: SessionId): Promise<
       ...(usage === undefined && record === undefined ? {} : { used: usage?.used ?? record?.usage.used }),
       ...(usage === undefined && record === undefined ? {} : { limit: usage?.limit ?? record?.usage.limit }),
       ...(usage === undefined && record === undefined ? {} : { reserve: usage?.reserve ?? record?.usage.reserve }),
+      ...(host.windowLimitSourceOf(ref) === undefined ? {} : { limitSource: host.windowLimitSourceOf(ref) }),
       ...(line?.doing === undefined && lastLine === undefined
         ? {}
         : { doing: line?.doing ?? (lastLine === undefined ? undefined : text(lastLine, 'doing')) }),
@@ -394,6 +395,7 @@ async function settingsOf(host: ArborHostService): Promise<ArborSettingsFacts> {
         ...(settings.window.reserveTokens === undefined ? {} : { reserveTokens: settings.window.reserveTokens }),
         ...(settings.window.protectionSeconds === undefined ? {} : { protectionSeconds: settings.window.protectionSeconds }),
         ...(settings.window.handoffFloor === undefined ? {} : { handoffFloor: settings.window.handoffFloor }),
+        ...(host.currentWindowLimitSource() === undefined ? {} : { contextTokensSource: host.currentWindowLimitSource() }),
       },
     }),
     ...(settings.notes === undefined ? {} : {

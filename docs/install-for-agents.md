@@ -26,7 +26,7 @@ Pins, and do not change them without being asked:
 - arbor `@4fu/arbor-*` `2026.1110.0`, from npm. `@4fu/arbor-errors` is
   `2026.1107.0`, the only published version.
 - This repository's published packages are `@4fu/dsh-arbor-*` at
-  `2026.1110.2`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.2`.
+  `2026.1110.3`, and the bundle is `@4fu/dsh-arbor-bundle@2026.1110.3`.
   Install the bundle from npm; a checkout is only needed for the proofs or for
   development. `@4fu/dsh-arbor-testkit` and the root package stay private.
 - The optional font plugin is `@4fu/dsh-arbor-fonts@2026.1110.0` from
@@ -55,7 +55,7 @@ exactly, so install it and let npm fetch them:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home       # any empty directory
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.2
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.3
 dsh web
 ```
 
@@ -321,12 +321,17 @@ What the page shows comes from arbor, not from a browser guess:
 - notes: `NoteStore.snapshot()`, the active set frozen by its epoch;
 - `/env`: `Environment.list()` plus the journal's `service_state` events;
 - schedules: `Arbor.schedules()`;
-- settings: `Environment.settings()`, falling back to the deployment's seed.
+- settings: `Environment.settings()`, falling back to the deployment's seed;
+  the window block carries the selected model's context budget and
+  `contextTokensSource`, and each window fact carries `limitSource`
+  (`model` or `default`).
 
 Proof 23 covers the per-session facts and the live stream; proof 24 covers the
 host view, the session title, the label, the journal's run records, a refused
 `end` and a delivery into an idle window; proof 25 covers the backend session's
-own idle/running state and its delivery mapping.
+own idle/running state and its delivery mapping; proof 26 covers the preset
+allowlist, the prompt/tool-set equality, the model-derived window budget, and
+the win32 composition of the shell and terminal rows.
 
 ### 6b. Typography contract
 
@@ -398,7 +403,7 @@ From npm, one command does the wiring:
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
 export DSH_HOME=/tmp/my-dsh-home
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.2
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.3
 dsh web
 ```
 
@@ -485,9 +490,19 @@ path the proofs use (`ctx.agents.create` with `meta.agentPreset: 'arbor'`, then
 ## 9. Release notes
 
 The bundle and its 11 dependencies are published under `@4fu` at
-`2026.1110.2`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
+`2026.1110.3`; `@4fu/dsh-arbor-fonts@2026.1110.0` is published separately. The
 testkit and the root package stay private.
 
+- `2026.1110.3` makes a Windows arbor session work like the Linux one. The
+  shell's PowerShell replacement lives in arbor core, so this release follows
+  the arbor release that adds it: `bash`/`bash_output`/`bash_stop` on POSIX and
+  `pwsh`/`pwsh_output`/`pwsh_stop` on Windows, with the same wait window,
+  background job, output cut and secret scrub. The arbor preset now mounts a
+  version-pinned allowlist of DSH's non-duplicative preset tools (web, present,
+  ask-user, todo, plan mode, Cordis, plugin management, the persistent terminal,
+  `read_image`; `lsp` when the deployment mounted its seam). A window's limit
+  and reserve come from the selected model's real context window, and the facts
+  mark arbor's 200k/4k fallback as `limitSource: "default"`.
 - `2026.1110.2` makes live plugin changes safe. Disabling, uninstalling and
   updating the bundle restore the DSH seats the client packages occupy, shadow
   or wrap, so the sidebar and the current page keep rendering. Enabling live
@@ -553,6 +568,47 @@ Everything official is decided one by one in
 `dsh-v0.2.2-rc.1`: `proofs/12-official-sections.ts` fails when the pinned DSH
 registers an official section name the table does not decide, so a DSH upgrade
 cannot let a new section in silently.
+
+### The arbor preset's DSH allowlist
+
+The arbor preset no longer declares `plugins: []`. It mounts an explicit,
+version-pinned list of DSH preset rows that arbor does not replace
+(`packages/arbor-preset/src/plugins.ts`):
+
+- `tool-web` (`web_search`, `web_fetch`), `tool-ask-user`
+  (`ask_user_question`), `tool-todo` (`todo_write`), `present`,
+  `tool-fs` with only `readImage` on (`read_image`), the plan-mode row
+  (`exit_plan_mode`, admitted only while plan mode is active), `tool-cordis`
+  when the deployment has `cordisInspect`, and `plugin_manager` when it has a
+  profile context;
+- the persistent-terminal group from DSH's experimental terminal bundle, with
+  DSH's own platform split (the bash backend on POSIX, the same package in
+  `pwsh` dialect on Windows);
+- `lsp` only when the deployment already mounted `ctx.lsp` and a provider.
+
+The rows that duplicate arbor are deliberately not mounted: bash/pwsh, DSH's
+read/write/edit/apply_patch (the `tool-fs` row is mounted for `read_image`
+only), glob/grep, jobs, schedule, subagent/team/goal/ralph/workflow, PTC, the
+skill loader and compaction. `DSH_TOOLS_ARBOR_REPLACES` in
+`@4fu/dsh-arbor-tools` is the deny side; `proofs/26-windows-tools.ts` checks
+that the rendered `<tools>` list and the model request declare exactly the same
+set.
+
+Browser-use and computer-use are provider registries in DSH 0.2.2-rc.1: the
+shipped packages add no model tool by themselves. A deployment that enables one
+adds its provider row to the preset's `plugins` config; the provider's tools
+then arrive through the same external-tool bridge.
+
+### The window budget
+
+A window's limit and reserve are the selected model's real context window, read
+from `ctx.llm.resolveModelInfo` for the session whose turn opens the window; the
+reserve is two percent of that window, capped at arbor's 4k default. The bridge
+writes both under `settings.window` just before the window opens, so arbor's
+record, reminders and hard limit use one budget. When DSH reports no capacity
+(a route without context metadata, or a recovered window whose session is not
+live yet), arbor's 200 000/4 000 default applies and the facts say
+`limitSource: "default"`; a value installed in `/env/settings.json` wins.
 
 The decisions that matter for an arbor session:
 

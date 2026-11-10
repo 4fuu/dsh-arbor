@@ -100,6 +100,14 @@ export interface DshBackendOptions {
    */
   readonly agents: AgentRegistry
   /**
+   * The budget the host resolved for one window, when it knows better than the
+   * `limits` arbor passed with the open request. One host serves every session,
+   * and a window's model can move between the moment arbor reads its settings
+   * and the moment the backend opens the window; the per-window answer keeps the
+   * backend's usage on the window's own model. Absent leaves arbor's limits.
+   */
+  readonly limitsOf?: (window: WindowRef) => { readonly contextTokens: number; readonly reserveTokens: number } | undefined
+  /**
    * The host's one renderer, read lazily because the host is built after this
    * backend is. A delivery's blocks were built by the host with its own table
    * and block kinds, so rendering them with any other renderer would drop the
@@ -404,6 +412,8 @@ export class DshBackend implements AgentBackend {
   private readonly headers = new WeakMap<Agent, HeaderLog>()
 
   private readonly options: DshBackendOptions
+  /** The last set {@link externalTools} read, so the prompt's names are the declared ones. */
+  private lastExternal: readonly ExternalTool[] = []
 
   constructor(options: DshBackendOptions) {
     this.options = options
@@ -428,11 +438,13 @@ export class DshBackend implements AgentBackend {
     return { provider: 'dsh', state: 'logged-in', models: await this.models() }
   }
 
-  externalTools(): readonly ExternalTool[] {
-    return dshExternalTools({
+  async externalTools(): Promise<readonly ExternalTool[]> {
+    const tools = await dshExternalTools({
       tools: this.options.tools,
       agents: this.options.agents,
     })
+    this.lastExternal = tools
+    return tools
   }
 
   /**
@@ -441,7 +453,7 @@ export class DshBackend implements AgentBackend {
    * {@link externalTools} applies, so a name here is a name the model can call.
    */
   externalToolNames(): readonly string[] {
-    return this.externalTools().map(tool => tool.name).sort()
+    return this.lastExternal.map(tool => tool.name).sort()
   }
 
   async open(request: OpenWindowRequest): Promise<WindowSession> {
@@ -452,7 +464,10 @@ export class DshBackend implements AgentBackend {
       () => { this.release(request.window) },
       delivery => renderDelivery(delivery, this.options.renderer()),
     )
-    session.open(request)
+    const own = this.options.limitsOf?.(request.window)
+    session.open(own === undefined
+      ? request
+      : { ...request, limits: { ...request.limits, ...own } })
     this.windows.set(request.window, { session, agent: undefined })
     this.waiting.get(request.window)?.resolve()
     this.waiting.delete(request.window)

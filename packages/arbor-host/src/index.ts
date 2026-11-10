@@ -70,6 +70,7 @@ import { SqliteNoteStore } from '@4fu/arbor-notes-sqlite'
 import { DirectoryEnvironment } from '@4fu/arbor-environment-dir'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { planProjectionDefinition } from '@deepseek-ai/dsh-plan-mode'
+import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -82,13 +83,35 @@ import {
   type HarnessState,
   type PersonaVariables,
 } from '@4fu/dsh-arbor-prompt'
-import { DshEnvironment, dshSkillSource } from '@4fu/dsh-arbor-env'
+import { DshEnvironment, dshSkillSource, type WindowLimits } from '@4fu/dsh-arbor-env'
 import { openArborWorkspace, arborSharedFolder, DshProjectBridge, type DshProject, type ExternalPointer, type ExternalProject } from '@4fu/dsh-arbor-workspace'
 import type { WorkspaceBackend } from '@4fu/arbor-core'
 import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { DshSendExecutor } from './send.ts'
 
 export { DshSendExecutor, DSH_TARGET_PREFIX, DSH_USER_TARGET } from './send.ts'
+
+/** Arbor's own default context budget, used when DSH reports no model capacity. */
+export const DEFAULT_CONTEXT_TOKENS = 200_000
+
+/** Arbor's own default reserve, used when a model's capacity is unknown. */
+export const DEFAULT_RESERVE_TOKENS = 4_000
+
+/**
+ * The share of a model's context window held back for the final reminder: two
+ * percent, capped at arbor's own 4k default. A smaller window gets a smaller
+ * reserve so the reminder still leaves room for a handoff; a larger window needs
+ * no more than 4k for the same job.
+ */
+export function reserveTokensFor(contextTokens: number): number {
+  return Math.min(DEFAULT_RESERVE_TOKENS, Math.max(1, Math.floor(contextTokens / 50)))
+}
+
+/** A budget resolved from one model: both numbers are known. */
+interface ModelWindow {
+  readonly contextTokens: number
+  readonly reserveTokens: number
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -230,9 +253,11 @@ function checkedNumber(name: string, value: unknown, min: number, max: number): 
  *
  * The window block keeps a window open for 24 hours after its run ends
  * (`window.idleSeconds: 86400`), so a session's next turn continues in the
- * same window with its prefix and context intact; arbor's other window
- * defaults (200 000 context tokens, 4 000 reserved) still apply. A deployment
- * that names its own window values overrides the idle period too.
+ * same window with its prefix and context intact. The context limit and reserve
+ * are not seeded: {@link ArborHostService.limitsForWindow} writes the selected
+ * model's real context window and the reserve derived from it before each
+ * window opens, and arbor's 200 000/4 000 defaults apply when DSH reports no
+ * capacity. A deployment that names its own window values overrides either.
  *
  * The workspaces block is deliberately absent as well: the workspace is arbor's
  * own over the shared folder, ovnfs checkouts are a window's own work, and the
@@ -290,37 +315,50 @@ export function sessionOfTarget(target: Target): SessionId | undefined {
  * host continues (the hard limit, an idle handover, a restart's recovery) opens
  * with a prefix that names no session and loses both per-session lines.
  *
- * The hooks observe and change nothing, so a window they cannot attribute — one
- * dispatched from outside a DSH session — opens exactly as it would without them.
+ * The hooks observe and change nothing about the window's prompt; a window they
+ * cannot attribute — one dispatched from outside a DSH session — opens exactly
+ * as it would without them. The one thing they set is the window budget: the
+ * limit and reserve a model's real context window implies, computed before the
+ * host records the window (see {@link ArborHostService.limitsForWindow}).
  *
  * @param note - called with the window and the session it serves.
  * @param sessionOf - the session a window already recorded serves, for a
  *   continuation to inherit.
+ * @param limits - called with the window and the session it serves, before the
+ *   window's record and prompt are built.
  */
 export function windowSessionPlugin(
   note: (window: WindowRef, sessionId: SessionId) => void,
   sessionOf: (window: WindowRef) => SessionId | undefined,
+  limits?: (window: WindowRef, sessionId: SessionId | undefined) => Promise<void> | void,
 ): Plugin {
   return {
     name: 'dsh-arbor-window-session',
     hooks: {
-      windowStart: (context) => {
+      windowStart: async (context) => {
         const label = context.task.label
+        let served: SessionId | undefined
         if (label !== undefined && label !== '') {
-          note(context.window, label as SessionId)
+          served = label as SessionId
+          note(context.window, served)
         } else {
           // An unlabeled task from an SDK or a remote integration still carries
           // its session target; the label is the deployment's own attachment.
           for (const target of context.task.targets) {
             const sessionId = sessionOfTarget(target)
-            if (sessionId !== undefined) note(context.window, sessionId)
+            if (sessionId !== undefined) {
+              served = sessionId
+              note(context.window, sessionId)
+            }
           }
         }
+        await limits?.(context.window, served)
         return { allow: true as const, context }
       },
-      windowContinue: (context) => {
+      windowContinue: async (context) => {
         const inherited = sessionOf(context.previous)
         if (inherited !== undefined) note(context.window, inherited)
+        await limits?.(context.window, inherited)
         return { allow: true as const, context }
       },
     },
@@ -413,6 +451,22 @@ export class ArborHostService extends Service {
   /** The last provider and model a live session rendered under, for the fallback. */
   private lastProvider: string | undefined
   private lastModel: string | undefined
+  /**
+   * The window budget the next window records: the selected model's context
+   * window and the reserve derived from it. Empty means arbor's own defaults.
+   * Read through the settings getter {@link DshEnvironment} installs.
+   */
+  private windowBudget: WindowLimits = {}
+  /** Which windows got a model budget and which fell back to arbor's default. */
+  private readonly windowLimitSources = new Map<WindowRef, 'model' | 'default'>()
+  /** The budget each window keeps, so the backend's usage follows its own model. */
+  private readonly windowBudgets = new Map<WindowRef, ModelWindow>()
+  /** The source of the last window budget, for the settings facts. */
+  private lastWindowLimitSource: 'model' | 'default' | undefined
+  /** The context window resolved per DSH route, `undefined` when it gave none. */
+  private readonly modelWindows = new Map<string, ModelWindow | undefined>()
+  /** Resolutions in flight, so one window does not ask twice for one route. */
+  private readonly modelWindowsPending = new Map<string, Promise<ModelWindow | undefined>>()
   /** The warnings the bridge raised while the host was built, for diagnostics. */
   readonly warnings: string[] = []
   /**
@@ -467,6 +521,9 @@ export class ArborHostService extends Service {
       // runs as is resolved per call: the session whose turn is executing it,
       // which is the initiating agent of that turn (see @4fu/dsh-arbor-tools).
       agents: ctx.agents,
+      // The budget this window's session resolved, so a window's own usage
+      // keeps its model's limit even while another session opens beside it.
+      limitsOf: window => this.windowBudgets.get(window),
       renderer: () => {
         if (host === undefined) throw new Error('arbor host: the renderer was read before the host existed')
         return host.renderer
@@ -527,6 +584,10 @@ export class ArborHostService extends Service {
       toolNames: () => ctx.tools.definitions().map(tool => tool.name),
       cwd: () => ctx.agents.currentInitiator()?.session.header.cwd ?? arborWorkspace.sharedFolder,
       seedSettings: settings,
+      // The selected model's real context window, read when a window opens.
+      // The environment's settings getter puts it under `window`, so arbor's
+      // record, reminders and `<board>` use one limit per window.
+      windowLimits: () => this.windowBudget,
     })
     const sendExecutor = new DshSendExecutor({ journal, agents: ctx.agents })
     host = new Arbor({
@@ -559,6 +620,7 @@ export class ArborHostService extends Service {
         windowSessionPlugin(
           (window, sessionId) => { this.windowSessions.set(window, sessionId) },
           (window) => this.windowSessions.get(window),
+          (window, sessionId) => this.limitsForWindow(window, sessionId),
         ),
       ],
       settings,
@@ -690,6 +752,109 @@ export class ArborHostService extends Service {
     return [this.persona?.prefix ?? '', this.persona?.suffix ?? '']
       .map(text => interpolatePersona(text, resolved))
       .filter(text => text !== '')
+  }
+
+  /**
+   * Fill the next window's budget from the model the session is about to use.
+   *
+   * The hook runs before arbor records the window and before its prompt epoch
+   * is built, so arbor's `usage`, the board, the usage reminders and the hard
+   * limit all read one limit for the window's own model. A session whose model
+   * DSH cannot describe, or a window dispatched outside any DSH session, leaves
+   * the budget empty and arbor's 200k/4k defaults apply; the facts record that
+   * as `limitSource: 'default'`.
+   *
+   * The budget is also kept per window: arbor passes `limits` to the backend
+   * later, after another session may have moved the shared value, and the
+   * backend's own usage must still follow the window it belongs to.
+   */
+  async limitsForWindow(window: WindowRef, sessionId: SessionId | undefined): Promise<void> {
+    const selection = this.selectionOf(sessionId)
+    const limits = selection === undefined ? undefined : await this.budgetForSelection(selection)
+    if (limits === undefined) {
+      this.windowBudget = {}
+      this.windowBudgets.delete(window)
+      this.windowLimitSources.set(window, 'default')
+      this.lastWindowLimitSource = 'default'
+      return
+    }
+    this.windowBudget = limits
+    this.windowBudgets.set(window, limits)
+    this.windowLimitSources.set(window, 'model')
+    this.lastWindowLimitSource = 'model'
+  }
+
+  /** Whether a window's budget came from its model or from arbor's default. */
+  windowLimitSourceOf(window: WindowRef): 'model' | 'default' | undefined {
+    return this.windowLimitSources.get(window)
+  }
+
+  /** The source of the most recently opened window's budget, for settings facts. */
+  currentWindowLimitSource(): 'model' | 'default' | undefined {
+    return this.lastWindowLimitSource
+  }
+
+  /**
+   * The model a session's next step uses: its own recorded selection, its live
+   * options, or DSH's default route. A recovered window opens before its
+   * session resumes and has no live agent, so it answers no selection and takes
+   * arbor's default budget rather than another session's route.
+   */
+  private selectionOf(sessionId: SessionId | undefined): Readonly<ModelSelection> | undefined {
+    if (sessionId !== undefined) {
+      const agent = this.ctx.agents.get(sessionId)
+      // A recovered window opens before its session resumes. Reading the
+      // process default there would name another model, so the window takes
+      // arbor's default budget and the facts say so.
+      if (agent === undefined) return undefined
+      const selected = agent.model.current()
+      if (selected !== undefined) return selected
+      const options = agent.options
+      if (options.provider !== undefined && options.model !== undefined) {
+        return {
+          provider: options.provider,
+          model: options.model,
+          ...options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort },
+        }
+      }
+    }
+    const defaults = this.ctx.get('agentDefaultModel') as { currentSelection(): ModelSelection } | undefined
+    return defaults?.currentSelection()
+  }
+
+  /** One model's budget, resolved once per route for the process's lifetime. */
+  private async budgetForSelection(selection: Readonly<ModelSelection>): Promise<ModelWindow | undefined> {
+    const key = `${selection.provider}\u0000${selection.model}`
+    if (this.modelWindows.has(key)) return this.modelWindows.get(key)
+    let pending = this.modelWindowsPending.get(key)
+    if (pending === undefined) {
+      pending = this.resolveWindow(selection)
+      this.modelWindowsPending.set(key, pending)
+    }
+    try {
+      const limits = await pending
+      this.modelWindows.set(key, limits)
+      return limits
+    } finally {
+      this.modelWindowsPending.delete(key)
+    }
+  }
+
+  /** DSH's answer for one exact route, or `undefined` when it gives none. */
+  private async resolveWindow(selection: Readonly<ModelSelection>): Promise<ModelWindow | undefined> {
+    const route = `${selection.provider}/${selection.model}`
+    try {
+      const info = await this.ctx.llm.resolveModelInfo(selection.provider, selection.model)
+      const contextTokens = info.context?.contextWindow
+      if (typeof contextTokens !== 'number' || !Number.isFinite(contextTokens) || contextTokens <= 0) {
+        this.ctx.logger.warn(`dsh-arbor: DSH reports no context window for ${route}; arbor's ${DEFAULT_CONTEXT_TOKENS}-token default is used`)
+        return undefined
+      }
+      return { contextTokens: Math.floor(contextTokens), reserveTokens: reserveTokensFor(contextTokens) }
+    } catch (error: unknown) {
+      this.ctx.logger.warn(`dsh-arbor: could not read the context window for ${route}: ${error instanceof Error ? error.message : String(error)}; arbor's ${DEFAULT_CONTEXT_TOKENS}-token default is used`)
+      return undefined
+    }
   }
 
   private requireState(): HostState {

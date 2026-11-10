@@ -416,10 +416,15 @@ async function toolEquality(): Promise<void> {
     check('no DSH tool arbor replaces reaches the model',
       !declared.some((name, index) => sources[index] === 'dsh' && DSH_TOOLS_ARBOR_REPLACES.includes(name)),
       `DSH registers ${dshRegistered.length} tools; the model can call ${declared.length}`)
-    check('every DSH tool arbor does not replace is in the model\'s set',
-      dshRegistered.filter(name => !DSH_TOOLS_ARBOR_REPLACES.includes(name))
-        .every(name => declared.includes(name)),
-      `DSH's kept tools: ${dshRegistered.filter(name => !DSH_TOOLS_ARBOR_REPLACES.includes(name)).join(', ')}`)
+    // A kept tool can still be admitted only under its own condition:
+    // exit_plan_mode is a plan-mode tool, and this case is not in plan mode, so
+    // DSH's step admission withholds it. Case 2 shows it exposed once plan mode
+    // is on. Every other kept tool has no condition and must be in the set.
+    const kept = dshRegistered.filter(name => !DSH_TOOLS_ARBOR_REPLACES.includes(name))
+    const withheld = kept.filter(name => !declared.includes(name))
+    check('every kept DSH tool is in the model\'s set, except a tool its own plan-mode condition withholds',
+      withheld.every(name => name === 'exit_plan_mode'),
+      `DSH's kept tools: ${kept.join(', ')}; withheld: ${withheld.join(', ') || 'none'}`)
     check('the MCP tool is in both', declared.includes(MCP_TOOL_NAME) && listed.includes(MCP_TOOL_NAME),
       'the server-qualified name is declared and listed')
   } finally {

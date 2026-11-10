@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, 'b*']
   pull_request:
+  workflow_dispatch:
 
 jobs:
   # The whole suite runs against the scripted model, so it needs no key, no
@@ -43,6 +44,29 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Profile install
+        run: pnpm check:profile
+
+  # The user's Windows run is the reason this exists. The checkout is the
+  # integration surface: the preset allowlist, the model-derived window budget
+  # and the profile install are exercised on Windows. The shell execution
+  # itself is arbor core's, so arbor's own windows-shell job runs the shell
+  # tool against PowerShell; this job runs the same proof here for the bridge.
+  windows-tools:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check
+        run: pnpm check
+      - name: Windows tools and window budget
+        run: pnpm proof:windows-tools
       - name: Profile install
         run: pnpm check:profile
 

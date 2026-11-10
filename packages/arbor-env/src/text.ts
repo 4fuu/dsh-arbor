@@ -16,7 +16,7 @@ import type { TextTable } from '@4fu/arbor-interfaces'
 export const dshEnvText: TextTable = {
   // ---- what a mounted item is -------------------------------------------
   'env.dsh.skill': 'DSH 的技能 {name}（只读）：{description}（{path}）。'
-    + '技能自带的其他文件仍在 DSH 那边，按绝对路径用 read 或 bash 读取。',
+    + '技能自带的其他文件仍在 DSH 那边，按绝对路径用 read 或命令工具（Unix 上是 bash，Windows 上是 pwsh）读取。',
   'env.dsh.server': 'DSH 的 MCP 服务器 {name}（只读）：它的工具作为 DSH 工具直接调用'
     + '（{tools}），不是本环境的模块函数，也不要为它再安装一个 MCP 服务器。',
   'env.dsh.server.notools': 'DSH 的 MCP 服务器 {name}（只读）：它当前没有发布任何工具。',

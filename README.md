@@ -15,7 +15,7 @@ Arbor keeps running on DSH's own embedded AgentLoop, in the same process.
 > pinned to one DSH version and relies on DSH internals. Read
 > [Versions and compatibility](docs/versions.md) before installing it on
 > anything you care about. The packages are published under `@4fu` at
-> `2026.1110.2`; the bundle and the font plugin install independently from npm.
+> `2026.1110.3`; the bundle and the font plugin install independently from npm.
 
 ## What an arbor session changes
 
@@ -38,8 +38,21 @@ preset. That session then runs on arbor, and the following are true for it:
 - **arbor's prompt and tools.** DSH's official prompt sections are decided one by
   one; the ones arbor replaces are absent, third-party sections go into a
   `<dsh>` data block, and a trusted `<harness>` section says what remains true of
-  DSH. DSH tools are offered to the model as arbor external tools, and arbor's
-  own tools replace DSH tools with the same capability.
+  DSH. The arbor preset mounts a version-pinned allowlist of DSH's own preset
+  rows that arbor does not replace: web search and fetch, `present`,
+  `ask_user_question`, `todo_write`, plan mode, the Cordis inspection tools,
+  plugin management, the persistent terminal, and `read_image`; `lsp` is mounted
+  only where the deployment already mounted its seam and a provider. Their tools
+  reach arbor as external tools under their own names, and arbor's own tools
+  replace DSH tools with the same capability. The prompt's tool list and the
+  tools the model can call are checked to be the same set.
+- **The shell tells the truth.** The window's command tool is `bash` on POSIX
+  and `pwsh` on Windows (PowerShell 7, falling back to Windows PowerShell 5.1),
+  with `pwsh_output` and `pwsh_stop` alongside it.
+- **The window's budget is the model's.** A window's token limit and reserve are
+  read from the selected model's real context window through DSH; arbor's
+  200k/4k default is used only when DSH reports no capacity, and the facts mark
+  that as `limitSource: "default"`.
 - **The Arbor page.** A permanent **Arbor** entry in DSH's left navigation opens
   the whole-host overview and one tab per arbor session: windows, chains,
   handoffs, projects, the board, notes, `/env`, schedules and arbor's search.
@@ -84,7 +97,7 @@ built or linked.
 
 ```bash
 npm install -g @deepseek-ai/dsh@0.2.2-rc.1
-dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.2
+dsh plugin --profile web add @4fu/dsh-arbor-bundle@2026.1110.3
 dsh web
 ```
 
@@ -136,7 +149,7 @@ model this prompt, editing the bracketed parts or dropping them:
 ```text copy Copy Install Prompt
 Install dsh-arbor (https://github.com/4fuu/dsh-arbor) in this environment [in a
 scratch DSH home under /tmp] and show me that it works: follow
-docs/install-for-agents.md, install @4fu/dsh-arbor-bundle@2026.1110.2 into a DSH
+docs/install-for-agents.md, install @4fu/dsh-arbor-bundle@2026.1110.3 into a DSH
 web profile, pick Arbor for one session, and [also run the proof suite from a
 checkout with pnpm install --frozen-lockfile, pnpm check and pnpm proofs]. Report
 which checks passed, what the live session answered, and anything that did not

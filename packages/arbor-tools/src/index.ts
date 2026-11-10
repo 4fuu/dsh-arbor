@@ -34,11 +34,12 @@ import type { ExternalTool, JSONSchema, DirectToolSpec, ToolCall, ToolResult } f
 /**
  * The DSH tools arbor's own replaces, one capability each.
  *
- * - `bash`, `pwsh` — arbor's `bash`, `bash_output`, `bash_stop`.
+ * - `bash`, `pwsh` — arbor's shell tool: `bash`, `bash_output`, `bash_stop` on
+ *   POSIX and `pwsh`, `pwsh_output`, `pwsh_stop` on Windows.
  * - `read`, `write`, `edit`, `apply_patch` — arbor's file tools.
  * - `glob`, `grep` — arbor's `workspace` module.
- * - `job_start`, `job_output`, `job_kill`, `job_list` — arbor's
- *   `bash_output` / `bash_stop`.
+ * - `job_start`, `job_output`, `job_kill`, `job_list` — arbor's shell output
+ *   and stop tools.
  * - `subagent`, `subagent_fork` — arbor's windows, its broadcast and its
  *   window messages.
  * - `schedule`, `schedule_*` — arbor's own `schedule` module. DSH's scheduler
@@ -189,6 +190,19 @@ export interface DshExternalToolsOptions {
    * it, which is the session whose window asked for the call.
    */
   readonly agents: AgentRegistry
+  /**
+   * The session agent whose scoped tool set is read, when the caller already
+   * knows it. Absent reads the initiating agent of the current turn, which is
+   * the same session for a window that is opening during its turn.
+   *
+   * This is what makes a DSH **preset** tool visible: a preset's rows register
+   * into the agent's scope, so the global view sees none of them. The resolved
+   * set is also the step's admission, so a conditionally unavailable tool is
+   * neither declared nor called.
+   */
+  readonly agent?: Agent
+  /** The turn's cancellation, for resolving conditional tools. */
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -206,10 +220,30 @@ export interface DshExternalToolsOptions {
  * every call the window runs, arbor's own tools included, because the session
  * log is the history the next model request is derived from.
  */
-export function dshExternalTools(options: DshExternalToolsOptions): readonly ExternalTool[] {
+export async function dshExternalTools(options: DshExternalToolsOptions): Promise<readonly ExternalTool[]> {
   const { tools, agents } = options
   const replaced = new Set(DSH_TOOLS_ARBOR_REPLACES)
-  return tools.schemas()
+  const agent = options.agent ?? agents.currentInitiator()
+  const selection = agent?.model.current()
+  let schemas: ReturnType<ToolsService['schemas']>
+  if (agent !== undefined && selection !== undefined) {
+    // The step's admission, including a preset row's scoped registrations. The
+    // set is read and released here: arbor declares what it found, and each
+    // call still goes through `ctx.tools.execute` with its own agent.
+    const admitted = await tools.resolve({
+      agent,
+      modelSelection: selection,
+      signal: options.signal ?? new AbortController().signal,
+    })
+    try {
+      schemas = tools.schemas(agent, admitted)
+    } finally {
+      admitted.dispose()
+    }
+  } else {
+    schemas = tools.schemas()
+  }
+  return schemas
     .filter(schema => !replaced.has(schema.name))
     .map(schema => ({
       name: schema.name,
