@@ -177,7 +177,7 @@ class Page {
     return result.result.value
   }
 
-  async waitFor(description, expression, timeout = 30_000) {
+  async waitFor(description, expression, timeout = 30_000, { dump = true } = {}) {
     const deadline = Date.now() + timeout
     let last
     while (Date.now() < deadline) {
@@ -188,7 +188,22 @@ class Page {
       }
       await sleep(200)
     }
+    if (dump) await this.dumpFailure(description)
     throw new Error(`timed out waiting for ${description}${last === undefined ? '' : ` (${last instanceof Error ? last.message : String(last)})`}`)
+  }
+
+  /** What the page showed when a wait timed out: a screenshot, the switches, the text and the page messages. */
+  async dumpFailure(description) {
+    try {
+      const path = await this.screenshot(`failure-${description.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`)
+      console.error(`failure screenshot: ${path}`)
+      console.error(`url: ${await this.evaluate('location.href')}`)
+      console.error(`switches: ${await this.evaluate(`JSON.stringify([...document.querySelectorAll('[role="switch"]')].map(node => node.getAttribute('aria-label')))`)}`)
+      console.error(`page text:\n${(await this.evaluate('document.body.innerText')).slice(0, 3000)}`)
+    } catch (error) {
+      console.error(`failure dump failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    for (const message of this.messages.slice(-20)) console.error(`page ${message.kind}: ${message.text}`)
   }
 
   /** The current UI facts this check asserts on. */
@@ -295,6 +310,31 @@ const ARBOR_SWITCH = `document.querySelector('button[role="switch"][aria-label*=
 /** The Plugins entry in the global navigation. */
 const PLUGINS_ENTRY = `[...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Plugins' || button.getAttribute('aria-label') === 'Plugins')`
 
+/**
+ * Open the Plugins page and wait for the Arbor switch. A click that lands
+ * while a first-run dialog is still fading out reaches the overlay, not the
+ * entry, so the click is repeated a few times before the wait counts as failed.
+ */
+async function openPlugins(page, description) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await page.click('the Plugins entry', PLUGINS_ENTRY)
+    try {
+      await page.waitFor(description, `!!${ARBOR_SWITCH}`, 10_000, { dump: attempt === 3 })
+      return
+    } catch (error) {
+      if (attempt === 3) throw error
+      const top = await page.evaluate(`(() => {
+        const entry = ${PLUGINS_ENTRY}
+        if (!entry) return 'no Plugins entry'
+        const rect = entry.getBoundingClientRect()
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        return hit === null ? 'nothing' : (entry.contains(hit) ? 'the entry itself' : hit.outerHTML.slice(0, 200))
+      })()`)
+      console.log(`the Plugins page did not open on click ${attempt} (top element: ${top}); clicking again`)
+    }
+  }
+}
+
 try {
   await mkdir(screenshots, { recursive: true })
   console.log(`work directory: ${work}`)
@@ -321,8 +361,7 @@ try {
     await page.waitFor('the workspace toast to clear', `!document.body.innerText.includes('Unable to create default workspace')`, 10_000).catch(() => undefined)
 
     await page.waitFor('the global navigation', `!!document.querySelector('nav[aria-label="Global panels"]')`)
-    await page.click('the Plugins entry', PLUGINS_ENTRY)
-    await page.waitFor('the Arbor switch on the Plugins page', `!!${ARBOR_SWITCH}`)
+    await openPlugins(page, 'the Arbor switch on the Plugins page')
     await sleep(500)
 
     const before = await page.state()
@@ -361,8 +400,7 @@ try {
     console.log(`screenshot: ${composerShot}`)
 
     // ---- on: the client packages apply again, into the same page.
-    await page.click('the Plugins entry', PLUGINS_ENTRY)
-    await page.waitFor('the Arbor switch again', `!!${ARBOR_SWITCH}`)
+    await openPlugins(page, 'the Arbor switch again')
     await page.click('the Arbor switch', ARBOR_SWITCH)
     await page.waitFor('the Arbor entry to come back', `!!document.querySelector('[data-arbor-icon]')`, 30_000)
     await page.waitFor('the switch to read on', `${ARBOR_SWITCH}?.getAttribute('aria-checked') === 'true'`, 30_000)
