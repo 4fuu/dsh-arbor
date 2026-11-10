@@ -14,13 +14,13 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-core": "2026.1110.0",
-    "@4fu/arbor-environment-dir": "2026.1110.0",
+    "@4fu/arbor-core": "2026.1110.1",
+    "@4fu/arbor-environment-dir": "2026.1110.1",
     "@4fu/arbor-interfaces": "2026.1110.0",
     "@4fu/arbor-journal-sqlite": "2026.1110.0",
-    "@4fu/arbor-notes-sqlite": "2026.1110.0",
-    "@4fu/arbor-prompt": "2026.1110.0",
-    "@4fu/arbor-workspace-dir": "2026.1110.0",
+    "@4fu/arbor-notes-sqlite": "2026.1110.1",
+    "@4fu/arbor-prompt": "2026.1110.1",
+    "@4fu/arbor-workspace-dir": "2026.1110.1",
     "@4fu/dsh-arbor-env": "workspace:*",
     "@4fu/dsh-arbor-llm": "workspace:*",
     "@4fu/dsh-arbor-prompt": "workspace:*",

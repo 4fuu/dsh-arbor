@@ -193,7 +193,7 @@ async function main(): Promise<void> {
 
   // ---- D. arbor's own ovnfs lines are untouched, and the line restates none.
   check("arbor's own ovnfs lines are still in <workspace>",
-    workspace.includes('所有窗口都从这里读取，bash 默认也在这里运行') && workspace.includes('共享文件夹按约定只读'),
+    workspace.includes('所有窗口都从这里读取，命令工具默认也在这里运行') && workspace.includes('共享文件夹按约定只读'),
     'the shared-folder and read-only lines are present')
   check('the reach line restates nothing arbor already says',
     !workspace.includes('它在共享目录里：') && workspace.split('它在共享目录里').length - 1 === 1,

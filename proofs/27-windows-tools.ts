@@ -149,12 +149,15 @@ async function main(): Promise<void> {
     const leaked = families.filter(name => callable.includes(name))
     check('no denied tool family is callable', leaked.length === 0, `leaked: ${leaked.join(', ') || 'none'}`)
 
-    // ---- the shell the installed core gives this host. The Windows fix is
-    // arbor core's, and arbor's own windows-shell job runs the tool there; this
-    // integration branch may still resolve the last published core, so the
-    // platform line is reported rather than made a red check before release.
+    // ---- the shell the installed core gives this host: PowerShell on Windows,
+    // the POSIX shell elsewhere.
     if (process.platform === 'win32') {
-      console.log(`INFO Windows shell tool: ${callable.includes('pwsh') ? 'pwsh' : 'bash (the installed core predates the PowerShell fix)'}`)
+      check('Windows exposes the PowerShell tools',
+        ['pwsh', 'pwsh_output', 'pwsh_stop'].every(name => callable.includes(name)),
+        `tools: ${callable.join(', ')}`)
+      check('a Windows window exposes no bash tool',
+        !callable.some(name => name.startsWith('bash')),
+        `tools: ${callable.join(', ')}`)
     } else {
       check('Linux exposes the POSIX shell tools',
         ['bash', 'bash_output', 'bash_stop'].every(name => callable.includes(name)),

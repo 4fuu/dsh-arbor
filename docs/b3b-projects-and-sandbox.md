@@ -5,7 +5,7 @@
 > on. The current install and status are in
 > [install-for-agents.md](install-for-agents.md), and the current version pins
 > are in [versions.md](versions.md). At the time of B3b, arbor was
-> `2026.1107.1`; the current arbor pin is `2026.1110.0`.
+> `2026.1107.1`; the current arbor pin is `2026.1110.1`.
 
 B3 mounted arbor's own workspace *over* DSH's sandbox: every file access and
 command of an arbor window ran through `ctx.fs` and `ctx.shell` under the

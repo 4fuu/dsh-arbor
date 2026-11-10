@@ -14,7 +14,7 @@
     "locale"
   ],
   "dependencies": {
-    "@4fu/arbor-core": "2026.1110.0",
+    "@4fu/arbor-core": "2026.1110.1",
     "@4fu/arbor-interfaces": "2026.1110.0"
   },
   "devDependencies": {

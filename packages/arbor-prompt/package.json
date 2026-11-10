@@ -15,7 +15,7 @@
   ],
   "dependencies": {
     "@4fu/arbor-interfaces": "2026.1110.0",
-    "@4fu/arbor-prompt": "2026.1110.0"
+    "@4fu/arbor-prompt": "2026.1110.1"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "0.2.2-rc.1",
