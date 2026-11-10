@@ -141,7 +141,7 @@ A different version is unsupported and may fail in any of these ways:
 - **The preset allowlist is pinned.** `packages/arbor-preset/src/plugins.ts`
   names DSH's preset rows and copies their ids and configuration from this
   version. A different DSH may rename a row, move it to another preset, or add a
-  service it needs; `proofs/26-windows-tools.ts` checks the composition and the
+  service it needs; `proofs/27-windows-tools.ts` checks the composition and the
   prompt/tool-set equality against the installed preset packages.
 - **The browser surface can stop registering.** The Arbor page and the
   composer's preset gate are pinned to DSH's client slot and preset
